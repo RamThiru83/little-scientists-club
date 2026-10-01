@@ -1444,3 +1444,399 @@
     }
   };
 })(typeof window !== 'undefined' ? window : globalThis);
+
+/* Episode 6 — What makes things happen? (causes, after Rothman's causal-pie model, for 5–6 year olds) */
+(function (global) {
+  const L = global.LSC; const { W, H, P, E, seg, clamp, lerp, circle, ellipse, text, roundRect } = L;
+  L.episodes = L.episodes || {};
+
+  const SOIL = '#7A4F2A', SOIL_WET = '#55361B', POT = '#D9834A', STEM = '#3E9B4F', CAN = '#7FC8A9', TEDDY = '#C98C5A', TEDDY_LIGHT = '#EDD2AE', GERM = '#7ED957';
+  // the four pieces of the flower's cause pie
+  const PIE = [{ id: 'soil', color: '#A9733F' }, { id: 'seed', color: '#E7C27A' }, { id: 'water', color: '#5FB8FF' }, { id: 'sun', color: '#FFD23F' }];
+
+  // ---------- props ----------
+  function garden(ctx, t, o) {
+    o = o || {}; L.sky(ctx, o.sky);
+    const sx = o.sunX == null ? 1650 : o.sunX, sy = o.sunY == null ? 200 : o.sunY;
+    if (o.beam) { ctx.save(); ctx.globalAlpha = o.beam.a; ctx.fillStyle = '#FFE680'; ctx.beginPath(); ctx.moveTo(sx - 60, sy + 40); ctx.lineTo(sx + 70, sy + 70); ctx.lineTo(o.beam.x + 200, o.beam.y); ctx.lineTo(o.beam.x - 200, o.beam.y); ctx.closePath(); ctx.fill(); ctx.restore(); }
+    L.sun(ctx, sx, sy, 110, t);
+    if (o.cloudSun) L.cloud(ctx, sx - 10, sy + 20, 1.45, '#B9C2D0', { outline: P.ink, face: 'sad' });
+    if (o.clouds !== false) L.cloud(ctx, 760 + Math.cos(t * 0.25) * 25, 150, 0.8);
+    L.ground(ctx, 820); if (o.tree !== false) L.tree(ctx, 200, 830, 1.0);
+  }
+  function seed(ctx, x, y, s, rot) { ctx.save(); ctx.translate(x, y); ctx.rotate(rot || 0); ctx.scale(s, s); ellipse(ctx, 0, 0, 30, 20, '#8B5A2B', P.ink, 5); ellipse(ctx, -8, -6, 9, 5, 'rgba(255,255,255,0.4)'); ctx.restore(); }
+  function drop(ctx, x, y, s) { ctx.save(); ctx.translate(x, y); ctx.scale(s, s); ctx.fillStyle = P.water; ctx.strokeStyle = P.ink; ctx.lineWidth = 5; ctx.beginPath(); ctx.moveTo(0, -34); ctx.quadraticCurveTo(26, 6, 26, 14); ctx.arc(0, 14, 26, 0, Math.PI); ctx.quadraticCurveTo(-26, 6, 0, -34); ctx.closePath(); ctx.fill(); ctx.stroke(); circle(ctx, -9, 10, 6, 'rgba(255,255,255,0.7)'); ctx.restore(); }
+  function soilIcon(ctx, x, y, s) { ctx.save(); ctx.translate(x, y); ctx.scale(s, s); ctx.fillStyle = SOIL; ctx.strokeStyle = P.ink; ctx.lineWidth = 5; ctx.lineJoin = 'round'; ctx.beginPath(); ctx.moveTo(-44, 20); ctx.quadraticCurveTo(-30, -22, -4, -18); ctx.quadraticCurveTo(22, -34, 44, 20); ctx.closePath(); ctx.fill(); ctx.stroke(); circle(ctx, -14, 4, 4, 'rgba(255,255,255,0.25)'); circle(ctx, 16, 0, 3, 'rgba(255,255,255,0.25)'); ctx.restore(); }
+  function germ(ctx, x, y, s, t) {
+    ctx.save(); ctx.translate(x, y); ctx.scale(s, s); ctx.strokeStyle = P.ink; ctx.lineWidth = 4; ctx.lineCap = 'round';
+    for (let i = 0; i < 8; i++) { const a = i / 8 * Math.PI * 2 + Math.sin((t || 0) * 3 + i) * 0.1; ctx.beginPath(); ctx.moveTo(Math.cos(a) * 20, Math.sin(a) * 20); ctx.lineTo(Math.cos(a) * 32, Math.sin(a) * 32); ctx.stroke(); }
+    circle(ctx, 0, 0, 24, GERM, P.ink, 4); circle(ctx, -8, -4, 6, P.white); circle(ctx, 8, -4, 6, P.white); circle(ctx, -8, -4, 3, P.ink); circle(ctx, 8, -4, 3, P.ink);
+    ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(0, 6, 8, 0.15 * Math.PI, 0.85 * Math.PI); ctx.stroke(); ctx.restore();
+  }
+  function mouthIcon(ctx, x, y, s) { // fingers going into a mouth
+    ctx.save(); ctx.translate(x, y); ctx.scale(s, s);
+    ctx.fillStyle = '#FFD9B8'; ctx.strokeStyle = P.ink; ctx.lineWidth = 5; ctx.beginPath(); ctx.arc(14, -6, 36, Math.PI * 0.75, Math.PI * 2.25); ctx.closePath(); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = '#7A2E3B'; ellipse(ctx, 4, 4, 16, 11, '#7A2E3B', P.ink, 4);
+    L.hand(ctx, -42, 16, 0.42, 1.2);
+    ctx.restore();
+  }
+  function pieIcon(ctx, id, s, t) {
+    ctx.save(); ctx.scale(s, s);
+    if (id === 'soil') soilIcon(ctx, 0, 0, 1); else if (id === 'seed') seed(ctx, 0, 0, 1.1, 0.3); else if (id === 'water') drop(ctx, 0, 4, 1); else if (id === 'sun') L.sun(ctx, 0, 0, 24, t || 0, { face: false });
+    else if (id === 'germs') germ(ctx, 0, 0, 1, t); else if (id === 'mouth') mouthIcon(ctx, 0, 0, 1);
+    ctx.restore();
+  }
+  // the cause pie: slices [{id,color,state,pop,lift}]; state 0 = missing (dashed), 1 = present, 2 = taken away (red X)
+  function causePie(ctx, x, y, r, slices, t, o) {
+    o = o || {}; const n = slices.length; ctx.save(); ctx.translate(x, y);
+    const full = slices.every(s => s.state === 1 && (s.pop == null || s.pop >= 1));
+    if (full || o.glow) { const ga = full ? 1 : o.glow; const g = ctx.createRadialGradient(0, 0, r * 0.9, 0, 0, r * 1.7); g.addColorStop(0, `rgba(255,230,120,${0.55 * ga})`); g.addColorStop(1, 'rgba(255,230,120,0)'); ctx.fillStyle = g; ctx.beginPath(); ctx.arc(0, 0, r * 1.7, 0, Math.PI * 2); ctx.fill(); }
+    circle(ctx, 0, 0, r + 14, 'rgba(255,255,255,0.9)', P.ink, 6);
+    slices.forEach((s, i) => {
+      const a0 = -Math.PI / 2 + i * 2 * Math.PI / n, a1 = a0 + 2 * Math.PI / n, am = (a0 + a1) / 2;
+      const pop = s.pop == null ? 1 : clamp(s.pop, 0, 1); const lift = s.lift || 0;
+      const lv = s.liftVec || [Math.cos(am), Math.sin(am)]; ctx.save(); ctx.translate(Math.cos(am) * 3 + lv[0] * lift * 70, Math.sin(am) * 3 + lv[1] * lift * 70);
+      if (s.state === 1) ctx.scale(Math.max(0.001, pop), Math.max(0.001, pop));
+      ctx.beginPath(); ctx.moveTo(0, 0); ctx.arc(0, 0, r, a0, a1); ctx.closePath();
+      if (s.state === 1) { ctx.fillStyle = s.color; ctx.fill(); ctx.strokeStyle = P.ink; ctx.lineWidth = 6; ctx.stroke(); }
+      else { ctx.fillStyle = 'rgba(200,205,215,0.35)'; ctx.fill(); ctx.setLineDash([12, 10]); ctx.strokeStyle = 'rgba(43,45,66,0.6)'; ctx.lineWidth = 5; ctx.stroke(); ctx.setLineDash([]); }
+      const ix = Math.cos(am) * r * 0.58, iy = Math.sin(am) * r * 0.58;
+      ctx.save(); ctx.translate(ix, iy); ctx.globalAlpha = s.state === 1 ? 1 : 0.4; pieIcon(ctx, s.id, r / 150, t); ctx.restore();
+      if (s.state === 2) { ctx.strokeStyle = P.red; ctx.lineWidth = Math.max(8, r * 0.09); ctx.lineCap = 'round'; const k = r * 0.26; ctx.beginPath(); ctx.moveTo(ix - k, iy - k); ctx.lineTo(ix + k, iy + k); ctx.moveTo(ix + k, iy - k); ctx.lineTo(ix - k, iy + k); ctx.stroke(); }
+      ctx.restore();
+    });
+    if (o.label) text(ctx, o.label, 0, r + 56, { size: 40, weight: 700, color: P.ink, stroke: P.white, strokeWidth: 8 });
+    ctx.restore();
+  }
+  // flower pot, bottom-centre at (x,y). o: soil 0..1, wet, seed, sprout 0..1, bloom 0..1, wilt 0..1, t, big (bloom scale)
+  function pot(ctx, x, y, s, o) {
+    o = o || {}; const t = o.t || 0; ctx.save(); ctx.translate(x, y); ctx.scale(s, s);
+    ctx.fillStyle = POT; ctx.strokeStyle = P.ink; ctx.lineWidth = 6; ctx.lineJoin = 'round';
+    ctx.beginPath(); ctx.moveTo(-72, 0); ctx.lineTo(-96, -150); ctx.lineTo(96, -150); ctx.lineTo(72, 0); ctx.closePath(); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = '#C4703E'; roundRect(ctx, -106, -190, 212, 44, 10); ctx.fill(); ctx.stroke();
+    if (o.soil > 0) { ctx.save(); ctx.translate(0, -190); ctx.scale(1, o.soil); ctx.fillStyle = o.wet ? SOIL_WET : SOIL; ctx.beginPath(); ctx.moveTo(-92, 0); ctx.quadraticCurveTo(-50, -34, 0, -30); ctx.quadraticCurveTo(50, -36, 92, 0); ctx.closePath(); ctx.fill(); ctx.stroke(); ctx.restore(); }
+    if (o.seed) seed(ctx, 0, o.soil ? -214 : -40, 0.9, 0.2);
+    if (o.sprout > 0) {
+      const wilt = o.wilt || 0; const big = o.big || 1; const hgt = (120 * o.sprout + 150 * (o.bloom || 0)) * big; const sway = Math.sin(t * 2) * 4;
+      const tx = wilt * 110 + sway, ty = -hgt * (1 - 0.35 * wilt);
+      ctx.save(); ctx.translate(0, -214 * (o.soil || 1)); ctx.strokeStyle = o.pale ? '#EDE9D0' : STEM; ctx.lineWidth = 12; ctx.lineCap = 'round';
+      ctx.beginPath(); ctx.moveTo(0, 0); ctx.quadraticCurveTo(wilt * 30, -hgt * 0.55, tx, ty); ctx.stroke();
+      // leaves
+      const leaf = (ly, dir, sc) => { if (sc <= 0) return; ctx.save(); ctx.translate(wilt * 12 * dir, ly); ctx.scale(dir * sc, sc); ctx.fillStyle = o.pale ? '#F3F0DA' : P.green; ctx.strokeStyle = P.ink; ctx.lineWidth = 4; ctx.beginPath(); ctx.moveTo(0, 0); ctx.quadraticCurveTo(28, -34, 64, -22); ctx.quadraticCurveTo(40, 8, 0, 0); ctx.closePath(); ctx.fill(); ctx.stroke(); ctx.restore(); };
+      leaf(-hgt * 0.42, 1, clamp(o.sprout * 1.4 - 0.3, 0, 1)); leaf(-hgt * 0.66, -1, clamp(o.sprout * 1.4 - 0.5, 0, 1));
+      if (o.bloom > 0) {
+        const b = clamp(o.bloom, 0, 1) * big; ctx.save(); ctx.translate(tx, ty); ctx.rotate(wilt * 1.2);
+        for (let i = 0; i < 6; i++) { const a = i / 6 * Math.PI * 2 + t * 0.2; circle(ctx, Math.cos(a) * 30 * b, Math.sin(a) * 30 * b, 24 * b, o.petal || P.pink, P.ink, 4); }
+        circle(ctx, 0, 0, 20 * b, P.sun, P.ink, 4); ctx.restore();
+      }
+      ctx.restore();
+    }
+    ctx.restore();
+  }
+  function teddy(ctx, x, y, s, t) { // sitting teddy, feet at (x,y)
+    ctx.save(); ctx.translate(x, y); ctx.scale(s, s); const bob = Math.sin((t || 0) * 2) * 2; ctx.translate(0, bob);
+    ellipse(ctx, -40, -14, 26, 18, TEDDY, P.ink, 5); ellipse(ctx, 40, -14, 26, 18, TEDDY, P.ink, 5);
+    ellipse(ctx, 0, -72, 56, 60, TEDDY, P.ink, 5); ellipse(ctx, 0, -64, 30, 34, TEDDY_LIGHT);
+    ellipse(ctx, -54, -84, 16, 36, TEDDY, P.ink, 5, 0.5); ellipse(ctx, 54, -84, 16, 36, TEDDY, P.ink, 5, -0.5);
+    circle(ctx, -40, -164, 19, TEDDY, P.ink, 5); circle(ctx, 40, -164, 19, TEDDY, P.ink, 5); circle(ctx, -40, -164, 9, TEDDY_LIGHT); circle(ctx, 40, -164, 9, TEDDY_LIGHT);
+    circle(ctx, 0, -138, 46, TEDDY, P.ink, 5); ellipse(ctx, 0, -124, 22, 15, TEDDY_LIGHT); circle(ctx, 0, -131, 6, P.ink);
+    circle(ctx, -17, -146, 5, P.ink); circle(ctx, 17, -146, 5, P.ink);
+    ctx.strokeStyle = P.ink; ctx.lineWidth = 3; ctx.lineCap = 'round'; ctx.beginPath(); ctx.arc(0, -120, 9, 0.2 * Math.PI, 0.8 * Math.PI); ctx.stroke();
+    ctx.fillStyle = P.red; ctx.lineWidth = 4; ctx.beginPath(); ctx.moveTo(0, -96); ctx.lineTo(-20, -108); ctx.lineTo(-20, -84); ctx.closePath(); ctx.fill(); ctx.stroke(); ctx.beginPath(); ctx.moveTo(0, -96); ctx.lineTo(20, -108); ctx.lineTo(20, -84); ctx.closePath(); ctx.fill(); ctx.stroke();
+    ctx.restore();
+  }
+  // watering can, body centre (x,y); tilt in radians (negative = pouring to the left); pour 0/1 draws drops falling to groundY
+  function can(ctx, x, y, s, tilt, pour, t, groundY) {
+    tilt = tilt || 0; ctx.save(); ctx.translate(x, y); ctx.rotate(tilt); ctx.scale(s, s);
+    ctx.fillStyle = CAN; ctx.strokeStyle = P.ink; ctx.lineWidth = 6; ctx.lineJoin = 'round';
+    ctx.lineWidth = 14; ctx.beginPath(); ctx.arc(0, -50, 46, Math.PI, 0); ctx.stroke(); ctx.strokeStyle = CAN; ctx.lineWidth = 7; ctx.stroke();
+    ctx.strokeStyle = P.ink; ctx.lineWidth = 22; ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(-56, -10); ctx.lineTo(-132, -84); ctx.stroke(); ctx.strokeStyle = CAN; ctx.lineWidth = 12; ctx.stroke();
+    ctx.lineWidth = 6; ctx.strokeStyle = P.ink; roundRect(ctx, -70, -50, 140, 110, 22); ctx.fillStyle = CAN; ctx.fill(); ctx.stroke();
+    circle(ctx, -138, -90, 20, CAN, P.ink, 6); ctx.fillStyle = P.ink; for (const [dx, dy] of [[-6, -6], [6, -6], [0, 4], [-7, 7], [7, 7]]) circle(ctx, -138 + dx, -90 + dy, 2.5, P.ink);
+    ctx.restore();
+    if (pour > 0) {
+      const lx = -138 * s, ly = -90 * s; const rx = x + lx * Math.cos(tilt) - ly * Math.sin(tilt), ry = y + lx * Math.sin(tilt) + ly * Math.cos(tilt);
+      const gy = groundY == null ? ry + 220 : groundY; const r = L.rng(5);
+      ctx.save(); for (let i = 0; i < 7; i++) { const ph = r(); const f = ((t || 0) * 1.3 + ph) % 1; ctx.globalAlpha = (1 - f * 0.5) * pour; drop(ctx, rx + (i - 3) * 14 + Math.sin(ph * 9) * 6, lerp(ry + 10, gy, f), 0.45); } ctx.restore();
+    }
+  }
+  function cupboard(ctx, x, y, w, h, inner) { // cutaway cupboard, bottom-centre (x,y): dark inside, door open on the left
+    ctx.save(); ctx.translate(x, y);
+    ctx.fillStyle = '#8C6A4F'; ctx.strokeStyle = P.ink; ctx.lineWidth = 8; roundRect(ctx, -w / 2, -h, w, h, 16); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = '#2B2234'; ctx.fillRect(-w / 2 + 16, -h + 16, w - 32, h - 32);
+    if (inner) { ctx.save(); ctx.beginPath(); ctx.rect(-w / 2 + 16, -h + 16, w - 32, h - 32); ctx.clip(); ctx.globalAlpha = 0.4; inner(); ctx.restore(); }
+    ctx.fillStyle = '#A47B5A'; ctx.lineWidth = 6; ctx.beginPath(); ctx.moveTo(-w / 2 + 16, -h + 16); ctx.lineTo(-w / 2 - 70, -h + 60); ctx.lineTo(-w / 2 - 70, -40); ctx.lineTo(-w / 2 + 16, -16); ctx.closePath(); ctx.fill(); ctx.stroke(); circle(ctx, -w / 2 - 50, -h / 2, 9, P.sun, P.ink, 4);
+    ctx.restore();
+  }
+  function cup(ctx, x, y, s, o) { // clear cup, bottom-centre; o: wool, bean, sprout
+    o = o || {}; ctx.save(); ctx.translate(x, y); ctx.scale(s, s);
+    ctx.fillStyle = 'rgba(230,245,255,0.8)'; ctx.strokeStyle = P.ink; ctx.lineWidth = 6; ctx.beginPath(); ctx.moveTo(-70, 0); ctx.lineTo(-84, -176); ctx.lineTo(84, -176); ctx.lineTo(70, 0); ctx.closePath(); ctx.fill(); ctx.stroke();
+    if (o.wool > 0) { ctx.save(); ctx.translate(0, -30); ctx.scale(o.wool, o.wool); ctx.fillStyle = o.wet ? '#DCEBF7' : P.white; ctx.strokeStyle = 'rgba(43,45,66,0.45)'; ctx.lineWidth = 4; for (const [cx, cy, r] of [[-34, 0, 30], [0, -12, 36], [34, 0, 30], [-14, 14, 26], [18, 14, 26]]) { ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.fill(); ctx.stroke(); } ctx.restore(); }
+    if (o.bean) seed(ctx, 0, -84, 0.75, 0.3);
+    if (o.sprout > 0) { const h = 150 * o.sprout; ctx.strokeStyle = STEM; ctx.lineWidth = 9; ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(0, -92); ctx.quadraticCurveTo(6, -92 - h * 0.5, 0, -92 - h); ctx.stroke(); for (const d of [-1, 1]) { ctx.save(); ctx.translate(0, -92 - h * 0.95); ctx.scale(d * o.sprout, o.sprout); ctx.fillStyle = P.green; ctx.strokeStyle = P.ink; ctx.lineWidth = 4; ctx.beginPath(); ctx.moveTo(0, 0); ctx.quadraticCurveTo(24, -30, 56, -20); ctx.quadraticCurveTo(34, 8, 0, 0); ctx.closePath(); ctx.fill(); ctx.stroke(); ctx.restore(); } }
+    ctx.restore();
+  }
+  function window_(ctx, x, y, t) { // a window with the sun in it
+    ctx.save(); ctx.translate(x, y); ctx.fillStyle = '#CDEBFF'; ctx.strokeStyle = P.ink; ctx.lineWidth = 8; roundRect(ctx, -150, -130, 300, 260, 18); ctx.fill(); ctx.stroke();
+    ctx.save(); ctx.beginPath(); roundRect(ctx, -150, -130, 300, 260, 18); ctx.clip(); L.sun(ctx, 10, -10, 62, t); ctx.restore();
+    ctx.beginPath(); ctx.moveTo(0, -130); ctx.lineTo(0, 130); ctx.moveTo(-150, 0); ctx.lineTo(150, 0); ctx.stroke(); ctx.restore();
+  }
+  function night(ctx, a) { if (a <= 0) return; L.fade(ctx, a * 0.7, '#1F2A48'); ctx.save(); ctx.globalAlpha = a; circle(ctx, 1300, 150, 56, '#FFF7C2', P.ink, 5); circle(ctx, 1272, 132, 46, `rgba(31,42,72,${0.75 * a})`); ctx.restore(); }
+  function dayLabel(ctx, Lt) { const d = Lt.cafter('wait', 'three days', -0.1) ? 3 : Lt.cafter('wait', 'two days', -0.1) ? 2 : Lt.cafter('wait', 'one day', -0.1) ? 1 : 0; if (!d) return; const p = d === 3 ? Lt.cwin('wait', 'three days', 0.4, E.outBack, -0.1) : d === 2 ? Lt.cwin('wait', 'two days', 0.4, E.outBack, -0.1) : Lt.cwin('wait', 'one day', 0.4, E.outBack, -0.1); L.sticker(ctx, 'Day ' + d, 1000, 120, p * (1 - Lt.win('grow', 0, 0.3)), { bg: P.white, size: 64, rot: 0 }); }
+  function pieSlices(present, removed, pops) { return PIE.map((p, i) => ({ ...p, state: removed && removed.includes(p.id) ? 2 : (present ? present(p.id, i) : 1) ? 1 : 0, pop: pops ? pops(i) : 1 })); }
+  const allFull = () => PIE.map(p => ({ ...p, state: 1 }));
+
+  L.episodes.ep6 = {
+    id: 'ep6', num: 6, title: 'What makes things happen?', short: 'Causes', phrase: 'Lots of pieces make it happen!',
+    props: { pot, causePie, teddy, can, seed, PIE },
+    lines: [
+      { id: 'hello', text: "Hello, little scientists! I'm Curie. Welcome to the Little Scientists Club!", hold: 0.3 },
+      { id: 'q', text: "Today's big question: what makes things happen?", hold: 0.6 },
+      { id: 'seed', text: 'Curie has a tiny seed, and Curie wants a flower! But a seed on its own... just sits there.', hold: 0.8 },
+      { id: 'pieces', text: 'A flower needs lots of pieces. Soil! A seed! Water! And sunshine!', hold: 0.6 },
+      { id: 'pie', text: "Each piece is a slice of Curie's cause pie. When the pie is full... something will happen!", hold: 0.8 },
+      { id: 'wait', text: 'Now we wait. Causes take time. One day... two days... three days...', hold: 0.6 },
+      { id: 'grow', text: 'Pop! A little sprout! And... a flower! All the pieces together made it happen!', hold: 1.0 },
+      { id: 'test', text: 'Which pieces really matter? Scientists test it! Take one piece away... and see what happens.', hold: 0.7 },
+      { id: 'nowater', text: 'No water? Nothing grows. No flower! Water makes a difference, so water is a cause.', hold: 0.8 },
+      { id: 'nosun', text: 'No sunshine? Just a tiny white sprout. No flower! Sunshine is a cause too.', hold: 0.8 },
+      { id: 'teddy', text: 'Hmm. Teddy sat next to the pot all week. Did teddy make the flower grow?', hold: 0.6 },
+      { id: 'teddytest', text: "Let's test! Take teddy away... the flower still grows! Teddy is not a cause. It was just there!", hold: 0.9 },
+      { id: 'rule', text: 'So, to make something happen, you need all the pieces. To stop it, just take one piece away!', hold: 0.9 },
+      { id: 'hands', text: "Doctors use this trick! Germs on your hands and fingers in your mouth can make a tummy ache. Wash the germs away... and that tummy ache can't happen!", hold: 0.8 },
+      { id: 'sayit', text: 'Say it with me: lots of pieces make it happen!', hold: 1.4 },
+      { id: 'try1', text: "Let's try it at home! Ask a grown-up for two cups, cotton wool, and two bean seeds. Put a seed in each cup.", hold: 0.4 },
+      { id: 'try2', text: 'Water one cup every day. Keep the other one dry. Wait a few days. Which one grows? Which piece was missing?', hold: 1.6 },
+      { id: 'bye', text: 'Great job, little scientist! Remember: lots of pieces together make things happen. See you next time at the Little Scientists Club! Bye-bye!', hold: 1.2 }
+    ],
+    sfx: [
+      { line: 'seed', offset: 0.1, name: 'pop' }, { line: 'pieces', chunk: 'soil', offset: 0, name: 'thump', vol: 0.6 }, { line: 'pieces', chunk: 'a seed', offset: 0, name: 'pop' }, { line: 'pieces', chunk: 'water', offset: 0, name: 'drip' }, { line: 'pieces', chunk: 'and sunshine', offset: 0, name: 'sparkle' },
+      { line: 'pie', offset: 0.1, name: 'ding' }, { line: 'pie', chunk: 'something will happen', offset: 0, name: 'tada' }, { line: 'wait', chunk: 'one day', offset: 0, name: 'click' }, { line: 'wait', chunk: 'two days', offset: 0, name: 'click' }, { line: 'wait', chunk: 'three days', offset: 0, name: 'click' },
+      { line: 'grow', offset: 0.05, name: 'pop' }, { line: 'grow', chunk: 'a flower', offset: 0, name: 'tada' }, { line: 'test', chunk: 'scientists test', offset: 0, name: 'bubble' }, { line: 'nowater', offset: 0.1, name: 'click' }, { line: 'nosun', offset: 0.1, name: 'click' },
+      { line: 'teddy', offset: 0.1, name: 'bubble' }, { line: 'teddytest', chunk: 'take teddy away', offset: 0, name: 'whoosh' }, { line: 'teddytest', chunk: 'still grows', offset: 0, name: 'sparkle' }, { line: 'rule', chunk: 'to stop it', offset: 0, name: 'ding' },
+      { line: 'hands', offset: 0.1, name: 'sparkle' }, { line: 'hands', chunk: 'wash the germs', offset: 0, name: 'bubble' }, { line: 'hands', chunk: "can't happen", offset: 0, name: 'ding' }, { line: 'sayit', offset: 1.4, name: 'ding' },
+      { line: 'try1', offset: 0.1, name: 'tada' }, { line: 'try1', chunk: 'each cup', offset: 0, name: 'pop' }, { line: 'try2', chunk: 'water one cup', offset: 0, name: 'drip' }, { line: 'try2', chunk: 'keep the other', offset: 0, name: 'click' }, { line: 'try2', chunk: 'which one grows', offset: 0, name: 'pop' }, { line: 'try2', chunk: 'which piece', offset: 0, name: 'ding' }, { line: 'bye', offset: 0.0, name: 'tada' }
+    ],
+    scenes: [
+      { from: 'hello', draw: (ctx, t, Lt) => L.scenes.intro(ctx, t, Lt) },
+      { from: 'q', draw: (ctx, t, Lt) => L.scenes.question(ctx, t, Lt, (c, tt) => { seed(c, -190, 60, 1.6, 0.3); L.arrow(c, -120, 60, -10, 60, P.ink, 10); pot(c, 150, 190, 0.78, { soil: 1, sprout: 1, bloom: 1, t: tt }); }) },
+      {
+        from: 'seed', draw: (ctx, t, Lt) => {
+          const potP = Lt.win('pieces', 0, 0.5, E.outBack);
+          const soilP = Lt.cwin('pieces', 'soil', 0.5, E.out); const seedHop = Lt.cwin('pieces', 'a seed', 0.7, E.inOut); const waterP = Lt.cwin('pieces', 'water', 1.4); const sunP = Lt.cwin('pieces', 'and sunshine', 0.8);
+          const pieP = Lt.win('pie', 0, 0.5, E.outBack); const sliceP = i => Lt.cwin('pie', 'each piece', 0.4, E.outBack, 0.5 + i * 0.32); const fullP = Lt.cwin('pie', 'when the pie is full', 0.6); const happenP = Lt.cwin('pie', 'something will happen', 0.6);
+          const sproutP = Lt.cwin('grow', 'pop', 0.7, E.outBack); const bloomP = Lt.cwin('grow', 'a flower', 0.9, E.outBack, 0.1);
+          const n1 = Lt.cwin('wait', 'two days', 0.9, null, -0.95), n2 = Lt.cwin('wait', 'three days', 0.9, null, -0.95); const nightA = Math.max(Math.sin(Math.PI * n1), Math.sin(Math.PI * n2)) * 0.75;
+          garden(ctx, t, { beam: sunP > 0 ? { x: 1200, y: 540, a: 0.22 * Math.min(1, sunP * 2) } : null });
+          if (sunP > 0) L.sparkles(ctx, 1650, 200, t, 8, 6, 200, P.white);
+          if (pieP > 0) { ctx.save(); ctx.translate(330, 300); ctx.scale(pieP, pieP); causePie(ctx, 0, 0, 140, pieSlices((id, i) => sliceP(i) > 0, null, sliceP), t, { label: 'cause pie', glow: fullP }); ctx.restore(); }
+          // the seed on the ground, then hopping into the pot
+          const seedIn = Lt.cwin('seed', 'tiny seed', 0.4, E.outBack, 0.1);
+          if (seedIn > 0 && seedHop < 1) { const hx = lerp(1000, 1200, seedHop), hy = lerp(806, 540, seedHop) - Math.sin(seedHop * Math.PI) * 240; ctx.save(); ctx.translate(hx, hy); ctx.scale(seedIn, seedIn); seed(ctx, 0, 0, 1.3, seedHop * 6); ctx.restore(); }
+          if (potP > 0) { ctx.save(); ctx.translate(1200, 820); ctx.scale(potP, potP); pot(ctx, 0, 0, 1.35, { soil: soilP, wet: waterP > 0.5, seed: seedHop >= 1 && sproutP <= 0, sprout: sproutP, bloom: bloomP, t }); ctx.restore(); }
+          if (waterP > 0 && waterP < 1) { const k = Math.sin(waterP * Math.PI); can(ctx, 1360, 400 - k * 20, 1.1, -0.75 * k, k > 0.35 ? 1 : 0, t, 545); }
+          if (happenP > 0 || (sproutP > 0 && sproutP < 1) || (bloomP > 0 && bloomP < 1)) L.sparkles(ctx, 1200, 520, t, 9, 10, 220);
+          // Curie
+          const sits = Lt.cafter('seed', 'just sits there') && !Lt.after('pieces'); const waiting = Lt.after('wait') && !Lt.after('grow');
+          L.pip(ctx, { x: 560, y: 720, s: 1.3, t, mood: sits || waiting ? 'think' : (sproutP > 0 && sproutP < 1) || (bloomP > 0 && bloomP < 1) ? 'wow' : 'talk', armR: waiting ? 0.6 : -0.5, armL: 0.6, lookX: 0.9, lookY: Lt.after('pieces') ? 0.1 : 0.6 });
+          night(ctx, nightA); dayLabel(ctx, Lt);
+          // stickers
+          L.sticker(ctx, 'just sits there...', 1000, 620, Lt.cwin('seed', 'just sits there', 0.5) * (1 - Lt.win('pieces', 0, 0.3)), { bg: P.grey, size: 64, rot: -0.05 });
+          const pieceLbl = [['soil!', 'soil', P.brown, P.white], ['a seed!', 'a seed', '#E7C27A', P.ink], ['water!', 'water', P.blue, P.white], ['sunshine!', 'and sunshine', P.sun, P.ink]];
+          pieceLbl.forEach(([lbl, needle, bg, color], i) => { const next = pieceLbl[i + 1]; const a = Lt.cwin('pieces', needle, 0.4, null, 0.1) * (next ? 1 - Lt.cwin('pieces', next[1], 0.25) : 1 - Lt.win('pie', 0, 0.3)); L.sticker(ctx, lbl, 1610, 600, a, { bg, color, size: 76, rot: i % 2 ? 0.06 : -0.06 }); });
+          L.sticker(ctx, 'something will happen!', 1000, 300, happenP * (1 - Lt.win('wait', 0, 0.3)), { bg: P.pink, size: 72, rot: -0.04 });
+          L.sticker(ctx, 'sprout!', 1540, 520, Lt.cwin('grow', 'sprout', 0.5) * (1 - Lt.cwin('grow', 'a flower', 0.3)), { bg: P.green, color: P.white, size: 80, rot: 0.06 });
+          L.sticker(ctx, 'a flower!', 1560, 380, Lt.cwin('grow', 'a flower', 0.5) * (1 - Lt.cwin('grow', 'all the pieces', 0.3)), { bg: P.pink, size: 88, rot: -0.05 });
+          L.sticker(ctx, 'all the pieces together!', 720, 110, Lt.cwin('grow', 'all the pieces', 0.6), { bg: P.sun, size: 60, rot: 0.03 });
+        }
+      },
+      {
+        from: 'test', draw: (ctx, t, Lt) => {
+          L.sky(ctx); L.sun(ctx, 1790, 150, 90, t); L.ground(ctx, 820);
+          // table
+          ctx.fillStyle = '#D9B277'; ctx.strokeStyle = P.ink; ctx.lineWidth = 6; roundRect(ctx, 380, 700, 1440, 40, 12); ctx.fill(); ctx.stroke(); ctx.fillStyle = '#B98B4E'; for (const lx of [440, 1760]) { ctx.fillRect(lx - 20, 740, 40, 160); ctx.strokeRect(lx - 20, 740, 40, 160); }
+          const lift = Lt.cwin('test', 'take one piece away', 0.7, E.inOut, 0.2) * (1 - Lt.win('nowater', 0, 0.4, E.inOut)); const qP = Lt.cwin('test', 'see what happens', 0.5, E.outBack);
+          // pot A: all four pieces, flower
+          pot(ctx, 600, 700, 0.8, { soil: 1, sprout: 1, bloom: 1, t });
+          causePie(ctx, 600, 170, 80, PIE.map(p => ({ ...p, state: 1, lift: p.id === 'water' ? lift : 0, liftVec: [0, -1] })), t);
+          if (lift > 0) { ctx.save(); ctx.translate(560, 215 - lift * 70); L.hand(ctx, 0, 0, 0.8, 0.9); ctx.restore(); }
+          if (qP > 0 && !Lt.after('nowater')) L.questionMark(ctx, 1100, 400, qP, t);
+          // pot B: no water
+          const bIn = Lt.win('nowater', 0, 0.5, E.outBack); const waterCause = Lt.cwin('nowater', 'is a cause', 0.5);
+          if (bIn > 0) { ctx.save(); ctx.translate(1040, 700); ctx.scale(bIn, bIn); pot(ctx, 0, 0, 0.8, { soil: 1, seed: true, t }); ctx.restore(); causePie(ctx, 1040, 170, 80, pieSlices(null, ['water']), t); }
+          // pot C: no sunshine (inside a dark cupboard)
+          const cIn = Lt.win('nosun', 0, 0.5, E.outBack);
+          if (cIn > 0) { ctx.save(); ctx.translate(1480, 700); ctx.scale(cIn, cIn); cupboard(ctx, 0, 0, 330, 300, () => pot(ctx, 0, -20, 0.7, { soil: 1, wet: true, sprout: 0.45, pale: true, t })); ctx.restore(); causePie(ctx, 1480, 170, 80, pieSlices(null, ['sun']), t); }
+          L.pip(ctx, { x: 200, y: 740, s: 1.1, t, mood: 'talk', armR: -0.6, armL: 0.6, lookX: 0.9, lookY: -0.3 });
+          L.sticker(ctx, 'Scientists test!', 1200, 120, Lt.cwin('test', 'scientists test', 0.5) * (1 - Lt.win('nowater', 0, 0.3)), { bg: P.blue, color: P.white, size: 76, rot: -0.03 });
+          L.sticker(ctx, 'no water', 1040, 400, Lt.cwin('nowater', 'no water', 0.4, null, 0.2) * (1 - Lt.cwin('nowater', 'no flower', 0.25)), { bg: P.greyDark, color: P.white, size: 60, rot: -0.04 });
+          L.sticker(ctx, 'no flower!', 1040, 400, Lt.cwin('nowater', 'no flower', 0.4) * (1 - waterCause), { bg: P.greyDark, color: P.white, size: 66, rot: 0.04 });
+          L.sticker(ctx, 'water is a cause!', 1040, 400, waterCause * (1 - Lt.win('nosun', 0, 0.3)), { bg: P.blue, color: P.white, size: 60, rot: -0.03 });
+          const sunCause = Lt.cwin('nosun', 'sunshine is a cause', 0.5);
+          L.sticker(ctx, 'no sunshine', 1480, 340, Lt.cwin('nosun', 'no sunshine', 0.4, null, 0.2) * (1 - Lt.cwin('nosun', 'white sprout', 0.25)), { bg: P.greyDark, color: P.white, size: 60, rot: 0.04 });
+          L.sticker(ctx, 'tiny white sprout', 1480, 340, Lt.cwin('nosun', 'white sprout', 0.4) * (1 - Lt.cwin('nosun', 'no flower', 0.25)), { bg: P.grey, size: 56, rot: -0.03 });
+          L.sticker(ctx, 'no flower!', 1480, 340, Lt.cwin('nosun', 'no flower', 0.4) * (1 - sunCause), { bg: P.greyDark, color: P.white, size: 66, rot: -0.04 });
+          L.sticker(ctx, 'sunshine is a cause too!', 1380, 340, sunCause, { bg: P.sun, size: 58, rot: 0.03 });
+        }
+      },
+      {
+        from: 'teddy', draw: (ctx, t, Lt) => {
+          garden(ctx, t);
+          const away = Lt.cwin('teddytest', 'take teddy away', 0.9, E.inOut); const still = Lt.cwin('teddytest', 'still grows', 0.8, E.outBack); const tIn = Lt.win('teddy', 0, 0.5, E.outBack);
+          causePie(ctx, 330, 300, 140, allFull(), t, { label: 'cause pie' });
+          pot(ctx, 1050, 820, 1.2, { soil: 1, sprout: 1, bloom: 1, big: 1 + 0.15 * still, t });
+          if (still > 0 && still < 1) L.sparkles(ctx, 1050, 420, t, 4, 10, 240);
+          if (tIn > 0) { const tx = lerp(1330, 2150, away); ctx.save(); ctx.translate(tx, 820); ctx.scale(tIn, tIn); teddy(ctx, 0, 0, 1.0, t); ctx.restore(); if (Lt.cafter('teddy', 'did teddy') && away <= 0) L.questionMark(ctx, 1330, 540, 0.9, t); }
+          L.pip(ctx, { x: 520, y: 720, s: 1.3, t, mood: Lt.after('teddytest') ? 'talk' : 'think', armR: away > 0 && away < 1 ? -0.2 : -0.5, armL: 0.6, lookX: 0.9, lookY: 0.2 });
+          L.sticker(ctx, 'still grows!', 1540, 460, still * (1 - Lt.cwin('teddytest', 'not a cause', 0.3)), { bg: P.green, color: P.white, size: 80, rot: 0.05 });
+          L.sticker(ctx, 'teddy is not a cause', 1530, 460, Lt.cwin('teddytest', 'not a cause', 0.5) * (1 - Lt.cwin('teddytest', 'just there', 0.3)), { bg: P.red, color: P.white, size: 66, rot: -0.04 });
+          L.sticker(ctx, 'just there!', 1540, 460, Lt.cwin('teddytest', 'just there', 0.5), { bg: P.pink, size: 84, rot: 0.05 });
+        }
+      },
+      {
+        from: 'rule', draw: (ctx, t, Lt) => {
+          L.sky(ctx, { top: '#E7F3FF', bottom: '#F4F9FF' }); ctx.fillStyle = '#DDE8F2'; ctx.fillRect(0, 760, W, H - 760);
+          const a = Lt.cwin('rule', 'to make something', 0.6, E.outBack); const b = Lt.cwin('rule', 'to stop it', 0.6, E.outBack); const away = Lt.cwin('rule', 'take one piece away', 0.6, E.outBack);
+          const panel = (x, p, draw) => { if (p <= 0) return; ctx.save(); ctx.translate(x + 400, 400); ctx.scale(p, p); ctx.translate(-x - 400, -400); ctx.fillStyle = P.white; ctx.strokeStyle = P.ink; ctx.lineWidth = 8; roundRect(ctx, x, 140, 800, 520, 40); ctx.fill(); ctx.stroke(); draw(); ctx.restore(); };
+          panel(100, a, () => { causePie(ctx, 330, 410, 100, allFull(), t); pot(ctx, 700, 640, 0.85, { soil: 1, sprout: 1, bloom: 1, t }); L.sticker(ctx, 'all the pieces', 400, 210, 1, { bg: P.green, color: P.white, size: 56, rot: 0 }); });
+          panel(1020, b, () => { causePie(ctx, 1250, 410, 100, PIE.map(p => ({ ...p, state: p.id === 'water' && away > 0 ? 2 : 1, lift: p.id === 'water' ? away : 0, liftVec: [0, -1] })), t); pot(ctx, 1620, 640, 0.85, { soil: 1, seed: true, t }); L.sticker(ctx, 'take one away', 1320, 210, 1, { bg: P.red, color: P.white, size: 56, rot: 0 }); if (away > 0) L.sticker(ctx, 'no flower', 1620, 400, away, { bg: P.greyDark, color: P.white, size: 52, rot: -0.05 }); });
+          L.pip(ctx, { x: 960, y: 790, s: 0.9, t, mood: 'talk', armR: b > 0 ? -1.0 : -0.5, armL: a > 0 ? 1.0 + Math.PI : 0.6, lookX: b > 0 ? 0.8 : -0.8, lookY: -0.5 });
+        }
+      },
+      {
+        from: 'hands', draw: (ctx, t, Lt) => {
+          L.sky(ctx, { top: '#E7F3FF', bottom: '#F4F9FF' }); ctx.fillStyle = '#DDE8F2'; ctx.fillRect(0, 820, W, H - 820);
+          // one spoken chunk carries germs → fingers in mouth → tummy ache, so the later beats are offsets from its start
+          const g = Lt.cwin('hands', 'germs on your hands', 0.5, E.outBack, 0.1); const m = Lt.cwin('hands', 'germs on your hands', 1.0, E.inOut, 1.3); const ache = Lt.cwin('hands', 'germs on your hands', 0.5, E.outBack, 2.8); const wash = Lt.cwin('hands', 'wash the germs', 1.4, null, 0.1); const ok = Lt.cwin('hands', "can't happen", 0.5, E.outBack);
+          // pie of two pieces
+          if (g > 0) causePie(ctx, 960, 290, 110, [{ id: 'germs', color: GERM, state: wash > 0.7 ? 2 : 1, pop: g }, { id: 'mouth', color: '#FFD9B8', state: m > 0 ? 1 : 0, pop: m }], t, { label: 'tummy ache pie' });
+          // the hand: on the left, moves to Curie's mouth, then to the basin
+          const hx = wash > 0 ? lerp(1300, 520, Math.min(1, wash * 2)) : lerp(520, 1300, m), hy = wash > 0 ? lerp(700, 680, Math.min(1, wash * 2)) : lerp(620, 700, m), hs = wash > 0 ? lerp(1.3, 2.0, Math.min(1, wash * 2)) : lerp(2.0, 1.3, m);
+          // basin and tap
+          if (wash > 0) { ctx.fillStyle = P.white; ctx.strokeStyle = P.ink; ctx.lineWidth = 8; ctx.beginPath(); ctx.moveTo(300, 740); ctx.quadraticCurveTo(300, 900, 520, 900); ctx.quadraticCurveTo(740, 900, 740, 740); ctx.closePath(); ctx.fill(); ctx.stroke(); ctx.fillStyle = P.grey; roundRect(ctx, 480, 440, 80, 60, 20); ctx.fill(); ctx.stroke(); roundRect(ctx, 520, 380, 36, 90, 14); ctx.fill(); ctx.stroke(); if (wash > 0.3) { ctx.fillStyle = 'rgba(95,184,255,0.8)'; ctx.fillRect(505, 500, 30, 230); const r = L.rng(9); for (let i = 0; i < 10; i++) { const f = ((t * 0.8 + r()) % 1); circle(ctx, 420 + r() * 200, 700 - f * 160, 10 + 10 * r(), 'rgba(255,255,255,0.8)', P.blueDeep, 3); } } }
+          ctx.save(); ctx.translate(hx, hy); ctx.rotate(-0.3 + m * 0.6); L.hand(ctx, 0, 0, hs, 0);
+          if (g > 0) { const gone = clamp((wash - 0.3) * 2, 0, 1); for (const [gx, gy, ph] of [[-30, -40, 0], [30, -10, 2], [-5, 30, 4]]) { const sc = (1 - gone) * g; if (sc <= 0) continue; ctx.save(); ctx.translate(gx + Math.sin(t * 3 + ph) * 4, gy); ctx.scale(sc, sc); germ(ctx, 0, 0, 0.8, t + ph); ctx.restore(); } }
+          ctx.restore();
+          const sad = ache > 0 && ok <= 0;
+          L.pip(ctx, { x: 1450, y: 700, s: 1.3, t, mood: ok > 0 ? 'happy' : sad ? 'sad' : 'talk', armR: sad ? 1.3 : -0.5, armL: sad ? 1.3 : 0.6, lookX: -0.8, lookY: 0.2 });
+          L.sticker(ctx, 'tummy ache!', 1450, 330, ache * (1 - Lt.cwin('hands', 'wash the germs', 0.3)), { bg: P.red, color: P.white, size: 76, rot: 0.05 });
+          L.sticker(ctx, 'wash!', 520, 300, Lt.cwin('hands', 'wash the germs', 0.5) * (1 - ok), { bg: P.blue, color: P.white, size: 80, rot: -0.06 });
+          L.sticker(ctx, "can't happen!", 1450, 330, ok, { bg: P.green, color: P.white, size: 80, rot: -0.04 });
+        }
+      },
+      {
+        from: 'sayit', draw: (ctx, t, Lt) => {
+          garden(ctx, t, { sunX: 1790, sunY: 150, beam: { x: 1250, y: 650, a: 0.2 } }); pot(ctx, 1250, 820, 0.7, { soil: 1, sprout: 1, bloom: 1, t });
+          L.pip(ctx, { x: 560, y: 720, s: 1.3, t, mood: 'talk', armR: -1.3, armL: 1.3 + Math.PI, lookX: 0.3, lookY: -0.5 });
+          L.sayItSticker(ctx, 'Lots of pieces make it happen!', Lt.cwin('sayit', 'lots of pieces make it happen', 0.8), t);
+        }
+      },
+      {
+        from: 'try1', draw: (ctx, t, Lt) => {
+          ctx.fillStyle = '#FFF4DF'; ctx.fillRect(0, 0, W, H); ctx.fillStyle = '#D9B277'; ctx.fillRect(0, 800, W, H - 800); ctx.fillStyle = '#B98B4E'; ctx.fillRect(0, 800, W, 24);
+          L.tryBanner(ctx, Lt.win('try1', 0, 0.6)); L.grownUpBadge(ctx, 180, 300, Lt.win('try1', 1.2, 0.6));
+          const c1 = Lt.cwin('try1', 'two cups', 0.5, E.outBack), c2 = Lt.cwin('try1', 'two cups', 0.5, E.outBack, 0.3); const wool = Lt.cwin('try1', 'cotton wool', 0.5, E.outBack); const beanP = Lt.cwin('try1', 'each cup', 0.6, E.in);
+          const pour = Lt.cwin('try2', 'water one cup', 1.6); const dry = Lt.cwin('try2', 'keep the other', 0.5, E.outBack); const dayP = Lt.cwin('try2', 'wait a few days', 1.6); const sproutP = Lt.cwin('try2', 'which one grows', 0.8, E.outBack, 0.1); const missing = Lt.cwin('try2', 'which piece', 0.6, E.outBack);
+          // both cups stand in the same sunshine: a wide window above them
+          const win = Lt.win('try1', 0.3, 0.5, E.outBack); if (win > 0) { ctx.save(); ctx.translate(1000, 330); ctx.scale(win, win); window_(ctx, 0, 0, t); ctx.restore(); }
+          if (win >= 1) { ctx.save(); ctx.globalAlpha = 0.22; ctx.fillStyle = '#FFE680'; ctx.beginPath(); ctx.moveTo(850, 440); ctx.lineTo(1150, 440); ctx.lineTo(1420, 800); ctx.lineTo(580, 800); ctx.closePath(); ctx.fill(); ctx.restore(); }
+          const drawCup = (x, p, o) => { if (p <= 0) return; ctx.save(); ctx.translate(x, 800); ctx.scale(p, p); cup(ctx, 0, 0, 1.15, o); ctx.restore(); };
+          const wet = pour > 0.3 || Lt.after('try2') && Lt.cafter('try2', 'keep the other');
+          drawCup(780, c1, { wool, bean: beanP >= 1 && sproutP <= 0, sprout: sproutP, wet });
+          drawCup(1220, c2, { wool, bean: beanP >= 1, sprout: 0 });
+          if (beanP > 0 && beanP < 1) for (const x of [780, 1220]) seed(ctx, x, lerp(300, 700, beanP), 0.85, beanP * 6);
+          // the can waters cup 1 only (again on each waiting day)
+          const dayIdx = dayP > 0 && dayP < 1 ? Math.min(2, Math.floor(dayP * 3)) : -1; const dayPour = dayIdx >= 0 ? (dayP * 3 - dayIdx) : 0;
+          const k = pour > 0 && pour < 1 ? Math.sin(pour * Math.PI) : (dayIdx >= 0 ? Math.sin(Math.min(1, dayPour * 1.6) * Math.PI) : 0);
+          if (k > 0) can(ctx, 930, 470 - k * 10, 1.0, -0.7 * k, k > 0.3 ? 1 : 0, t, 640);
+          if (dry > 0) { ctx.save(); ctx.translate(1430, 470); ctx.scale(dry, dry); can(ctx, 0, 0, 0.8, 0, 0, t); ctx.strokeStyle = P.red; ctx.lineWidth = 14; ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(-90, -90); ctx.lineTo(90, 90); ctx.moveTo(90, -90); ctx.lineTo(-90, 90); ctx.stroke(); ctx.restore(); }
+          if (dayIdx >= 0) L.sticker(ctx, 'Day ' + (dayIdx + 1), 1600, 320, 1, { bg: P.white, size: 60, rot: 0 });
+          if (missing > 0) { ctx.save(); ctx.translate(1620, 560); ctx.scale(missing, missing); causePie(ctx, 0, 0, 80, pieSlices(null, ['water']), t); ctx.restore(); }
+          L.pip(ctx, { x: 380, y: 640, s: 1.0, t, mood: 'talk', armR: -0.6, armL: 0.6, lookX: 0.9, lookY: 0 });
+          L.sticker(ctx, 'dry', 1220, 540, dry * (1 - Lt.cwin('try2', 'which one grows', 0.3)), { bg: P.greyDark, color: P.white, size: 64, rot: -0.05 });
+          L.sticker(ctx, 'Which one grows?', 1480, 220, Lt.cwin('try2', 'which one grows', 0.6) * (1 - missing), { bg: P.sun, size: 64, rot: -0.03 });
+          L.sticker(ctx, 'Which piece was missing?', 1480, 220, missing, { bg: P.sun, size: 56, rot: 0.03 });
+        }
+      },
+      { from: 'bye', draw: (ctx, t, Lt) => L.scenes.outro(ctx, t, Lt, 'Lots of pieces make it happen!') }
+    ],
+    interactive: {
+      hint: 'Drag the pieces into the pot: soil, seed, water and sunshine. When the cause pie is full, wait and watch. Drag a piece back out to take it away, and try teddy too!',
+      init: s => {
+        s.items = [{ n: 'soil', hx: 170, hy: 640 }, { n: 'seed', hx: 300, hy: 640 }, { n: 'water', hx: 430, hy: 640 }, { n: 'sun', hx: 190, hy: 790 }, { n: 'teddy', hx: 380, hy: 800 }];
+        s.items.forEach(it => { it.x = it.hx; it.y = it.hy; it.placed = false; });
+        s.drag = null; s.day = 0; s.dayT = 0; s.grow = 0; s.wilt = 0; s.grown = false; s.wasFull = false; s.lastCue = ''; s.idle = 0; s.pour = 0; s.moved = false; s.awayTimer = 0; s.cueTeddy = false;
+      },
+      update: (s, dt, cue) => {
+        const has = n => s.items.some(it => it.n === n && it.placed);
+        const full = ['soil', 'seed', 'water', 'sun'].every(has);
+        if (s.cueTeddy) { s.cueTeddy = false; s.lastCue = 'teddy'; cue('teddy'); }
+        if (full && !s.wasFull && s.grow <= 0) { s.lastCue = 'wait'; cue('wait'); } // the pie just became full: now we wait
+        s.wasFull = full;
+        if (full) {
+          s.idle = 0; s.awayTimer = 0; s.wilt = 0; // a piece put straight back cancels the wilt
+          if (s.grow <= 0 && s.day < 3) { s.dayT += dt; if (s.dayT >= 1.4) { s.dayT = 0; s.day++; } }
+          else { s.grow = Math.min(1, s.grow + dt * 0.55); if (s.grow >= 1 && !s.grown) { s.grown = true; s.lastCue = 'grow'; cue('grow'); } }
+        } else {
+          if (s.awayTimer > 0) { s.awayTimer -= dt; if (s.awayTimer <= 0) { s.lastCue = 'away'; cue('away'); } }
+          if (s.grow > 0 && s.awayTimer <= 0) { s.wilt = Math.min(1, s.wilt + dt * 0.7); if (s.wilt >= 1) { s.grow = 0; s.wilt = 0; s.day = 0; s.dayT = 0; s.grown = false; } }
+          else if (s.grow <= 0) { s.day = 0; s.dayT = 0; s.wilt = 0; s.grown = false; }
+          const n = s.items.filter(it => it.placed && it.n !== 'teddy').length;
+          if (!s.drag) s.idle += dt;
+          if (n > 0 && n < 4 && s.idle > 6 && s.lastCue !== 'missing') { s.lastCue = 'missing'; cue('missing'); s.idle = 0; }
+        }
+        if (s.pour > 0) s.pour = Math.max(0, s.pour - dt);
+      },
+      draw: (ctx, s, t) => {
+        const has = n => s.items.some(it => it.n === n && it.placed);
+        const full = ['soil', 'seed', 'water', 'sun'].every(has);
+        garden(ctx, t, { tree: false, clouds: false, cloudSun: !has('sun'), beam: has('sun') ? { x: 1200, y: 560, a: 0.2 } : null });
+        // tray
+        ctx.fillStyle = 'rgba(255,255,255,0.72)'; roundRect(ctx, 70, 560, 460, 330, 30); ctx.fill();
+        const inTray = s.items.filter(it => !it.placed && it !== s.drag).length;
+        text(ctx, inTray ? 'drag us into the pot!' : 'drag a piece back out!', 300, 525, { size: 50, weight: 700, stroke: P.white, strokeWidth: 12 });
+        causePie(ctx, 300, 280, 130, PIE.map(p => ({ ...p, state: has(p.id) ? 1 : 0 })), t, { label: 'cause pie' });
+        if (!s.moved) L.arrow(ctx, 570, 560, 900, 530, P.sun, 14);
+        pot(ctx, 1200, 820, 1.25, { soil: has('soil') ? 1 : 0, wet: has('water'), seed: has('seed') && s.grow <= 0, sprout: clamp(s.grow * 2, 0, 1), bloom: clamp(s.grow * 2 - 1, 0, 1), wilt: s.wilt, t });
+        if (s.grow > 0 && s.grow < 1 && s.wilt <= 0) L.sparkles(ctx, 1200, 480, t, 9, 8, 200);
+        for (const it of s.items) if (it !== s.drag) drawItem(ctx, it, t, s);
+        if (s.drag) drawItem(ctx, s.drag, t, s);
+        if (full && s.grow < 1) { const lbl = s.day < 3 ? 'Day ' + (s.day + 1) : 'growing...'; L.sticker(ctx, lbl, 820, 100, 1, { bg: P.white, size: 60, rot: 0 }); if (s.day < 3) night(ctx, Math.max(0, Math.sin(Math.PI * s.dayT / 1.4)) * 0.45); }
+        if (s.wilt > 0) L.sticker(ctx, 'a piece is missing!', 820, 100, 1, { bg: P.greyDark, color: P.white, size: 56, rot: 0 });
+        else if (full && s.grow >= 1) L.sticker(ctx, 'all the pieces: a flower!', 820, 100, 1, { bg: P.pink, size: 56, rot: 0 });
+        L.pip(ctx, { x: 700, y: 800, s: 0.95, t, mood: s.wilt > 0 ? 'sad' : s.grow >= 1 ? 'wow' : 'happy', armR: -0.6, armL: 0.6, lookX: 0.9, lookY: -0.1 });
+      },
+      pointer: (s, type, x, y) => {
+        const slotOf = it => it.n === 'soil' ? [1200, 700, 150] : it.n === 'seed' ? [1200, 552, 70] : it.n === 'water' ? (s.pour > 0 ? [1360, 400, 120] : [980, 790, 95]) : it.n === 'sun' ? [1650, 200, 140] : [1440, 760, 110];
+        if (type === 'down') {
+          let best = null, bd = 1e9;
+          for (const it of s.items) { const [sx, sy, sr] = it.placed ? slotOf(it) : [it.x, it.y, 85]; const d = Math.hypot(x - sx, y - sy); if (d < sr && d < bd) { best = it; bd = d; } }
+          if (!best) return;
+          s.drag = best; s.moved = true;
+          if (best.placed) { best.placed = false; best.x = x; best.y = y; if (best.n !== 'teddy' && s.grow > 0.3) s.awayTimer = 0.7; }
+          s.dx = x - best.x; s.dy = y - best.y;
+        }
+        if (type === 'move' && s.drag) { s.drag.x = clamp(x - s.dx, 40, W - 40); s.drag.y = clamp(y - s.dy, 80, H - 40); }
+        if (type === 'up' && s.drag) {
+          const it = s.drag; s.drag = null; s.idle = 0;
+          const over = (Math.abs(it.x - 1200) < 320 && it.y > 260 && it.y < 920) || (it.n === 'sun' && Math.hypot(it.x - 1650, it.y - 200) < 230);
+          if (over) { it.placed = true; if (it.n === 'water') s.pour = 1.6; if (it.n === 'teddy') s.cueTeddy = true; if (it.n !== 'teddy') s.lastCue = ''; }
+          else { it.placed = false; it.x = it.hx; it.y = it.hy; }
+        }
+      },
+      cues: { wait: 'The pie is full! Now we wait... causes take time.', grow: 'All the pieces together... and the flower grows!', away: "Take one piece away... and it doesn't happen!", teddy: 'Teddy is just there. Teddy is not a cause!', missing: "Something is missing, so the flower can't grow yet." }
+    }
+  };
+  // item drawing for the interactive (tray icons, dragged icons, and placed props around the pot)
+  function drawItem(ctx, it, t, s) {
+    if (it.placed) {
+      if (it.n === 'soil' || it.n === 'seed' || it.n === 'sun') return; // shown by the pot and the sky
+      if (it.n === 'water') { if (s.pour > 0) { const k = Math.sin(Math.PI * clamp(s.pour / 1.6, 0, 1)); can(ctx, 1360, 400 - k * 20, 1.1, -0.75 * k, k > 0.3 ? 1 : 0, t, 545); } else can(ctx, 980, 790, 0.85, 0, 0, t); return; }
+      teddy(ctx, 1440, 820, 0.95, t); return;
+    }
+    const sc = it === s.drag ? 1.15 : 1; ctx.save(); ctx.translate(it.x, it.y); ctx.scale(sc, sc);
+    if (it.n === 'soil') soilIcon(ctx, 0, 0, 1.3); else if (it.n === 'seed') seed(ctx, 0, 0, 1.4, 0.3); else if (it.n === 'water') can(ctx, 14, 0, 0.5, 0, 0, t); else if (it.n === 'sun') L.sun(ctx, 0, 0, 40, t); else teddy(ctx, 0, 70, 0.55, t);
+    ctx.restore();
+    text(ctx, it.n === 'water' ? 'water' : it.n === 'sun' ? 'sunshine' : it.n, it.x, it.y + (it.n === 'teddy' ? 96 : 68), { size: 34, weight: 700, color: P.ink, stroke: P.white, strokeWidth: 7 });
+  }
+})(typeof window !== 'undefined' ? window : globalThis);

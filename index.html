@@ -35,6 +35,7 @@ h2 { font-family: var(--font-display); font-weight: 700; font-size: 26px; margin
 .lead { color: var(--muted); margin: 6px 0 0; font-size: 17px }
 .eyebrow { font-family: var(--font-body); font-weight: 700; font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted) }
 .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px }
+@media (min-width: 900px) { .grid { grid-template-columns: repeat(3, 1fr) } }
 .card { background: var(--card); border-radius: 22px; box-shadow: var(--shadow); overflow: hidden; display: grid; grid-template-rows: auto 1fr; align-content: start; text-decoration: none; color: var(--fg); min-width: 0; border: 3px solid transparent }
 .card:hover { border-color: var(--accent) }
 .card img { width: 100%; height: auto; aspect-ratio: 16/9; object-fit: cover; display: block; max-width: 100% }
@@ -95,13 +96,13 @@ section[hidden] { display: none }
 <section id="view-hub">
   <div class="wrap">
   <header class="top"><canvas class="logo" width="128" height="128" aria-hidden="true"></canvas><div><a class="brand" href="#">Little Scientists <span>Club</span></a><div class="eyebrow">Big questions, little scientists</div></div><nav><a class="pill" href="#">All episodes</a><a class="pill" href="https://www.youtube.com/@LittleScientistsClubCurie" target="_blank" rel="noopener">YouTube channel</a></nav></header>
-  <section><h1>Pick a question to explore</h1><p class="lead">Every episode has a two-minute animated story and a hands-on simulation you can play with. Made for 5–6-year-olds, with a grown-up nearby.</p></section>
-  <section class="grid" aria-label="Episodes"><a class="card" href="#ep1"><img src="thumbs/ep1.jpg" alt="" width="1280" height="720"><div class="body"><span class="eyebrow">Episode 1</span><span class="title">Why does ice cream melt?</span><span class="lead">Watch with Curie, then play: heat makes things melt.</span></div></a><a class="card" href="#ep2"><img src="thumbs/ep2.jpg" alt="" width="1280" height="720"><div class="body"><span class="eyebrow">Episode 2</span><span class="title">Why does a ball always come down?</span><span class="lead">Watch with Curie, then play: gravity pulls things down.</span></div></a><a class="card" href="#ep3"><img src="thumbs/ep3.jpg" alt="" width="1280" height="720"><div class="body"><span class="eyebrow">Episode 3</span><span class="title">Where does rain come from?</span><span class="lead">Watch with Curie, then play: the sun lifts the water up, and the rain brings it down.</span></div></a><a class="card" href="#ep4"><img src="thumbs/ep4.jpg" alt="" width="1280" height="720"><div class="body"><span class="eyebrow">Episode 4</span><span class="title">Why do I have a shadow?</span><span class="lead">Watch with Curie, then play: a shadow is where the light can't go.</span></div></a><a class="card" href="#ep5"><img src="thumbs/ep5.jpg" alt="" width="1280" height="720"><div class="body"><span class="eyebrow">Episode 5</span><span class="title">Why do boats float?</span><span class="lead">Watch with Curie, then play: water pushes up.</span></div></a></section>
-  <section class="panel"><h2>How to use this site</h2><p>Each episode page starts with the story, narrated by Curie with captions. Tap <b>Try it</b> to do the science yourself: drag the sun, throw the ball, make it rain, stretch a shadow, or sort things into the pond. Underneath you will find the big idea, an experiment to try at home, and a three-question quiz to talk about together.</p></section>
+  <section><h1>Pick a question to explore</h1><p class="lead">Every episode has a short animated story and a hands-on simulation you can play with. Made for 5–6-year-olds, with a grown-up nearby.</p></section>
+  <section class="grid" aria-label="Episodes"><a class="card" href="#ep1"><img src="thumbs/ep1.jpg" alt="" width="1280" height="720"><div class="body"><span class="eyebrow">Episode 1</span><span class="title">Why does ice cream melt?</span><span class="lead">Watch with Curie, then play: heat makes things melt.</span></div></a><a class="card" href="#ep2"><img src="thumbs/ep2.jpg" alt="" width="1280" height="720"><div class="body"><span class="eyebrow">Episode 2</span><span class="title">Why does a ball always come down?</span><span class="lead">Watch with Curie, then play: gravity pulls things down.</span></div></a><a class="card" href="#ep3"><img src="thumbs/ep3.jpg" alt="" width="1280" height="720"><div class="body"><span class="eyebrow">Episode 3</span><span class="title">Where does rain come from?</span><span class="lead">Watch with Curie, then play: the sun lifts the water up, and the rain brings it down.</span></div></a><a class="card" href="#ep4"><img src="thumbs/ep4.jpg" alt="" width="1280" height="720"><div class="body"><span class="eyebrow">Episode 4</span><span class="title">Why do I have a shadow?</span><span class="lead">Watch with Curie, then play: a shadow is where the light can't go.</span></div></a><a class="card" href="#ep5"><img src="thumbs/ep5.jpg" alt="" width="1280" height="720"><div class="body"><span class="eyebrow">Episode 5</span><span class="title">Why do boats float?</span><span class="lead">Watch with Curie, then play: water pushes up.</span></div></a><a class="card" href="#ep6"><img src="thumbs/ep6.jpg" alt="" width="1280" height="720"><div class="body"><span class="eyebrow">Episode 6</span><span class="title">What makes things happen?</span><span class="lead">Watch with Curie, then play: lots of pieces make it happen.</span></div></a></section>
+  <section class="panel"><h2>How to use this site</h2><p>Each episode page starts with the story, narrated by Curie with captions. Tap <b>Try it</b> to do the science yourself: drag the sun, throw the ball, make it rain, stretch a shadow, sort things into the pond, or fill Curie's cause pie. Underneath you will find the big idea, an experiment to try at home, and a three-question quiz to talk about together.</p></section>
   <footer><div>Little Scientists Club · <a href="https://www.youtube.com/@LittleScientistsClubCurie" target="_blank" rel="noopener">Watch on YouTube</a></div><div>Sound plays after you tap a button. Nothing here is collected or saved.</div></footer>
   </div></section>
 <section id="view-ep1" hidden><div class="wrap">
-  <header class="top"><canvas class="logo" width="128" height="128" aria-hidden="true"></canvas><div><a class="brand" href="#">Little Scientists <span>Club</span></a><div class="eyebrow">Episode 1 of 5</div></div><nav><a class="pill" href="#">All episodes</a><a class="pill" href="https://www.youtube.com/@LittleScientistsClubCurie" target="_blank" rel="noopener">YouTube channel</a></nav></header>
+  <header class="top"><canvas class="logo" width="128" height="128" aria-hidden="true"></canvas><div><a class="brand" href="#">Little Scientists <span>Club</span></a><div class="eyebrow">Episode 1 of 6</div></div><nav><a class="pill" href="#">All episodes</a><a class="pill" href="https://www.youtube.com/@LittleScientistsClubCurie" target="_blank" rel="noopener">YouTube channel</a></nav></header>
   <section><h1>Why does ice cream melt?</h1><p class="lead">Watch the story first, then tap <b>Try it</b> and do the science yourself.</p></section>
   <section class="stage" aria-label="Episode player">
     <div class="canvas-wrap"><canvas class="stage" width="1920" height="1080" role="img" aria-label="Episode animation; the words Curie says are shown below the picture"></canvas><div class="overlay"><button class="bigplay" type="button"><span aria-hidden="true">▶ </span><span class="lbl">Watch with Curie</span></button></div></div>
@@ -125,7 +126,7 @@ section[hidden] { display: none }
   <footer><div><a href="#">All episodes</a> · <a href="https://www.youtube.com/@LittleScientistsClubCurie" target="_blank" rel="noopener">Little Scientists Club on YouTube</a></div><div>Sound plays after you tap a button. Nothing here is collected or saved.</div></footer>
   </div></section>
 <section id="view-ep2" hidden><div class="wrap">
-  <header class="top"><canvas class="logo" width="128" height="128" aria-hidden="true"></canvas><div><a class="brand" href="#">Little Scientists <span>Club</span></a><div class="eyebrow">Episode 2 of 5</div></div><nav><a class="pill" href="#">All episodes</a><a class="pill" href="https://www.youtube.com/@LittleScientistsClubCurie" target="_blank" rel="noopener">YouTube channel</a></nav></header>
+  <header class="top"><canvas class="logo" width="128" height="128" aria-hidden="true"></canvas><div><a class="brand" href="#">Little Scientists <span>Club</span></a><div class="eyebrow">Episode 2 of 6</div></div><nav><a class="pill" href="#">All episodes</a><a class="pill" href="https://www.youtube.com/@LittleScientistsClubCurie" target="_blank" rel="noopener">YouTube channel</a></nav></header>
   <section><h1>Why does a ball always come down?</h1><p class="lead">Watch the story first, then tap <b>Try it</b> and do the science yourself.</p></section>
   <section class="stage" aria-label="Episode player">
     <div class="canvas-wrap"><canvas class="stage" width="1920" height="1080" role="img" aria-label="Episode animation; the words Curie says are shown below the picture"></canvas><div class="overlay"><button class="bigplay" type="button"><span aria-hidden="true">▶ </span><span class="lbl">Watch with Curie</span></button></div></div>
@@ -149,7 +150,7 @@ section[hidden] { display: none }
   <footer><div><a href="#">All episodes</a> · <a href="https://www.youtube.com/@LittleScientistsClubCurie" target="_blank" rel="noopener">Little Scientists Club on YouTube</a></div><div>Sound plays after you tap a button. Nothing here is collected or saved.</div></footer>
   </div></section>
 <section id="view-ep3" hidden><div class="wrap">
-  <header class="top"><canvas class="logo" width="128" height="128" aria-hidden="true"></canvas><div><a class="brand" href="#">Little Scientists <span>Club</span></a><div class="eyebrow">Episode 3 of 5</div></div><nav><a class="pill" href="#">All episodes</a><a class="pill" href="https://www.youtube.com/@LittleScientistsClubCurie" target="_blank" rel="noopener">YouTube channel</a></nav></header>
+  <header class="top"><canvas class="logo" width="128" height="128" aria-hidden="true"></canvas><div><a class="brand" href="#">Little Scientists <span>Club</span></a><div class="eyebrow">Episode 3 of 6</div></div><nav><a class="pill" href="#">All episodes</a><a class="pill" href="https://www.youtube.com/@LittleScientistsClubCurie" target="_blank" rel="noopener">YouTube channel</a></nav></header>
   <section><h1>Where does rain come from?</h1><p class="lead">Watch the story first, then tap <b>Try it</b> and do the science yourself.</p></section>
   <section class="stage" aria-label="Episode player">
     <div class="canvas-wrap"><canvas class="stage" width="1920" height="1080" role="img" aria-label="Episode animation; the words Curie says are shown below the picture"></canvas><div class="overlay"><button class="bigplay" type="button"><span aria-hidden="true">▶ </span><span class="lbl">Watch with Curie</span></button></div></div>
@@ -173,7 +174,7 @@ section[hidden] { display: none }
   <footer><div><a href="#">All episodes</a> · <a href="https://www.youtube.com/@LittleScientistsClubCurie" target="_blank" rel="noopener">Little Scientists Club on YouTube</a></div><div>Sound plays after you tap a button. Nothing here is collected or saved.</div></footer>
   </div></section>
 <section id="view-ep4" hidden><div class="wrap">
-  <header class="top"><canvas class="logo" width="128" height="128" aria-hidden="true"></canvas><div><a class="brand" href="#">Little Scientists <span>Club</span></a><div class="eyebrow">Episode 4 of 5</div></div><nav><a class="pill" href="#">All episodes</a><a class="pill" href="https://www.youtube.com/@LittleScientistsClubCurie" target="_blank" rel="noopener">YouTube channel</a></nav></header>
+  <header class="top"><canvas class="logo" width="128" height="128" aria-hidden="true"></canvas><div><a class="brand" href="#">Little Scientists <span>Club</span></a><div class="eyebrow">Episode 4 of 6</div></div><nav><a class="pill" href="#">All episodes</a><a class="pill" href="https://www.youtube.com/@LittleScientistsClubCurie" target="_blank" rel="noopener">YouTube channel</a></nav></header>
   <section><h1>Why do I have a shadow?</h1><p class="lead">Watch the story first, then tap <b>Try it</b> and do the science yourself.</p></section>
   <section class="stage" aria-label="Episode player">
     <div class="canvas-wrap"><canvas class="stage" width="1920" height="1080" role="img" aria-label="Episode animation; the words Curie says are shown below the picture"></canvas><div class="overlay"><button class="bigplay" type="button"><span aria-hidden="true">▶ </span><span class="lbl">Watch with Curie</span></button></div></div>
@@ -197,7 +198,7 @@ section[hidden] { display: none }
   <footer><div><a href="#">All episodes</a> · <a href="https://www.youtube.com/@LittleScientistsClubCurie" target="_blank" rel="noopener">Little Scientists Club on YouTube</a></div><div>Sound plays after you tap a button. Nothing here is collected or saved.</div></footer>
   </div></section>
 <section id="view-ep5" hidden><div class="wrap">
-  <header class="top"><canvas class="logo" width="128" height="128" aria-hidden="true"></canvas><div><a class="brand" href="#">Little Scientists <span>Club</span></a><div class="eyebrow">Episode 5 of 5</div></div><nav><a class="pill" href="#">All episodes</a><a class="pill" href="https://www.youtube.com/@LittleScientistsClubCurie" target="_blank" rel="noopener">YouTube channel</a></nav></header>
+  <header class="top"><canvas class="logo" width="128" height="128" aria-hidden="true"></canvas><div><a class="brand" href="#">Little Scientists <span>Club</span></a><div class="eyebrow">Episode 5 of 6</div></div><nav><a class="pill" href="#">All episodes</a><a class="pill" href="https://www.youtube.com/@LittleScientistsClubCurie" target="_blank" rel="noopener">YouTube channel</a></nav></header>
   <section><h1>Why do boats float?</h1><p class="lead">Watch the story first, then tap <b>Try it</b> and do the science yourself.</p></section>
   <section class="stage" aria-label="Episode player">
     <div class="canvas-wrap"><canvas class="stage" width="1920" height="1080" role="img" aria-label="Episode animation; the words Curie says are shown below the picture"></canvas><div class="overlay"><button class="bigplay" type="button"><span aria-hidden="true">▶ </span><span class="lbl">Watch with Curie</span></button></div></div>
@@ -218,6 +219,30 @@ section[hidden] { display: none }
     <div class="panel"><span class="eyebrow">Try it at home</span><div class="badge">👋 with a grown-up</div><ol class="steps"><li><span>Ask a grown-up for a bowl of water.</span></li><li><span>Collect a spoon, a coin, a cork, a plastic lid and a leaf.</span></li><li><span>Guess first: will it sink or float? Then drop it in.</span></li><li><span>Roll some clay or foil into a ball, then shape it into a boat. Test both!</span></li></ol></div>
   </section>
   <section class="panel"><span class="eyebrow">Quick quiz</span><h2>What did you find out?</h2><div class="pipbox"><canvas class="pipq" width="240" height="240" aria-hidden="true"></canvas><div class="says pipsays" style="padding:0">Tap an answer and I'll tell you!</div></div><div class="quiz"><div class="q" data-q="0"><p>1. Water pushes...</p><div class="opts"><button type="button" data-ok="1">Up</button><button type="button" data-ok="0">Down</button><button type="button" data-ok="0">Sideways</button></div><div class="fb" aria-live="polite"></div></div><div class="q" data-q="1"><p>2. A small stone sinks because it pushes away only a little...</p><div class="opts"><button type="button" data-ok="1">Water</button><button type="button" data-ok="0">Air</button><button type="button" data-ok="0">Sand</button></div><div class="fb" aria-live="polite"></div></div><div class="q" data-q="2"><p>3. The same clay floats when it is shaped like a...</p><div class="opts"><button type="button" data-ok="1">Boat</button><button type="button" data-ok="0">Ball</button><button type="button" data-ok="0">Cube</button></div><div class="fb" aria-live="polite"></div></div></div></section>
+  <footer><div><a href="#">All episodes</a> · <a href="https://www.youtube.com/@LittleScientistsClubCurie" target="_blank" rel="noopener">Little Scientists Club on YouTube</a></div><div>Sound plays after you tap a button. Nothing here is collected or saved.</div></footer>
+  </div></section>
+<section id="view-ep6" hidden><div class="wrap">
+  <header class="top"><canvas class="logo" width="128" height="128" aria-hidden="true"></canvas><div><a class="brand" href="#">Little Scientists <span>Club</span></a><div class="eyebrow">Episode 6 of 6</div></div><nav><a class="pill" href="#">All episodes</a><a class="pill" href="https://www.youtube.com/@LittleScientistsClubCurie" target="_blank" rel="noopener">YouTube channel</a></nav></header>
+  <section><h1>What makes things happen?</h1><p class="lead">Watch the story first, then tap <b>Try it</b> and do the science yourself.</p></section>
+  <section class="stage" aria-label="Episode player">
+    <div class="canvas-wrap"><canvas class="stage" width="1920" height="1080" role="img" aria-label="Episode animation; the words Curie says are shown below the picture"></canvas><div class="overlay"><button class="bigplay" type="button"><span aria-hidden="true">▶ </span><span class="lbl">Watch with Curie</span></button></div></div>
+    <div class="cap" aria-live="polite"></div>
+    <div class="bar">
+      <div class="seg" role="group" aria-label="Mode"><button class="mWatch" type="button" aria-pressed="true">Watch</button><button class="mPlay" type="button" aria-pressed="false">Try it</button></div>
+      <button class="btn pp" type="button">Pause</button>
+      <input class="scrub" type="range" min="0" max="1000" value="0" aria-label="Move through the episode" id="scrub-ep6">
+      <button class="btn restart" type="button">Start again</button>
+      <button class="btn fs" type="button">Full screen</button>
+      <a class="btn" href="https://www.youtube.com/@LittleScientistsClubCurie" target="_blank" rel="noopener">Watch on YouTube</a>
+    </div>
+    <div class="hint"></div>
+    <div class="says" aria-live="polite"></div>
+  </section>
+  <section class="two">
+    <div class="panel"><span class="eyebrow">Curie's big idea</span><div><div class="idea">Lots of pieces make it happen!</div></div><p>Things rarely have just one cause. A flower needs soil, a seed, water and sunshine all together, and it takes time. Epidemiologists draw this as a causal pie (Kenneth Rothman's sufficient-component cause model): each slice is a component cause, and the thing happens only when the whole pie is complete. The pieces need not act at the same time: the flower shows once the last piece has done its work (Rothman calls that gap the induction period). Because every slice is needed, taking any one away stops that pie, which is how prevention works: wash the germs off your hands and that tummy ache cannot happen. The same thing can also happen through a different pie (a flower can get its water from rain instead of a watering can), so removing one piece prevents the cases that needed it, not every case. To find out whether something really is a cause, scientists test it by taking it away and seeing whether the result changes. Teddy sat beside the pot all week, but the flower grew just the same without him: being there is not the same as being a cause.</p></div>
+    <div class="panel"><span class="eyebrow">Try it at home</span><div class="badge">👋 with a grown-up</div><ol class="steps"><li><span>Ask a grown-up for two clear cups, some cotton wool and two dried bean seeds.</span></li><li><span>Put cotton wool and a bean in each cup, and stand both cups on a sunny windowsill.</span></li><li><span>Water one cup a little every day so the wool stays damp. Keep the other cup dry.</span></li><li><span>Check every day for a week. Which bean grows? Which piece of the pie was missing?</span></li></ol></div>
+  </section>
+  <section class="panel"><span class="eyebrow">Quick quiz</span><h2>What did you find out?</h2><div class="pipbox"><canvas class="pipq" width="240" height="240" aria-hidden="true"></canvas><div class="says pipsays" style="padding:0">Tap an answer and I'll tell you!</div></div><div class="quiz"><div class="q" data-q="0"><p>1. What does a flower need to grow?</p><div class="opts"><button type="button" data-ok="1">All the pieces together</button><button type="button" data-ok="0">Just a seed</button><button type="button" data-ok="0">A teddy</button></div><div class="fb" aria-live="polite"></div></div><div class="q" data-q="1"><p>2. Take one piece away and the flower...</p><div class="opts"><button type="button" data-ok="1">Does not grow</button><button type="button" data-ok="0">Grows faster</button><button type="button" data-ok="0">Turns blue</button></div><div class="fb" aria-live="polite"></div></div><div class="q" data-q="2"><p>3. Teddy sat next to the pot every day. Is teddy a cause?</p><div class="opts"><button type="button" data-ok="1">No, teddy was just there</button><button type="button" data-ok="0">Yes, teddy made it grow</button><button type="button" data-ok="0">Only on Sundays</button></div><div class="fb" aria-live="polite"></div></div></div></section>
   <footer><div><a href="#">All episodes</a> · <a href="https://www.youtube.com/@LittleScientistsClubCurie" target="_blank" rel="noopener">Little Scientists Club on YouTube</a></div><div>Sound plays after you tap a button. Nothing here is collected or saved.</div></footer>
   </div></section>
 <script src="lib.js"></script><script src="data.js"></script>
@@ -250,17 +275,19 @@ section[hidden] { display: none }
     function setMode(m) {
       mode = m; mWatch.setAttribute('aria-pressed', String(m === 'watch')); mPlay.setAttribute('aria-pressed', String(m === 'play')); says.textContent = '';
       if (m === 'watch') { hint.innerHTML = 'Captions are on screen. Drag the slider to any moment, or tap <b>Try it</b> to do the science yourself.'; scrub.hidden = false; pp.hidden = false; overlay.hidden = started; setPP(); cap.hidden = false; }
-      else { audio.pause(); pp.hidden = true; scrub.hidden = true; overlay.hidden = true; cap.hidden = true; cap.textContent = ''; lastCap = ''; hint.innerHTML = '<b>Try it:</b> ' + M.hint; state = {}; I.init(state); last = performance.now(); unlockCues(); }
+      else { audio.pause(); pp.hidden = true; scrub.hidden = true; overlay.hidden = true; cap.hidden = true; cap.textContent = ''; lastCap = ''; hint.innerHTML = '<b>Try it:</b> ' + M.hint; state = {}; I.init(state); last = performance.now(); pendingCue = ''; lastCueId = ''; lastCueAt = 0; if (cueAudio) { cueAudio.pause(); cueAudio = null; } unlockCues(); }
       cancelAnimationFrame(raf); if (active) loop();
     }
+    let pendingCue = '';
     function cue(id) {
       const now = performance.now();
-      // never pile cues up: ignore repeats of the same cue within 4 s, and never talk over a cue that is still playing
+      // never pile cues up: ignore repeats of the same cue within 4 s; a different cue requested while one is still playing waits its turn
       if (id === lastCueId && now - lastCueAt < 4000) return;
-      if (cueAudio && !cueAudio.paused && !cueAudio.ended) return;
-      lastCueId = id; lastCueAt = now; says.textContent = 'Curie says: ' + (M.cues[id] || '');
+      if (cueAudio && !cueAudio.paused && !cueAudio.ended) { pendingCue = id; return; }
+      pendingCue = ''; lastCueId = id; lastCueAt = now; says.textContent = 'Curie says: ' + (M.cues[id] || '');
       const a = cueAudios[id]; if (!a) return; cueAudio = a; try { a.currentTime = 0; } catch (e) {} a.play().catch(() => {});
     }
+    for (const a of Object.values(cueAudios)) a.addEventListener('ended', () => { if (pendingCue && mode === 'play' && active) { const id = pendingCue; pendingCue = ''; cue(id); } });
     function captionAt(t) {
       for (const ln of EP.lines) { const Ln = TL.lines[ln.id]; if (!Ln) continue; if (t >= Ln.start - 0.15 && t <= Ln.end + 0.7) return ln.text; }
       return '';
@@ -268,7 +295,7 @@ section[hidden] { display: none }
     function loop() {
       raf = requestAnimationFrame(loop);
       if (mode === 'watch') {
-        const t = started ? (audio.currentTime || 0) : POSTER_T; player.drawFrame(t);
+        const t = started && !audio.ended ? (audio.currentTime || 0) : POSTER_T; player.drawFrame(t);
         if (!scrub.matches(':active')) scrub.value = String(Math.round((started ? t : 0) / TL.duration * 1000));
         const c = started ? captionAt(t) : ''; if (c !== lastCap) { lastCap = c; cap.textContent = c; }
       } else { const now = performance.now(); const dt = Math.min(0.05, (now - last) / 1000); last = now; I.update(state, dt, cue); I.draw(ctx, state, now / 1000); }
@@ -300,10 +327,11 @@ section[hidden] { display: none }
       }));
     });
     const api = {
+      get state() { return state; }, get mode() { return mode; },
       show() { active = true; player.drawFrame(started ? (audio.currentTime || 0) : POSTER_T); setMode(mode); drawPipQ(); },
       hide() { active = false; cancelAnimationFrame(raf); audio.pause(); setPP(); if (cueAudio) cueAudio.pause(); }
     };
-    mounted[ep] = api; return api;
+    mounted[ep] = api; window.__lsc = mounted; return api;
   }
 
   let current = null;
