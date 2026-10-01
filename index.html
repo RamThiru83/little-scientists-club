@@ -4,7 +4,8 @@
 <meta name="description" content="Little Scientists Club: animated science stories for 5–6 year olds, each with a hands-on simulation, an experiment and a quiz.">
 <link rel="icon" href="thumbs/favicon.png">
 <style>[hidden]{display:none!important} html{color-scheme:light} body{margin:0} img{max-width:100%}</style>
-<link rel="stylesheet" href="fonts.css"><style>
+<link rel="stylesheet" href="fonts.css">
+<style>
 :root { --bg:#EAF6FF; --fg:#2B2D42; --muted:#5F6B85; --card:#FFFFFF; --accent:#FFB03B; --accent-ink:#2B2D42; --blue:#4EA8FF; --blue-deep:#2F7FD6; --green:#5BC26B; --pink:#FF9BD2; --line:rgba(43,45,66,.12); --shadow:0 10px 30px rgba(47,127,214,.15); --font-display:'Fredoka','Nunito',system-ui,sans-serif; --font-body:'Nunito','Fredoka',system-ui,sans-serif; }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --bg:#141A2E; --fg:#F2F5FF; --muted:#A9B3CC; --card:#1F2744; --accent:#FFB03B; --accent-ink:#1A1300; --blue:#5FB8FF; --blue-deep:#8FCBFF; --green:#6ED47E; --pink:#FF9BD2; --line:rgba(255,255,255,.12); --shadow:0 10px 30px rgba(0,0,0,.35); color-scheme: dark } }
 :root[data-theme="dark"] { --bg:#141A2E; --fg:#F2F5FF; --muted:#A9B3CC; --card:#1F2744; --accent:#FFB03B; --accent-ink:#1A1300; --blue:#5FB8FF; --blue-deep:#8FCBFF; --green:#6ED47E; --pink:#FF9BD2; --line:rgba(255,255,255,.12); --shadow:0 10px 30px rgba(0,0,0,.35); color-scheme: dark }
@@ -73,8 +74,6 @@ button:focus-visible, a:focus-visible { outline: 3px solid var(--blue); outline-
 section[hidden] { display: none }
 </style>
 </head><body>
-
-
 <section id="view-hub">
   <div class="wrap">
   <header class="top"><canvas class="logo" width="128" height="128" aria-hidden="true"></canvas><div><a class="brand" href="#">Little Scientists <span>Club</span></a><div class="eyebrow">Big questions, little scientists</div></div><nav><a class="pill" href="#">All episodes</a><a class="pill" href="https://www.youtube.com/@LittleScientistsClubCurie" target="_blank" rel="noopener">YouTube channel</a></nav></header>
@@ -93,7 +92,7 @@ section[hidden] { display: none }
       <button class="btn pp" type="button">Pause</button>
       <input class="scrub" type="range" min="0" max="1000" value="0" aria-label="Scrub through the episode" id="scrub-ep1">
       <button class="btn restart" type="button">Start again</button>
-      <a class="btn" href="https://www.youtube.com/@LittleScientistsClubCurie" target="_blank" rel="noopener">Watch on YouTube</a>
+      <a class="btn" href="https://youtu.be/geL3uKnslT4" target="_blank" rel="noopener">Watch on YouTube</a>
     </div>
     <div class="hint"></div>
     <div class="says"></div>
@@ -115,7 +114,7 @@ section[hidden] { display: none }
       <button class="btn pp" type="button">Pause</button>
       <input class="scrub" type="range" min="0" max="1000" value="0" aria-label="Scrub through the episode" id="scrub-ep2">
       <button class="btn restart" type="button">Start again</button>
-      <a class="btn" href="https://www.youtube.com/@LittleScientistsClubCurie" target="_blank" rel="noopener">Watch on YouTube</a>
+      <a class="btn" href="https://youtu.be/PlfkVBF830E" target="_blank" rel="noopener">Watch on YouTube</a>
     </div>
     <div class="hint"></div>
     <div class="says"></div>
@@ -137,7 +136,7 @@ section[hidden] { display: none }
       <button class="btn pp" type="button">Pause</button>
       <input class="scrub" type="range" min="0" max="1000" value="0" aria-label="Scrub through the episode" id="scrub-ep3">
       <button class="btn restart" type="button">Start again</button>
-      <a class="btn" href="https://www.youtube.com/@LittleScientistsClubCurie" target="_blank" rel="noopener">Watch on YouTube</a>
+      <a class="btn" href="https://youtu.be/6TXyuOozO98" target="_blank" rel="noopener">Watch on YouTube</a>
     </div>
     <div class="hint"></div>
     <div class="says"></div>
@@ -159,7 +158,7 @@ section[hidden] { display: none }
       <button class="btn pp" type="button">Pause</button>
       <input class="scrub" type="range" min="0" max="1000" value="0" aria-label="Scrub through the episode" id="scrub-ep4">
       <button class="btn restart" type="button">Start again</button>
-      <a class="btn" href="https://www.youtube.com/@LittleScientistsClubCurie" target="_blank" rel="noopener">Watch on YouTube</a>
+      <a class="btn" href="https://youtu.be/FMNAGlJY1TU" target="_blank" rel="noopener">Watch on YouTube</a>
     </div>
     <div class="hint"></div>
     <div class="says"></div>
@@ -181,7 +180,7 @@ section[hidden] { display: none }
       <button class="btn pp" type="button">Pause</button>
       <input class="scrub" type="range" min="0" max="1000" value="0" aria-label="Scrub through the episode" id="scrub-ep5">
       <button class="btn restart" type="button">Start again</button>
-      <a class="btn" href="https://www.youtube.com/@LittleScientistsClubCurie" target="_blank" rel="noopener">Watch on YouTube</a>
+      <a class="btn" href="https://youtu.be/HmYO-thndTA" target="_blank" rel="noopener">Watch on YouTube</a>
     </div>
     <div class="hint"></div>
     <div class="says"></div>
@@ -266,5 +265,4 @@ section[hidden] { display: none }
   document.fonts.load('700 48px Fredoka').then(() => document.fonts.load('600 48px Fredoka')).catch(() => {}).finally(route);
 })();
 </script>
-
 </body></html>
