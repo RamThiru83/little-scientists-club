@@ -333,7 +333,7 @@
   L.park = function (ctx, t, o) {
     o = o || {};
     L.sky(ctx); if (o.sun !== false) L.sun(ctx, o.sunX == null ? 1650 : o.sunX, o.sunY == null ? 200 : o.sunY, o.sunR || 110, t);
-    L.cloud(ctx, 300 + Math.sin(t * 0.3) * 20, 180, 1.1); L.cloud(ctx, 1100 + Math.cos(t * 0.25) * 25, 120, 0.8);
+    if (o.clouds !== false) { L.cloud(ctx, 300 + Math.sin(t * 0.3) * 20, 180, 1.1); L.cloud(ctx, 1100 + Math.cos(t * 0.25) * 25, 120, 0.8); }
     L.ground(ctx, 820);
     if (o.tree !== false) L.tree(ctx, 240, 830, 1.1);
     if (o.house) L.house(ctx, 1500, 840, 1);
@@ -466,13 +466,13 @@
   }
   function particles(ctx, t, o) {
     // o: {jiggle 0..1 (amplitude), bonds 0..1, flow 0..1 (0 grid, 1 liquid), alpha}
-    const cols = 8, rows = 5, sx = 150, sy = 140, ox = W / 2 - (cols - 1) * sx / 2, oy = 330;
+    const cols = 8, rows = 5, sx = 150, sy = 128, ox = W / 2 - (cols - 1) * sx / 2, oy = 290;
     const r = L.rng(42); const pts = [];
     for (let i = 0; i < rows; i++) for (let j = 0; j < cols; j++) {
       const ph = r() * 6.28, ph2 = r() * 6.28, fx = r(), fy = r();
       const gx = ox + j * sx, gy = oy + i * sy;
       // liquid position: pile at bottom with random spread
-      const lx = 260 + fx * (W - 520), ly = 700 + fy * 230 + Math.sin(t * 1.5 + ph) * 10;
+      const lx = 260 + fx * (W - 520), ly = 690 + fy * 170 + Math.sin(t * 1.5 + ph) * 10;
       const amp = 3 + 34 * o.jiggle;
       const jx = Math.sin(t * (6 + 10 * o.jiggle) + ph) * amp, jy = Math.cos(t * (7 + 9 * o.jiggle) + ph2) * amp;
       const f = E.inOut(o.flow); pts.push({ x: lerp(gx, lx, f) + jx + (f > 0 ? Math.sin(t * 2 + ph) * 60 * f : 0), y: lerp(gy, ly, f) + jy, i, j, ph });
@@ -623,23 +623,24 @@
     // ---- interactive mode ----
     interactive: {
       hint: 'Drag the sun close to the ice cream to melt it. Tap the freezer to make it hard again.',
-      init: s => { s.sunX = 1650; s.sunY = 200; s.melt = 0; s.drag = false; s.cold = 0; s.lastCue = ''; },
+      init: s => { s.sunX = 1650; s.sunY = 200; s.melt = 0; s.drag = false; s.cold = 0; s.lastCue = ''; s.refreeze = false; s.moved = false; },
       update: (s, dt, cue) => {
         const d = Math.hypot(s.sunX - 880, s.sunY - 520); const heat = clamp(1 - (d - 220) / 500, 0, 1);
-        s.heat = heat; s.melt = clamp(s.melt + (heat * 0.22 - (s.cold > 0 ? 0.35 : 0.01)) * dt, 0, 0.85);
+        s.heat = heat; s.melt = clamp(s.melt + (heat * 0.22 - (s.cold > 0 ? 0.6 : 0.01)) * dt, 0, 0.85);
         if (s.cold > 0) s.cold = Math.max(0, s.cold - dt);
-        if (heat > 0.5 && s.melt > 0.3 && s.lastCue !== 'melt') { s.lastCue = 'melt'; cue('melt'); }
-        if (s.cold > 2.5 && s.lastCue !== 'cold') { s.lastCue = 'cold'; cue('cold'); }
+        // one cue per event: 'melt' once per melting, 'cold' once the freezer has made it hard again
+        if (s.cold > 0) { if (s.refreeze && s.melt < 0.1) { s.refreeze = false; s.lastCue = 'cold'; cue('cold'); } }
+        else if (heat > 0.5 && s.melt > 0.3 && s.lastCue !== 'melt') { s.lastCue = 'melt'; cue('melt'); }
       },
       draw: (ctx, s, t) => {
         coneScene(ctx, t, { sunX: s.sunX, sunY: s.sunY, sunIn: 1, heat: s.heat, melt: s.melt, coneScale: 1, cold: s.cold > 0 ? 1 : 0, pipMood: s.melt > 0.5 ? 'wow' : 'happy' });
-        freezer(ctx, 1600, 640, 0, t); text(ctx, 'tap me', 1600, 940, { size: 40, weight: 600, color: P.ink });
-        ctx.save(); ctx.globalAlpha = 0.9; L.sticker(ctx, s.melt > 0.6 ? 'LIQUID' : s.melt > 0.2 ? 'melting...' : 'SOLID', 1150, 300, 1, { bg: s.melt > 0.6 ? P.blue : s.melt > 0.2 ? P.pink : '#BFE9FF', color: s.melt > 0.6 ? P.white : P.ink, size: 72, rot: 0 }); ctx.restore();
-        if (!s.drag && s.melt < 0.1) text(ctx, 'drag me ↓', s.sunX, s.sunY - 180, { size: 44, weight: 600, color: P.ink });
+        freezer(ctx, 1600, 640, 0, t); text(ctx, 'tap me', 1600, 950, { size: 60, weight: 600, color: P.ink });
+        ctx.save(); ctx.globalAlpha = 0.9; L.sticker(ctx, s.melt > 0.6 ? 'LIQUID' : s.melt > 0.2 ? (s.cold > 0 ? 'freezing...' : 'melting...') : 'SOLID', 620, 300, 1, { bg: s.melt > 0.6 ? P.blue : s.melt > 0.2 ? (s.cold > 0 ? '#BFE9FF' : P.pink) : '#BFE9FF', color: s.melt > 0.6 ? P.white : P.ink, size: 72, rot: 0 }); ctx.restore();
+        if (!s.moved) { text(ctx, 'drag me', s.sunX - 330, s.sunY - 30, { size: 64, weight: 600, color: P.ink }); L.arrow(ctx, s.sunX - 300, s.sunY + 30, s.sunX - 440, s.sunY + 160, P.sun, 12); }
       },
       pointer: (s, type, x, y) => {
-        if (type === 'down') { if (Math.hypot(x - s.sunX, y - s.sunY) < 200) s.drag = true; else if (Math.abs(x - 1600) < 180 && Math.abs(y - 640) < 270) { s.cold = 4; } }
-        if (type === 'move' && s.drag) { s.sunX = clamp(x, 120, W - 120); s.sunY = clamp(y, 100, 760); }
+        if (type === 'down') { if (Math.hypot(x - s.sunX, y - s.sunY) < 200) s.drag = true; else if (Math.abs(x - 1600) < 180 && Math.abs(y - 640) < 270) { s.cold = 4; s.refreeze = s.melt > 0.15; } }
+        if (type === 'move' && s.drag) { s.sunX = clamp(x, 120, W - 120); s.sunY = clamp(y, 100, 760); if (Math.hypot(s.sunX - 1650, s.sunY - 200) > 60) s.moved = true; }
         if (type === 'up') s.drag = false;
       },
       cues: { melt: 'The sun is warm! Heat makes the ice cream melt.', cold: 'Brrr! The freezer is cold. The ice cream is hard again.' }
@@ -821,24 +822,24 @@
       hint: 'Drag the ball and let go to throw it. Try to make it float away — you can\'t! Tap the big and small balls to drop them together.',
       init: s => { s.bx = 760; s.by = 600; s.vx = 0; s.vy = 0; s.drag = false; s.lx = 0; s.ly = 0; s.flying = false; s.lastCue = ''; s.dropP = -1; s.throws = 0; },
       update: (s, dt, cue) => {
-        if (s.flying) { s.vy += 1800 * dt; s.bx += s.vx * dt; s.by += s.vy * dt; if (s.by > 760) { s.by = 760; s.vy *= -0.45; s.vx *= 0.8; if (Math.abs(s.vy) < 60) { s.flying = false; s.vx = 0; s.vy = 0; if (s.throws >= 2 && s.lastCue !== 'down') { s.lastCue = 'down'; cue('down'); } } } if (s.bx < 60 || s.bx > W - 60) { s.vx *= -0.8; s.bx = clamp(s.bx, 60, W - 60); } }
-        if (s.dropP >= 0) { s.dropP += dt / 1.0; if (s.dropP > 1.6) { s.dropP = -1; if (s.lastCue !== 'together') { s.lastCue = 'together'; cue('together'); } } }
+        if (s.flying) { s.vy += 1800 * dt; s.bx += s.vx * dt; s.by += s.vy * dt; if (s.by > 760) { s.by = 760; s.vy *= -0.4; s.vx *= 0.75; if (Math.abs(s.vy) < 120) { s.flying = false; s.vx = 0; s.vy = 0; if (s.throws >= 2) { s.lastCue = 'down'; cue('down'); } } } if (s.bx < 60 || s.bx > W - 60) { s.vx *= -0.8; s.bx = clamp(s.bx, 60, W - 60); } }
+        if (s.dropP >= 0) { s.dropP += dt / 1.0; if (s.dropP > 1.6) { s.dropP = -1; s.lastCue = 'together'; cue('together'); } }
       },
       draw: (ctx, s, t) => {
-        L.park(ctx, t, { house: true, tree: false });
+        L.park(ctx, t, { house: false, tree: false, sunX: 240, sunY: 180, clouds: false }); L.cloud(ctx, 900 + Math.cos(t * 0.25) * 25, 130, 0.8);
         ctx.fillStyle = P.brown; ctx.strokeStyle = P.ink; ctx.lineWidth = 6; roundRect(ctx, 1300, 300, 420, 28, 10); ctx.fill(); ctx.stroke(); roundRect(ctx, 1330, 328, 20, 440, 6); ctx.fill(); ctx.stroke(); roundRect(ctx, 1670, 328, 20, 440, 6); ctx.fill(); ctx.stroke();
         const d = s.dropP < 0 ? 0 : E.in(clamp(s.dropP, 0, 1)); L.ball(ctx, 1420, lerp(210, 710, d), 90, P.red, t); L.ball(ctx, 1600, lerp(260, 760, d), 40, P.green, t);
-        text(ctx, 'tap to drop', 1510, 170, { size: 40, weight: 600, color: P.ink });
+        text(ctx, 'tap to drop', 1510, 80, { size: 60, weight: 600, color: P.ink });
         L.pip(ctx, { x: 420, y: 720, s: 1.2, t, mood: s.flying ? 'wow' : 'happy', armR: -0.6, armL: 0.6, lookX: clamp((s.bx - 420) / 600, -1, 1), lookY: clamp((s.by - 600) / 400, -1, 1) });
         if (s.drag) { L.arrow(ctx, s.bx, s.by, s.bx + (s.bx - s.lx) * 1.5, s.by + (s.by - s.ly) * 1.5, P.sun, 12); }
         L.ball(ctx, s.bx, s.by, 60, P.red, t, s.bx / 60);
-        if (!s.flying && !s.drag && s.throws === 0) text(ctx, 'drag me and let go!', s.bx, s.by - 110, { size: 44, weight: 600, color: P.ink });
+        if (!s.flying && !s.drag && s.throws === 0) text(ctx, 'drag me and let go!', s.bx, s.by - 120, { size: 64, weight: 600, color: P.ink });
         if (s.flying && s.vy < 0) L.arrow(ctx, s.bx + 100, s.by - 100, s.bx + 100, s.by + 40, P.blue, 12);
       },
       pointer: (s, type, x, y) => {
         if (type === 'down') { if (Math.hypot(x - s.bx, y - s.by) < 150) { s.drag = true; s.flying = false; s.lx = x; s.ly = y; } else if (x > 1280 && y < 800 && s.dropP < 0) s.dropP = 0; }
         if (type === 'move' && s.drag) { s.lx = s.bx; s.ly = s.by; s.bx = clamp(x, 60, W - 60); s.by = clamp(y, 60, 760); }
-        if (type === 'up' && s.drag) { s.drag = false; s.vx = (s.bx - s.lx) * 14; s.vy = (s.by - s.ly) * 14; s.flying = true; s.throws++; }
+        if (type === 'up' && s.drag) { s.drag = false; const maxUp = Math.sqrt(2 * 1800 * Math.max(0, s.by - 90)); s.vx = clamp((s.bx - s.lx) * 14, -1000, 1000); s.vy = clamp((s.by - s.ly) * 14, -maxUp, 1350); s.flying = true; s.throws++; }
       },
       cues: { down: 'Up it goes... and down it comes. Gravity pulls it down every time!', together: 'Big ball and small ball land together!' }
     }
@@ -1016,24 +1017,24 @@
     ],
     interactive: {
       hint: 'Drag the sun down to warm the sea and lift the water up. When the cloud gets heavy, tap it to make rain!',
-      init: s => { s.sunY = 220; s.heat = 0; s.vap = 0; s.cloud = 0; s.grey = 0; s.rain = 0; s.drag = false; s.lastCue = ''; },
+      init: s => { s.sunY = 220; s.heat = 0; s.vap = 0; s.cloud = 0; s.grey = 0; s.rain = 0; s.drag = false; s.lastCue = ''; s.warmSaid = false; s.heavySaid = false; },
       update: (s, dt, cue) => {
         s.heat = clamp((s.sunY - 220) / 380, 0, 1);
         s.vap = clamp(s.vap + (s.heat * 0.5 - 0.08) * dt, 0, 1);
         if (s.vap > 0.5) s.cloud = clamp(s.cloud + 0.12 * dt, 0, 1);
         if (s.cloud > 0.95) s.grey = clamp(s.grey + 0.15 * dt, 0, 1);
         if (s.rain > 0) { s.rain -= dt / 4; s.cloud = clamp(s.cloud - dt / 5, 0, 1); s.grey = clamp(s.grey - dt / 3, 0, 1); if (s.rain <= 0) { s.rain = 0; } }
-        if (s.heat > 0.6 && s.lastCue === '') { s.lastCue = 'warm'; cue('warm'); }
-        if (s.grey > 0.9 && s.lastCue !== 'heavy' && s.lastCue !== 'rain') { s.lastCue = 'heavy'; cue('heavy'); }
+        if (s.heat > 0.6 && !s.warmSaid) { s.warmSaid = true; s.lastCue = 'warm'; cue('warm'); } if (s.heat < 0.2) s.warmSaid = false;
+        if (s.grey > 0.9 && s.rain <= 0 && !s.heavySaid) { s.heavySaid = true; s.lastCue = 'heavy'; cue('heavy'); }
       },
       draw: (ctx, s, t) => {
         seaScene(ctx, t, { sunHeat: s.heat, vapour: s.vap, vapourFade: true, cloud: s.cloud, cloudGrey: s.grey, rain: s.rain, river: 1, pip: false, sunY: s.sunY });
-        if (s.heat < 0.2) text(ctx, 'drag me down ↓', 1620, s.sunY - 180, { size: 44, weight: 600, color: P.ink });
-        if (s.grey > 0.9) text(ctx, 'tap the cloud!', 900, 450, { size: 44, weight: 600, color: P.ink });
-        L.pip(ctx, { x: 330, y: 600, s: 1.0, t, mood: s.rain > 0 ? 'wow' : 'happy', armR: -0.5, armL: 0.6, lookX: 0.8, lookY: -0.4 });
+        if (s.heat < 0.2) { text(ctx, 'drag me down', 1620, s.sunY + 215, { size: 64, weight: 600, color: P.ink }); L.arrow(ctx, 1620, s.sunY + 250, 1620, s.sunY + 330, P.sun, 12); }
+        if (s.grey > 0.9 && s.rain <= 0) text(ctx, 'tap the cloud!', 900, 460, { size: 64, weight: 600, color: P.ink });
+        L.pip(ctx, { x: 160, y: 462, s: 0.9, t, mood: s.rain > 0 ? 'wow' : 'happy', armR: -0.5, armL: 0.6, lookX: 0.8, lookY: -0.4 });
       },
       pointer: (s, type, x, y) => {
-        if (type === 'down') { if (Math.hypot(x - 1620, y - s.sunY) < 200) s.drag = true; else if (Math.hypot(x - 900, y - 250) < 300 && s.grey > 0.9 && s.rain <= 0) { s.rain = 1; s.lastCue = 'rain'; } }
+        if (type === 'down') { if (Math.hypot(x - 1620, y - s.sunY) < 200) s.drag = true; else if (Math.hypot(x - 900, y - 250) < 300 && s.grey > 0.9 && s.rain <= 0) { s.rain = 1; s.lastCue = 'rain'; s.heavySaid = false; } }
         if (type === 'move' && s.drag) s.sunY = clamp(y, 150, 600);
         if (type === 'up') s.drag = false;
       },
@@ -1084,11 +1085,16 @@
     ctx.beginPath(); ctx.moveTo(-120, 0); ctx.quadraticCurveTo(-120, -110, -20, -110); ctx.lineTo(10, -150); ctx.lineTo(40, -110); ctx.quadraticCurveTo(140, -100, 170, -30); ctx.quadraticCurveTo(175, 10, 150, 10); ctx.lineTo(80, 0); ctx.quadraticCurveTo(90, 60, 40, 60); ctx.lineTo(-100, 60); ctx.quadraticCurveTo(-130, 60, -120, 0); ctx.closePath(); ctx.fill();
     ctx.restore();
   }
+  // the tree's ground shadow: an ellipse stretching away from the light, longer when the light is low
+  function treeShadow(ctx, sx, sy) {
+    const tdx = 1650 - sx, tdy = 830 - sy; const telev = Math.atan2(Math.max(10, tdy), Math.abs(tdx) || 1); const tlen = clamp(240 / Math.tan(Math.max(0.12, telev)) * 0.9, 60, 1400); const tdir = tdx >= 0 ? 1 : -1;
+    ctx.save(); ctx.fillStyle = 'rgba(30,40,70,0.45)'; ctx.beginPath(); ctx.ellipse(1650 + tdir * tlen / 2, 832, tlen / 2 + 40, 34, 0, 0, Math.PI * 2); ctx.fill(); ctx.beginPath(); ctx.ellipse(1650 + tdir * (tlen - 20), 832, 110, 40, 0, 0, Math.PI * 2); ctx.fill(); ctx.restore();
+  }
   function sunArcScene(ctx, t, sunP, o) {
     // sunP 0..1: sun moves along an arc from left horizon (0) to right horizon (1)
     o = o || {}; const a = Math.PI * (1 - sunP); const sx = 960 + Math.cos(a) * 820, sy = 760 - Math.sin(a) * 620;
     const sky = sunP < 0.15 || sunP > 0.85 ? { top: '#F7A26B', bottom: '#FFD7B0' } : {}; L.sky(ctx, sky);
-    L.sun(ctx, sx, sy, 110, t); L.ground(ctx, 820); L.tree(ctx, 1650, 830, 1.0);
+    L.sun(ctx, sx, sy, 110, t); L.ground(ctx, 820); treeShadow(ctx, sx, sy); L.tree(ctx, 1650, 830, 1.0);
     const len = groundShadow(ctx, 760, 822, sx, sy, 1.3);
     L.pip(ctx, { x: 760, y: 720, s: 1.3, t, mood: o.mood || 'talk', armR: -0.4, armL: 0.6, lookX: clamp((sx - 760) / 800, -1, 1), lookY: -0.6, bob: false });
     return { sx, sy, len };
@@ -1128,7 +1134,7 @@
           L.sky(ctx); const sx = 1640, sy = 200; L.sun(ctx, sx, sy, 120, t); L.ground(ctx, 820); L.tree(ctx, 1500, 830, 1.0); L.house(ctx, 260, 840, 0.9);
           const wp = seg(t, Lt.start('walk') + 0.3, Lt.chunk('walk', 'and look')); const x = lerp(420, 900, wp); const hop = Math.abs(Math.sin(wp * 20)) * 14 * (wp < 1 ? 1 : 0);
           // wave & jump during 'wave'
-          const wavep = Lt.cwin('wave', 'when pip waves', 1.6); const jp = Lt.cwin('wave', 'when pip jumps', 1.2, null, 0.3); const jy = -Math.sin(jp * Math.PI) * 240;
+          const wavep = Lt.cwin('wave', 'when curie waves', 1.6); const jp = Lt.cwin('wave', 'when curie jumps', 1.2, null, 0.3); const jy = -Math.sin(jp * Math.PI) * 240;
           const arm = wavep > 0 && wavep < 1 ? -1.3 + Math.sin(t * 10) * 0.4 : -0.4;
           groundShadow(ctx, x, 822, sx, sy, 1.3);
           if (jp > 0 && jp < 1) { /* shadow stays on ground, pip lifts */ }
@@ -1143,14 +1149,14 @@
           const pipIn = Lt.win('block', 0.1, 0.9, E.outBack); const px = lerp(1000, 820, 1) ; const pipX = pipIn > 0 ? lerp(700, 850, pipIn) : null;
           wall(ctx, on * Math.max(lit, Lt.after('block') ? 1 : 0), 1500, 500);
           if (on) beams(ctx, t, 300, 500, 1200, pipIn > 0.95 ? pipX - 100 : null, 1);
-          if (Lt.after('shadow') || (pipIn > 0.95 && Lt.after('block'))) { const sp = Lt.after('shadow') ? Lt.cwin('shadow', "is pip's shadow", 0.8, null, -0.4) : 0; pipSilhouette(ctx, 1500, 500, 1.9, 0.9 * Math.max(sp, 0.001)); }
+          if (Lt.after('shadow') || (pipIn > 0.95 && Lt.after('block'))) { const sp = Lt.after('shadow') ? Lt.cwin('shadow', "is curie's shadow", 0.8, null, -0.4) : 0; pipSilhouette(ctx, 1500, 500, 1.9, 0.9 * Math.max(sp, 0.001)); }
           if (pipIn > 0) L.pip(ctx, { x: pipX, y: 500, s: 1.3 * pipIn, t, mood: Lt.after('shadow') ? 'wow' : 'talk', armR: -0.3, armL: 0.6, lookX: -0.9, bob: false });
           const tp = Lt.cwin('torch', 'with a torch', 0.8, E.outBack); if (tp > 0) { ctx.save(); ctx.translate(200, 500); ctx.scale(tp, tp); L.torch(ctx, 0, 0, 0, on, 1.2); ctx.restore(); }
           if (!Lt.after('block')) L.pip(ctx, { x: 500, y: 850, s: 0.8, t, mood: 'talk', armR: -0.5, armL: 0.6, lookX: 0.5, lookY: -0.5 });
           L.sticker(ctx, 'straight lines!', 760, 200, Lt.win('light', 0.8, 0.5) * (1 - Lt.win('wall', 0, 0.3)), { bg: P.sun, size: 80, rot: -0.05 });
           L.sticker(ctx, 'bright!', 1540, 220, Lt.cwin('wall', 'the wall is bright', 0.5, null, 0.5) * (1 - Lt.win('block', 0, 0.3)), { bg: P.sun, size: 88, rot: 0.06 });
           L.sticker(ctx, "can't go through", 760, 200, Lt.cwin('block', "it can't go", 0.5) * (1 - Lt.win('shadow', 0, 0.3)), { bg: P.red, color: P.white, size: 76, rot: -0.04 });
-          L.sticker(ctx, 'shadow', 1560, 240, Lt.cwin('shadow', "is pip's shadow", 0.5, null, 0.4) * (1 - Lt.win('define', 0, 0.3)), { bg: P.purple, color: P.white, size: 96, rot: 0.05 });
+          L.sticker(ctx, 'shadow', 1560, 240, Lt.cwin('shadow', "is curie's shadow", 0.5, null, 0.4) * (1 - Lt.win('define', 0, 0.3)), { bg: P.purple, color: P.white, size: 96, rot: 0.05 });
           L.sticker(ctx, "where light can't go", 1200, 200, Lt.win('define', 0.6, 0.6), { bg: P.purple, color: P.white, size: 80, rot: -0.03 });
         }
       },
@@ -1189,28 +1195,29 @@
     ],
     interactive: {
       hint: 'Drag the sun across the sky and watch Curie\'s shadow stretch and shrink. Drag Curie too!',
-      init: s => { s.sunP = 0.3; s.dragSun = false; s.dragPip = false; s.pipX = 760; s.lastCue = ''; s.lowSeen = false; s.highSeen = false; },
+      init: s => { s.sunP = 0.15; s.dragSun = false; s.dragPip = false; s.pipX = 760; s.lastCue = ''; s.zone = 'low'; s.moved = false; s.cuedOnce = false; },
       update: (s, dt, cue) => {
-        if (s.sunP < 0.2 || s.sunP > 0.8) s.lowSeen = true; if (s.sunP > 0.4 && s.sunP < 0.6) s.highSeen = true;
-        if (s.lowSeen && s.lastCue === '' && (s.sunP < 0.2 || s.sunP > 0.8)) { s.lastCue = 'low'; cue('low'); }
-        if (s.highSeen && s.lastCue === 'low' && s.sunP > 0.4 && s.sunP < 0.6) { s.lastCue = 'high'; cue('high'); }
+        // say 'low'/'high' each time the sun enters that part of the sky (after the child has started dragging)
+        const zone = (s.sunP < 0.2 || s.sunP > 0.8) ? 'low' : (s.sunP > 0.4 && s.sunP < 0.6) ? 'high' : 'mid';
+        if (zone !== s.zone) { s.zone = zone; if (zone !== 'mid' && s.moved) { s.cuedOnce = true; s.lastCue = zone; cue(zone); } }
+        else if (s.moved && !s.cuedOnce && zone !== 'mid') { s.cuedOnce = true; s.lastCue = zone; cue(zone); }
       },
       draw: (ctx, s, t) => {
         const a = Math.PI * (1 - s.sunP); const sx = 960 + Math.cos(a) * 820, sy = 760 - Math.sin(a) * 620;
         const sky = s.sunP < 0.15 || s.sunP > 0.85 ? { top: '#F7A26B', bottom: '#FFD7B0' } : {}; L.sky(ctx, sky);
         // dotted arc path
         ctx.save(); ctx.setLineDash([10, 18]); ctx.strokeStyle = 'rgba(43,45,66,0.35)'; ctx.lineWidth = 5; ctx.beginPath(); ctx.ellipse(960, 760, 820, 620, 0, Math.PI, 2 * Math.PI); ctx.stroke(); ctx.restore();
-        L.sun(ctx, sx, sy, 110, t); L.ground(ctx, 820); L.tree(ctx, 1650, 830, 1.0);
+        L.sun(ctx, sx, sy, 110, t); L.ground(ctx, 820); treeShadow(ctx, sx, sy); L.tree(ctx, 1650, 830, 1.0);
         const len = groundShadow(ctx, s.pipX, 822, sx, sy, 1.3);
         L.pip(ctx, { x: s.pipX, y: 720, s: 1.3, t, mood: len > 700 ? 'wow' : 'happy', armR: -0.4, armL: 0.6, lookX: clamp((sx - s.pipX) / 800, -1, 1), lookY: -0.6, bob: false });
-        if (!s.dragSun && s.lastCue === '') text(ctx, 'drag the sun ↔', sx, sy - 180, { size: 44, weight: 600, color: P.ink });
+        if (!s.moved) { const lx = clamp(sx, 340, W - 340); text(ctx, 'drag the sun', lx, sy - 190, { size: 64, weight: 600, color: P.ink }); L.arrow(ctx, lx + 190, sy - 200, lx + 300, sy - 200, P.sun, 12); L.arrow(ctx, lx - 190, sy - 200, lx - 300, sy - 200, P.sun, 12); }
         const lbl = s.sunP < 0.25 ? 'morning: long shadow' : s.sunP > 0.75 ? 'evening: long shadow' : s.sunP > 0.4 && s.sunP < 0.6 ? 'noon: short shadow' : 'in between';
         L.sticker(ctx, lbl, 960, 120, 1, { bg: P.purple, color: P.white, size: 60, rot: 0 });
       },
       pointer: (s, type, x, y) => {
         const a = Math.PI * (1 - s.sunP); const sx = 960 + Math.cos(a) * 820, sy = 760 - Math.sin(a) * 620;
         if (type === 'down') { if (Math.hypot(x - sx, y - sy) < 200) s.dragSun = true; else if (Math.abs(x - s.pipX) < 160 && y > 560 && y < 860) s.dragPip = true; }
-        if (type === 'move') { if (s.dragSun) { const ang = Math.atan2(760 - y, x - 960); s.sunP = clamp(1 - ang / Math.PI, 0.03, 0.97); } if (s.dragPip) s.pipX = clamp(x, 200, 1500); }
+        if (type === 'move') { if (s.dragSun) { const ang = Math.atan2(760 - y, x - 960); s.sunP = clamp(1 - ang / Math.PI, 0.03, 0.97); s.moved = true; } if (s.dragPip) s.pipX = clamp(x, 200, 1500); }
         if (type === 'up') { s.dragSun = false; s.dragPip = false; }
       },
       cues: { low: 'The sun is low, so the shadow is long!', high: 'The sun is high, so the shadow is short!' }
@@ -1352,7 +1359,7 @@
           pond(ctx, t);
           const d1 = Lt.cwin('clay1', 'plop', 0.6, E.in, -0.6); const sk = Lt.cwin('clay1', 'plop', 1.6, E.in, 0.0);
           const cy1 = d1 < 1 ? lerp(380, WATER_Y, d1) : lerp(WATER_Y, 920 - 40, sk);
-          const morph = Lt.cwin('clay2', 'now pip makes', 1.4, E.inOut, 1.6); const d2 = Lt.cwin('clay2', 'it floats', 0.6, E.in, -0.75); const bob = Math.sin(t * 2) * 8;
+          const morph = Lt.cwin('clay2', 'now curie makes', 1.4, E.inOut, 1.6); const d2 = Lt.cwin('clay2', 'it floats', 0.6, E.in, -0.75); const bob = Math.sin(t * 2) * 8;
           L.pip(ctx, { x: 300, y: 420, s: 1.1, t, mood: Lt.cafter('clay2', 'it floats', -0.2) ? 'wow' : 'talk', armR: d1 > 0 && d1 < 0.4 ? -1.3 : -0.5, armL: 0.6, lookX: 0.9, lookY: 0.4 });
           if (!Lt.after('clay2')) { const sq = Lt.win('clay1', 0.8, 1.2); if (sq > 0) clayBall(ctx, lerp(520, 900, d1), sq < 1 ? 380 : cy1, 1); }
           splash(ctx, 900, WATER_Y, Lt.cwin('clay1', 'plop', 0.8));
@@ -1404,7 +1411,7 @@
           if (it === s.drag) continue;
           if (it.x > 540) { // over the pond
             const target = it.sinks ? 920 - 50 : WATER_Y - 15;
-            if (!it.inWater && it.y >= WATER_Y - 20) { it.inWater = true; it.splash = 0.01; s.count++; if (s.count === 1 && s.lastCue === '') { s.lastCue = 'first'; cue(it.sinks ? 'sink' : 'float'); } }
+            if (!it.inWater && it.y >= WATER_Y - 20) { it.inWater = true; it.splash = 0.01; s.count++; s.lastCue = it.sinks ? 'sink' : 'float'; cue(s.lastCue); }
             if (it.y < target) { it.vy += (it.inWater ? 300 : 1800) * dt; it.y = Math.min(target, it.y + it.vy * dt); } else { it.y = target; it.vy = 0; }
             if (it.splash > 0) { it.splash += dt * 1.5; if (it.splash > 1) it.splash = 0; }
           } else if (it.y !== it.hy || it.x !== it.hx) { it.x = it.hx; it.y = it.hy; it.inWater = false; it.vy = 0; }
@@ -1412,12 +1419,19 @@
       },
       draw: (ctx, s, t) => {
         pond(ctx, t);
-        ctx.fillStyle = 'rgba(255,255,255,0.7)'; roundRect(ctx, 80, 230, 420, 400, 30); ctx.fill(); text(ctx, 'drag us in!', 290, 200, { size: 40, weight: 700 });
+        ctx.fillStyle = 'rgba(255,255,255,0.7)'; roundRect(ctx, 80, 230, 420, 400, 30); ctx.fill(); text(ctx, 'drag us in!', 290, 195, { size: 56, weight: 700, stroke: P.white, strokeWidth: 12 });
         for (const it of s.items) {
           const bob = it.inWater && !it.sinks ? Math.sin(t * 2 + it.x) * 6 : 0; const x = it.x, y = it.y + bob;
-          if (it.n === 'stone') stone(ctx, x, y, 0.8); else if (it.n === 'boat') boat(ctx, x, y, 0.55); else if (it.n === 'cork') cork(ctx, x, y, 0.8); else if (it.n === 'coin') coin(ctx, x, y, 0.9); else if (it.n === 'spoon') spoon(ctx, x, y, 0.7, 0.5); else if (it.n === 'leaf') leafItem(ctx, x, y, 0.8); else { clayBoat(ctx, x, y, 0.7, it.shape); if (it === s.drag || it.x < 540) text(ctx, 'tap to reshape', x, y + 70, { size: 28, weight: 600 }); }
+          if (it.n === 'stone') stone(ctx, x, y, 0.8); else if (it.n === 'boat') boat(ctx, x, y, 0.55); else if (it.n === 'cork') cork(ctx, x, y, 0.8); else if (it.n === 'coin') coin(ctx, x, y, 0.9); else if (it.n === 'spoon') spoon(ctx, x, y, 0.7, 0.5); else if (it.n === 'leaf') leafItem(ctx, x, y, 0.8); else { clayBoat(ctx, x, y, 0.7, it.shape); if (it === s.drag || it.x < 540) text(ctx, 'tap to reshape', x, y + 78, { size: 40, weight: 600 }); }
           if (it.splash > 0) splash(ctx, it.x, WATER_Y, it.splash);
-          if (it.inWater && it.vy === 0) text(ctx, it.sinks ? 'sinks' : 'floats!', x, y - 80, { size: 40, weight: 700, color: it.sinks ? P.ink : P.blueDeep });
+        }
+        // sink/float labels, staggered so that neighbours do not overlap
+        const labelled = s.items.filter(it => it.inWater && it.vy === 0).sort((a, b) => a.x - b.x); let prevX = -1e9, row = 0;
+        for (const it of labelled) {
+          const bob = !it.sinks ? Math.sin(t * 2 + it.x) * 6 : 0; const y = it.y + bob;
+          row = (it.x - prevX < 190) ? (row + 1) % 2 : 0; prevX = it.x;
+          const ly = it.sinks ? y + 80 + row * 52 : ((it.n === 'boat' || (it.n === 'clay' && it.shape > 0.5) ? y - 150 : y - 85) - row * 52);
+          text(ctx, it.sinks ? 'sinks' : 'floats!', it.x, ly, { size: 48, weight: 700, color: it.sinks ? P.ink : P.blueDeep, stroke: P.white, strokeWidth: 8 });
         }
         L.pip(ctx, { x: 300, y: 820, s: 0.8, t, mood: 'happy', armR: -0.6, armL: 0.6, lookX: 0.8, lookY: -0.3 });
       },

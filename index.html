@@ -1,8 +1,18 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Little Scientists Club</title>
-<meta name="description" content="Little Scientists Club: animated science stories for 5–6 year olds, each with a hands-on simulation, an experiment and a quiz.">
+<meta name="description" content="Little Scientists Club: animated science stories for 5–6-year-olds, each with a hands-on simulation, an experiment and a quiz.">
 <link rel="icon" href="thumbs/favicon.png">
+<link rel="apple-touch-icon" href="thumbs/apple-touch-icon.png">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Little Scientists Club">
+<meta property="og:title" content="Little Scientists Club: play with the science">
+<meta property="og:description" content="Animated science stories for 5–6-year-olds, each with a hands-on simulation, an experiment to try at home and a quiz.">
+<meta property="og:url" content="https://ramthiru83.github.io/little-scientists-club/">
+<meta property="og:image" content="https://ramthiru83.github.io/little-scientists-club/thumbs/ep1.jpg">
+<meta property="og:image:width" content="1280"><meta property="og:image:height" content="720">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="theme-color" content="#4EA8FF">
 <style>[hidden]{display:none!important} html{color-scheme:light} body{margin:0} img{max-width:100%}</style>
 <link rel="stylesheet" href="fonts.css">
 <style>
@@ -30,30 +40,38 @@ h2 { font-family: var(--font-display); font-weight: 700; font-size: 26px; margin
 .card img { width: 100%; height: auto; aspect-ratio: 16/9; object-fit: cover; display: block; max-width: 100% }
 .card .body { padding: 14px 16px 16px; display: grid; gap: 6px }
 .card .title { font-family: var(--font-display); font-weight: 600; font-size: 20px; line-height: 1.2 }
-.stage { background: var(--card); border-radius: 26px; box-shadow: var(--shadow); overflow: hidden; display: grid }
+section.stage { background: var(--card); border-radius: 26px; box-shadow: var(--shadow); overflow: hidden; display: grid }
 .canvas-wrap { position: relative; width: 100%; aspect-ratio: 16/9; max-width: 100%; background: #000; touch-action: none; user-select: none; -webkit-user-select: none }
-.canvas-wrap canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block }
-.overlay { position: absolute; inset: 0; display: grid; place-items: center; background: rgba(20,30,60,.35) }
+.canvas-wrap canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; border-radius: 0; box-shadow: none; background: #000 }
+.canvas-wrap:fullscreen, .canvas-wrap:-webkit-full-screen { aspect-ratio: auto; width: 100vw; height: 100vh; background: #000 }
+.canvas-wrap:fullscreen canvas, .canvas-wrap:-webkit-full-screen canvas { inset: auto; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: min(100vw, calc(100vh * 16 / 9)); height: min(100vh, calc(100vw * 9 / 16)) }
+.overlay { position: absolute; inset: 0; display: flex; align-items: flex-start; justify-content: center; padding-top: 8%; background: rgba(20,30,60,.2) }
 .overlay[hidden] { display: none }
 .overlay button { font-family: var(--font-display); font-weight: 700; font-size: clamp(20px, 3.5vw, 32px); background: var(--accent); color: var(--accent-ink); border: 4px solid #2B2D42; border-radius: 999px; padding: 16px 34px; cursor: pointer; box-shadow: 0 8px 0 rgba(0,0,0,.25) }
 .bar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; padding: 14px 16px; border-top: 1px solid var(--line) }
 .seg { display: inline-flex; border: 2px solid var(--line); border-radius: 999px; overflow: hidden }
 .seg button { font-family: var(--font-display); font-weight: 600; font-size: 16px; background: transparent; color: var(--fg); border: 0; padding: 10px 18px; cursor: pointer }
-.seg button[aria-pressed="true"] { background: var(--blue); color: #fff }
+.seg button[aria-pressed="true"] { background: var(--blue-deep); color: #fff }
+:root[data-theme="dark"] .seg button[aria-pressed="true"] { background: #2F7FD6 }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .seg button[aria-pressed="true"] { background: #2F7FD6; color: #fff } }
 .btn { font-family: var(--font-display); font-weight: 600; font-size: 16px; background: var(--card); color: var(--fg); border: 2px solid var(--line); border-radius: 999px; padding: 10px 18px; cursor: pointer; text-decoration: none }
 .btn[hidden] { display: none }
 .scrub { flex: 1 1 160px; min-width: 120px; accent-color: var(--blue) }
 .scrub[hidden] { display: none }
 .hint { padding: 0 16px 14px; color: var(--muted); font-size: 16px; min-height: 1.5em }
 .hint b { color: var(--fg) }
-.says { padding: 0 16px 16px; font-family: var(--font-display); font-weight: 600; font-size: 18px; color: var(--blue-deep); min-height: 1.6em }
+.says { padding: 0 16px 16px; font-family: var(--font-display); font-weight: 600; font-size: 18px; color: #2563B8; min-height: 1.6em }
+:root[data-theme="dark"] .says { color: #8FCBFF }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .says { color: #8FCBFF } }
+.cap { padding: 10px 16px 0; font-family: var(--font-display); font-weight: 600; font-size: clamp(16px, 2.6vw, 21px); line-height: 1.35; min-height: 1.4em; color: var(--fg) }
+.cap[hidden] { display: none }
 .two { display: grid; grid-template-columns: 1fr 1fr; gap: 16px }
 @media (max-width: 760px) { .two { grid-template-columns: 1fr } }
 .panel { background: var(--card); border-radius: 22px; box-shadow: var(--shadow); padding: 20px 22px; min-width: 0 }
 .idea { font-family: var(--font-display); font-weight: 700; font-size: clamp(22px, 3.4vw, 30px); background: var(--accent); color: var(--accent-ink); border-radius: 18px; padding: 14px 18px; display: inline-block; margin-bottom: 12px; text-wrap: balance }
 .steps { margin: 0; padding: 0; list-style: none; display: grid; gap: 10px; counter-reset: s }
 .steps li { display: grid; grid-template-columns: 40px 1fr; gap: 12px; align-items: start; counter-increment: s }
-.steps li::before { content: counter(s); font-family: var(--font-display); font-weight: 700; width: 36px; height: 36px; border-radius: 50%; background: var(--green); color: #fff; display: grid; place-items: center }
+.steps li::before { content: counter(s); font-family: var(--font-display); font-weight: 700; width: 36px; height: 36px; border-radius: 50%; background: var(--green); color: var(--accent-ink); display: grid; place-items: center }
 .badge { font-size: 13px; font-weight: 700; color: var(--muted); display: inline-flex; gap: 6px; align-items: center; margin-bottom: 10px }
 .quiz { display: grid; gap: 14px }
 .q { display: grid; gap: 8px }
@@ -61,7 +79,7 @@ h2 { font-family: var(--font-display); font-weight: 700; font-size: 26px; margin
 .opts { display: flex; gap: 10px; flex-wrap: wrap }
 .opts button { font-family: var(--font-display); font-weight: 600; font-size: 18px; background: var(--card); color: var(--fg); border: 3px solid var(--line); border-radius: 999px; padding: 10px 20px; cursor: pointer }
 .opts button:hover { border-color: var(--blue) }
-.opts button.yes { background: var(--green); color: #fff; border-color: transparent }
+.opts button.yes { background: var(--green); color: var(--accent-ink); border-color: transparent }
 .opts button.no { opacity: .5 }
 .fb { font-size: 16px; color: var(--muted); min-height: 1.4em }
 .pipbox { display: flex; align-items: center; gap: 14px }
@@ -77,25 +95,27 @@ section[hidden] { display: none }
 <section id="view-hub">
   <div class="wrap">
   <header class="top"><canvas class="logo" width="128" height="128" aria-hidden="true"></canvas><div><a class="brand" href="#">Little Scientists <span>Club</span></a><div class="eyebrow">Big questions, little scientists</div></div><nav><a class="pill" href="#">All episodes</a><a class="pill" href="https://www.youtube.com/@LittleScientistsClubCurie" target="_blank" rel="noopener">YouTube channel</a></nav></header>
-  <section><h1>Pick a question to explore</h1><p class="lead">Every episode has a two-minute animated story and a hands-on simulation you can play with. Made for 5–6 year olds, with a grown-up nearby.</p></section>
+  <section><h1>Pick a question to explore</h1><p class="lead">Every episode has a two-minute animated story and a hands-on simulation you can play with. Made for 5–6-year-olds, with a grown-up nearby.</p></section>
   <section class="grid" aria-label="Episodes"><a class="card" href="#ep1"><img src="thumbs/ep1.jpg" alt="" width="1280" height="720"><div class="body"><span class="eyebrow">Episode 1</span><span class="title">Why does ice cream melt?</span><span class="lead">Watch with Curie, then play: heat makes things melt.</span></div></a><a class="card" href="#ep2"><img src="thumbs/ep2.jpg" alt="" width="1280" height="720"><div class="body"><span class="eyebrow">Episode 2</span><span class="title">Why does a ball always come down?</span><span class="lead">Watch with Curie, then play: gravity pulls things down.</span></div></a><a class="card" href="#ep3"><img src="thumbs/ep3.jpg" alt="" width="1280" height="720"><div class="body"><span class="eyebrow">Episode 3</span><span class="title">Where does rain come from?</span><span class="lead">Watch with Curie, then play: the sun lifts the water up, and the rain brings it down.</span></div></a><a class="card" href="#ep4"><img src="thumbs/ep4.jpg" alt="" width="1280" height="720"><div class="body"><span class="eyebrow">Episode 4</span><span class="title">Why do I have a shadow?</span><span class="lead">Watch with Curie, then play: a shadow is where the light can't go.</span></div></a><a class="card" href="#ep5"><img src="thumbs/ep5.jpg" alt="" width="1280" height="720"><div class="body"><span class="eyebrow">Episode 5</span><span class="title">Why do boats float?</span><span class="lead">Watch with Curie, then play: water pushes up.</span></div></a></section>
-  <section class="panel"><h2>How to use this site</h2><p>Each episode page starts with the story, narrated by Curie with captions. Tap <b>Play</b> to try the science yourself: drag the sun, throw the ball, make it rain, stretch a shadow, or sort things into the pond. Underneath you will find the big idea, an experiment to try at home, and a three-question quiz to talk about together.</p></section>
+  <section class="panel"><h2>How to use this site</h2><p>Each episode page starts with the story, narrated by Curie with captions. Tap <b>Try it</b> to do the science yourself: drag the sun, throw the ball, make it rain, stretch a shadow, or sort things into the pond. Underneath you will find the big idea, an experiment to try at home, and a three-question quiz to talk about together.</p></section>
   <footer><div>Little Scientists Club · <a href="https://www.youtube.com/@LittleScientistsClubCurie" target="_blank" rel="noopener">Watch on YouTube</a></div><div>Sound plays after you tap a button. Nothing here is collected or saved.</div></footer>
   </div></section>
 <section id="view-ep1" hidden><div class="wrap">
   <header class="top"><canvas class="logo" width="128" height="128" aria-hidden="true"></canvas><div><a class="brand" href="#">Little Scientists <span>Club</span></a><div class="eyebrow">Episode 1 of 5</div></div><nav><a class="pill" href="#">All episodes</a><a class="pill" href="https://www.youtube.com/@LittleScientistsClubCurie" target="_blank" rel="noopener">YouTube channel</a></nav></header>
-  <section><h1>Why does ice cream melt?</h1><p class="lead">Watch the story first, then tap <b>Play</b> and try it yourself.</p></section>
+  <section><h1>Why does ice cream melt?</h1><p class="lead">Watch the story first, then tap <b>Try it</b> and do the science yourself.</p></section>
   <section class="stage" aria-label="Episode player">
-    <div class="canvas-wrap"><canvas class="stage" width="1920" height="1080"></canvas><div class="overlay"><button class="bigplay" type="button">▶ Watch with Curie</button></div></div>
+    <div class="canvas-wrap"><canvas class="stage" width="1920" height="1080" role="img" aria-label="Episode animation; the words Curie says are shown below the picture"></canvas><div class="overlay"><button class="bigplay" type="button"><span aria-hidden="true">▶ </span><span class="lbl">Watch with Curie</span></button></div></div>
+    <div class="cap" aria-live="polite"></div>
     <div class="bar">
-      <div class="seg" role="group" aria-label="Mode"><button class="mWatch" type="button" aria-pressed="true">Watch</button><button class="mPlay" type="button" aria-pressed="false">Play</button></div>
+      <div class="seg" role="group" aria-label="Mode"><button class="mWatch" type="button" aria-pressed="true">Watch</button><button class="mPlay" type="button" aria-pressed="false">Try it</button></div>
       <button class="btn pp" type="button">Pause</button>
-      <input class="scrub" type="range" min="0" max="1000" value="0" aria-label="Scrub through the episode" id="scrub-ep1">
+      <input class="scrub" type="range" min="0" max="1000" value="0" aria-label="Move through the episode" id="scrub-ep1">
       <button class="btn restart" type="button">Start again</button>
+      <button class="btn fs" type="button">Full screen</button>
       <a class="btn" href="https://youtu.be/geL3uKnslT4" target="_blank" rel="noopener">Watch on YouTube</a>
     </div>
     <div class="hint"></div>
-    <div class="says"></div>
+    <div class="says" aria-live="polite"></div>
   </section>
   <section class="two">
     <div class="panel"><span class="eyebrow">Curie's big idea</span><div><div class="idea">Heat makes things melt!</div></div><p>Ice cream is made of tiny bits. When it is cold they hold on to each other tightly, so the ice cream is hard: a solid. Warmth from the sun or a hand gives the bits energy, they wiggle apart and slide past each other, and the ice cream becomes a liquid. In the freezer the bits slow down and grab hold again.</p></div>
@@ -106,129 +126,165 @@ section[hidden] { display: none }
   </div></section>
 <section id="view-ep2" hidden><div class="wrap">
   <header class="top"><canvas class="logo" width="128" height="128" aria-hidden="true"></canvas><div><a class="brand" href="#">Little Scientists <span>Club</span></a><div class="eyebrow">Episode 2 of 5</div></div><nav><a class="pill" href="#">All episodes</a><a class="pill" href="https://www.youtube.com/@LittleScientistsClubCurie" target="_blank" rel="noopener">YouTube channel</a></nav></header>
-  <section><h1>Why does a ball always come down?</h1><p class="lead">Watch the story first, then tap <b>Play</b> and try it yourself.</p></section>
+  <section><h1>Why does a ball always come down?</h1><p class="lead">Watch the story first, then tap <b>Try it</b> and do the science yourself.</p></section>
   <section class="stage" aria-label="Episode player">
-    <div class="canvas-wrap"><canvas class="stage" width="1920" height="1080"></canvas><div class="overlay"><button class="bigplay" type="button">▶ Watch with Curie</button></div></div>
+    <div class="canvas-wrap"><canvas class="stage" width="1920" height="1080" role="img" aria-label="Episode animation; the words Curie says are shown below the picture"></canvas><div class="overlay"><button class="bigplay" type="button"><span aria-hidden="true">▶ </span><span class="lbl">Watch with Curie</span></button></div></div>
+    <div class="cap" aria-live="polite"></div>
     <div class="bar">
-      <div class="seg" role="group" aria-label="Mode"><button class="mWatch" type="button" aria-pressed="true">Watch</button><button class="mPlay" type="button" aria-pressed="false">Play</button></div>
+      <div class="seg" role="group" aria-label="Mode"><button class="mWatch" type="button" aria-pressed="true">Watch</button><button class="mPlay" type="button" aria-pressed="false">Try it</button></div>
       <button class="btn pp" type="button">Pause</button>
-      <input class="scrub" type="range" min="0" max="1000" value="0" aria-label="Scrub through the episode" id="scrub-ep2">
+      <input class="scrub" type="range" min="0" max="1000" value="0" aria-label="Move through the episode" id="scrub-ep2">
       <button class="btn restart" type="button">Start again</button>
+      <button class="btn fs" type="button">Full screen</button>
       <a class="btn" href="https://youtu.be/PlfkVBF830E" target="_blank" rel="noopener">Watch on YouTube</a>
     </div>
     <div class="hint"></div>
-    <div class="says"></div>
+    <div class="says" aria-live="polite"></div>
   </section>
   <section class="two">
-    <div class="panel"><span class="eyebrow">Curie's big idea</span><div><div class="idea">Gravity pulls things down!</div></div><p>The Earth is enormous, and it pulls everything towards itself. We call that pull gravity. It is why a thrown ball always comes back down, why rain falls, and why our feet stay on the ground. Gravity pulls big and small things the same way, so a big ball and a small ball dropped together land together.</p></div>
-    <div class="panel"><span class="eyebrow">Try it at home</span><div class="badge">👋 with a grown-up</div><ol class="steps"><li><span>Hold a ball in one hand and a soft toy in the other, at the same height.</span></li><li><span>Count to three and let go of both at exactly the same time.</span></li><li><span>Watch closely: which one lands first? Try it again to be sure.</span></li><li><span>Now throw the ball up gently. Which way does it always go?</span></li></ol></div>
+    <div class="panel"><span class="eyebrow">Curie's big idea</span><div><div class="idea">Gravity pulls things down!</div></div><p>The Earth is enormous, and it pulls everything towards itself. We call that pull gravity. It is why a thrown ball always comes back down, why rain falls, and why our feet stay on the ground. Gravity makes big and small things fall together, so a big ball and a small ball dropped at the same time land together.</p></div>
+    <div class="panel"><span class="eyebrow">Try it at home</span><div class="badge">👋 with a grown-up</div><ol class="steps"><li><span>Hold a ball in one hand and a toy car or a wooden block in the other, at the same height.</span></li><li><span>Count to three and let go of both at exactly the same time.</span></li><li><span>Watch closely: which one lands first? Try it again to be sure.</span></li><li><span>Now throw the ball up gently. Which way does it always go?</span></li></ol></div>
   </section>
   <section class="panel"><span class="eyebrow">Quick quiz</span><h2>What did you find out?</h2><div class="pipbox"><canvas class="pipq" width="240" height="240" aria-hidden="true"></canvas><div class="says pipsays" style="padding:0">Tap an answer and I'll tell you!</div></div><div class="quiz"><div class="q" data-q="0"><p>1. What pulls the ball back down?</p><div class="opts"><button type="button" data-ok="1">Gravity</button><button type="button" data-ok="0">The wind</button><button type="button" data-ok="0">A string</button></div><div class="fb" aria-live="polite"></div></div><div class="q" data-q="1"><p>2. A big ball and a small ball dropped together land...</p><div class="opts"><button type="button" data-ok="1">Together</button><button type="button" data-ok="0">Big one first</button><button type="button" data-ok="0">Small one first</button></div><div class="fb" aria-live="polite"></div></div><div class="q" data-q="2"><p>3. Gravity keeps your feet...</p><div class="opts"><button type="button" data-ok="1">On the ground</button><button type="button" data-ok="0">In the sky</button><button type="button" data-ok="0">In the sea</button></div><div class="fb" aria-live="polite"></div></div></div></section>
   <footer><div><a href="#">All episodes</a> · <a href="https://www.youtube.com/@LittleScientistsClubCurie" target="_blank" rel="noopener">Little Scientists Club on YouTube</a></div><div>Sound plays after you tap a button. Nothing here is collected or saved.</div></footer>
   </div></section>
 <section id="view-ep3" hidden><div class="wrap">
   <header class="top"><canvas class="logo" width="128" height="128" aria-hidden="true"></canvas><div><a class="brand" href="#">Little Scientists <span>Club</span></a><div class="eyebrow">Episode 3 of 5</div></div><nav><a class="pill" href="#">All episodes</a><a class="pill" href="https://www.youtube.com/@LittleScientistsClubCurie" target="_blank" rel="noopener">YouTube channel</a></nav></header>
-  <section><h1>Where does rain come from?</h1><p class="lead">Watch the story first, then tap <b>Play</b> and try it yourself.</p></section>
+  <section><h1>Where does rain come from?</h1><p class="lead">Watch the story first, then tap <b>Try it</b> and do the science yourself.</p></section>
   <section class="stage" aria-label="Episode player">
-    <div class="canvas-wrap"><canvas class="stage" width="1920" height="1080"></canvas><div class="overlay"><button class="bigplay" type="button">▶ Watch with Curie</button></div></div>
+    <div class="canvas-wrap"><canvas class="stage" width="1920" height="1080" role="img" aria-label="Episode animation; the words Curie says are shown below the picture"></canvas><div class="overlay"><button class="bigplay" type="button"><span aria-hidden="true">▶ </span><span class="lbl">Watch with Curie</span></button></div></div>
+    <div class="cap" aria-live="polite"></div>
     <div class="bar">
-      <div class="seg" role="group" aria-label="Mode"><button class="mWatch" type="button" aria-pressed="true">Watch</button><button class="mPlay" type="button" aria-pressed="false">Play</button></div>
+      <div class="seg" role="group" aria-label="Mode"><button class="mWatch" type="button" aria-pressed="true">Watch</button><button class="mPlay" type="button" aria-pressed="false">Try it</button></div>
       <button class="btn pp" type="button">Pause</button>
-      <input class="scrub" type="range" min="0" max="1000" value="0" aria-label="Scrub through the episode" id="scrub-ep3">
+      <input class="scrub" type="range" min="0" max="1000" value="0" aria-label="Move through the episode" id="scrub-ep3">
       <button class="btn restart" type="button">Start again</button>
+      <button class="btn fs" type="button">Full screen</button>
       <a class="btn" href="https://youtu.be/6TXyuOozO98" target="_blank" rel="noopener">Watch on YouTube</a>
     </div>
     <div class="hint"></div>
-    <div class="says"></div>
+    <div class="says" aria-live="polite"></div>
   </section>
   <section class="two">
     <div class="panel"><span class="eyebrow">Curie's big idea</span><div><div class="idea">The sun lifts the water up, and the rain brings it down!</div></div><p>The sun warms the sea, and tiny bits of water float up into the air as invisible water vapour. High in the sky it is cold, so the bits huddle into droplets, and millions of droplets make a cloud. The droplets bump and join until they are too heavy to float, then they fall as rain, which runs back to the sea. Round and round: the water cycle.</p></div>
-    <div class="panel"><span class="eyebrow">Try it at home</span><div class="badge">👋 with a grown-up</div><ol class="steps"><li><span>Ask a grown-up for a glass of very cold water with ice cubes.</span></li><li><span>Leave it on the table and wait a few minutes.</span></li><li><span>Look at the outside of the glass. Where did the little drops come from?</span></li><li><span>Breathe on a cold window or mirror and watch a tiny cloud appear.</span></li></ol></div>
+    <div class="panel"><span class="eyebrow">Try it at home</span><div class="badge">👋 with a grown-up</div><ol class="steps"><li><span>Ask a grown-up for a glass or cup of very cold water with ice cubes.</span></li><li><span>Leave it on the table and wait a few minutes.</span></li><li><span>Look at the outside of the glass. Where did the little drops come from?</span></li><li><span>Breathe on a cold window or mirror and watch a tiny cloud appear.</span></li></ol></div>
   </section>
   <section class="panel"><span class="eyebrow">Quick quiz</span><h2>What did you find out?</h2><div class="pipbox"><canvas class="pipq" width="240" height="240" aria-hidden="true"></canvas><div class="says pipsays" style="padding:0">Tap an answer and I'll tell you!</div></div><div class="quiz"><div class="q" data-q="0"><p>1. What lifts water up into the sky?</p><div class="opts"><button type="button" data-ok="1">The warm sun</button><button type="button" data-ok="0">The moon</button><button type="button" data-ok="0">A fan</button></div><div class="fb" aria-live="polite"></div></div><div class="q" data-q="1"><p>2. Millions of tiny droplets make a...</p><div class="opts"><button type="button" data-ok="1">Cloud</button><button type="button" data-ok="0">Rock</button><button type="button" data-ok="0">Tree</button></div><div class="fb" aria-live="polite"></div></div><div class="q" data-q="2"><p>3. Rain falls when the drops get too...</p><div class="opts"><button type="button" data-ok="1">Heavy</button><button type="button" data-ok="0">Light</button><button type="button" data-ok="0">Warm</button></div><div class="fb" aria-live="polite"></div></div></div></section>
   <footer><div><a href="#">All episodes</a> · <a href="https://www.youtube.com/@LittleScientistsClubCurie" target="_blank" rel="noopener">Little Scientists Club on YouTube</a></div><div>Sound plays after you tap a button. Nothing here is collected or saved.</div></footer>
   </div></section>
 <section id="view-ep4" hidden><div class="wrap">
   <header class="top"><canvas class="logo" width="128" height="128" aria-hidden="true"></canvas><div><a class="brand" href="#">Little Scientists <span>Club</span></a><div class="eyebrow">Episode 4 of 5</div></div><nav><a class="pill" href="#">All episodes</a><a class="pill" href="https://www.youtube.com/@LittleScientistsClubCurie" target="_blank" rel="noopener">YouTube channel</a></nav></header>
-  <section><h1>Why do I have a shadow?</h1><p class="lead">Watch the story first, then tap <b>Play</b> and try it yourself.</p></section>
+  <section><h1>Why do I have a shadow?</h1><p class="lead">Watch the story first, then tap <b>Try it</b> and do the science yourself.</p></section>
   <section class="stage" aria-label="Episode player">
-    <div class="canvas-wrap"><canvas class="stage" width="1920" height="1080"></canvas><div class="overlay"><button class="bigplay" type="button">▶ Watch with Curie</button></div></div>
+    <div class="canvas-wrap"><canvas class="stage" width="1920" height="1080" role="img" aria-label="Episode animation; the words Curie says are shown below the picture"></canvas><div class="overlay"><button class="bigplay" type="button"><span aria-hidden="true">▶ </span><span class="lbl">Watch with Curie</span></button></div></div>
+    <div class="cap" aria-live="polite"></div>
     <div class="bar">
-      <div class="seg" role="group" aria-label="Mode"><button class="mWatch" type="button" aria-pressed="true">Watch</button><button class="mPlay" type="button" aria-pressed="false">Play</button></div>
+      <div class="seg" role="group" aria-label="Mode"><button class="mWatch" type="button" aria-pressed="true">Watch</button><button class="mPlay" type="button" aria-pressed="false">Try it</button></div>
       <button class="btn pp" type="button">Pause</button>
-      <input class="scrub" type="range" min="0" max="1000" value="0" aria-label="Scrub through the episode" id="scrub-ep4">
+      <input class="scrub" type="range" min="0" max="1000" value="0" aria-label="Move through the episode" id="scrub-ep4">
       <button class="btn restart" type="button">Start again</button>
+      <button class="btn fs" type="button">Full screen</button>
       <a class="btn" href="https://youtu.be/FMNAGlJY1TU" target="_blank" rel="noopener">Watch on YouTube</a>
     </div>
     <div class="hint"></div>
-    <div class="says"></div>
+    <div class="says" aria-live="polite"></div>
   </section>
   <section class="two">
     <div class="panel"><span class="eyebrow">Curie's big idea</span><div><div class="idea">A shadow is where the light can't go!</div></div><p>Light travels in straight lines. When it hits your body it stops, because it cannot go through you, so the ground or wall behind you gets no light. That dark patch is your shadow. When the sun is low in the morning or evening, shadows stretch long; at noon, when the sun is high, they are short.</p></div>
-    <div class="panel"><span class="eyebrow">Try it at home</span><div class="badge">👋 with a grown-up</div><ol class="steps"><li><span>Ask a grown-up for a torch and make the room dark.</span></li><li><span>Shine the torch on a wall and put your hand in the light.</span></li><li><span>Make a dog, a bird or a rabbit with your hands.</span></li><li><span>Move your hand closer to the torch. Does the shadow get bigger or smaller?</span></li></ol></div>
+    <div class="panel"><span class="eyebrow">Try it at home</span><div class="badge">👋 with a grown-up</div><ol class="steps"><li><span>Ask a grown-up for a torch and make the room dark. Never shine it in anyone's eyes.</span></li><li><span>Shine the torch on a wall and put your hand in the light.</span></li><li><span>Make a dog, a bird or a rabbit with your hands.</span></li><li><span>Move your hand closer to the torch. Does the shadow get bigger or smaller?</span></li></ol></div>
   </section>
   <section class="panel"><span class="eyebrow">Quick quiz</span><h2>What did you find out?</h2><div class="pipbox"><canvas class="pipq" width="240" height="240" aria-hidden="true"></canvas><div class="says pipsays" style="padding:0">Tap an answer and I'll tell you!</div></div><div class="quiz"><div class="q" data-q="0"><p>1. A shadow is where...</p><div class="opts"><button type="button" data-ok="1">Light can't go</button><button type="button" data-ok="0">Light is brightest</button><button type="button" data-ok="0">Water is</button></div><div class="fb" aria-live="polite"></div></div><div class="q" data-q="1"><p>2. When the sun is low, your shadow is...</p><div class="opts"><button type="button" data-ok="1">Long</button><button type="button" data-ok="0">Short</button><button type="button" data-ok="0">Gone</button></div><div class="fb" aria-live="polite"></div></div><div class="q" data-q="2"><p>3. Light travels in...</p><div class="opts"><button type="button" data-ok="1">Straight lines</button><button type="button" data-ok="0">Circles</button><button type="button" data-ok="0">Zigzags</button></div><div class="fb" aria-live="polite"></div></div></div></section>
   <footer><div><a href="#">All episodes</a> · <a href="https://www.youtube.com/@LittleScientistsClubCurie" target="_blank" rel="noopener">Little Scientists Club on YouTube</a></div><div>Sound plays after you tap a button. Nothing here is collected or saved.</div></footer>
   </div></section>
 <section id="view-ep5" hidden><div class="wrap">
   <header class="top"><canvas class="logo" width="128" height="128" aria-hidden="true"></canvas><div><a class="brand" href="#">Little Scientists <span>Club</span></a><div class="eyebrow">Episode 5 of 5</div></div><nav><a class="pill" href="#">All episodes</a><a class="pill" href="https://www.youtube.com/@LittleScientistsClubCurie" target="_blank" rel="noopener">YouTube channel</a></nav></header>
-  <section><h1>Why do boats float?</h1><p class="lead">Watch the story first, then tap <b>Play</b> and try it yourself.</p></section>
+  <section><h1>Why do boats float?</h1><p class="lead">Watch the story first, then tap <b>Try it</b> and do the science yourself.</p></section>
   <section class="stage" aria-label="Episode player">
-    <div class="canvas-wrap"><canvas class="stage" width="1920" height="1080"></canvas><div class="overlay"><button class="bigplay" type="button">▶ Watch with Curie</button></div></div>
+    <div class="canvas-wrap"><canvas class="stage" width="1920" height="1080" role="img" aria-label="Episode animation; the words Curie says are shown below the picture"></canvas><div class="overlay"><button class="bigplay" type="button"><span aria-hidden="true">▶ </span><span class="lbl">Watch with Curie</span></button></div></div>
+    <div class="cap" aria-live="polite"></div>
     <div class="bar">
-      <div class="seg" role="group" aria-label="Mode"><button class="mWatch" type="button" aria-pressed="true">Watch</button><button class="mPlay" type="button" aria-pressed="false">Play</button></div>
+      <div class="seg" role="group" aria-label="Mode"><button class="mWatch" type="button" aria-pressed="true">Watch</button><button class="mPlay" type="button" aria-pressed="false">Try it</button></div>
       <button class="btn pp" type="button">Pause</button>
-      <input class="scrub" type="range" min="0" max="1000" value="0" aria-label="Scrub through the episode" id="scrub-ep5">
+      <input class="scrub" type="range" min="0" max="1000" value="0" aria-label="Move through the episode" id="scrub-ep5">
       <button class="btn restart" type="button">Start again</button>
+      <button class="btn fs" type="button">Full screen</button>
       <a class="btn" href="https://youtu.be/HmYO-thndTA" target="_blank" rel="noopener">Watch on YouTube</a>
     </div>
     <div class="hint"></div>
-    <div class="says"></div>
+    <div class="says" aria-live="polite"></div>
   </section>
   <section class="two">
     <div class="panel"><span class="eyebrow">Curie's big idea</span><div><div class="idea">Water pushes up!</div></div><p>When something sits in water it pushes some water out of the way, and the water pushes back up. A small, heavy stone pushes only a little water aside, so the push is too small and it sinks. A wide, hollow boat full of air pushes a lot of water aside, so the water pushes up hard enough to hold it. The same clay sinks as a ball and floats as a boat.</p></div>
     <div class="panel"><span class="eyebrow">Try it at home</span><div class="badge">👋 with a grown-up</div><ol class="steps"><li><span>Ask a grown-up for a bowl of water.</span></li><li><span>Collect a spoon, a coin, a cork, a plastic lid and a leaf.</span></li><li><span>Guess first: will it sink or float? Then drop it in.</span></li><li><span>Roll some clay or foil into a ball, then shape it into a boat. Test both!</span></li></ol></div>
   </section>
-  <section class="panel"><span class="eyebrow">Quick quiz</span><h2>What did you find out?</h2><div class="pipbox"><canvas class="pipq" width="240" height="240" aria-hidden="true"></canvas><div class="says pipsays" style="padding:0">Tap an answer and I'll tell you!</div></div><div class="quiz"><div class="q" data-q="0"><p>1. Water pushes...</p><div class="opts"><button type="button" data-ok="1">Up</button><button type="button" data-ok="0">Down</button><button type="button" data-ok="0">Sideways</button></div><div class="fb" aria-live="polite"></div></div><div class="q" data-q="1"><p>2. A stone sinks because it is small and...</p><div class="opts"><button type="button" data-ok="1">Heavy</button><button type="button" data-ok="0">Light</button><button type="button" data-ok="0">Wide</button></div><div class="fb" aria-live="polite"></div></div><div class="q" data-q="2"><p>3. The same clay floats when it is shaped like a...</p><div class="opts"><button type="button" data-ok="1">Boat</button><button type="button" data-ok="0">Ball</button><button type="button" data-ok="0">Cube</button></div><div class="fb" aria-live="polite"></div></div></div></section>
+  <section class="panel"><span class="eyebrow">Quick quiz</span><h2>What did you find out?</h2><div class="pipbox"><canvas class="pipq" width="240" height="240" aria-hidden="true"></canvas><div class="says pipsays" style="padding:0">Tap an answer and I'll tell you!</div></div><div class="quiz"><div class="q" data-q="0"><p>1. Water pushes...</p><div class="opts"><button type="button" data-ok="1">Up</button><button type="button" data-ok="0">Down</button><button type="button" data-ok="0">Sideways</button></div><div class="fb" aria-live="polite"></div></div><div class="q" data-q="1"><p>2. A small stone sinks because it pushes away only a little...</p><div class="opts"><button type="button" data-ok="1">Water</button><button type="button" data-ok="0">Air</button><button type="button" data-ok="0">Sand</button></div><div class="fb" aria-live="polite"></div></div><div class="q" data-q="2"><p>3. The same clay floats when it is shaped like a...</p><div class="opts"><button type="button" data-ok="1">Boat</button><button type="button" data-ok="0">Ball</button><button type="button" data-ok="0">Cube</button></div><div class="fb" aria-live="polite"></div></div></div></section>
   <footer><div><a href="#">All episodes</a> · <a href="https://www.youtube.com/@LittleScientistsClubCurie" target="_blank" rel="noopener">Little Scientists Club on YouTube</a></div><div>Sound plays after you tap a button. Nothing here is collected or saved.</div></footer>
   </div></section>
 <script src="lib.js"></script><script src="data.js"></script>
 <script>/* Single-page site: hub + one view per episode, routed by location.hash (#ep1 … #ep5). */
 (function(){
   const D = window.LSC_DATA; const EPS = Object.keys(D.timelines);
-  const mounted = {}; const W = 1920, H = 1080;
+  const mounted = {}; const W = 1920, H = 1080; const SITE = 'Little Scientists Club';
   function $(root, sel) { return root.querySelector(sel); }
+  const canFullscreen = !!(document.fullscreenEnabled || document.webkitFullscreenEnabled);
 
   function mount(ep) {
     if (mounted[ep]) return mounted[ep];
-    const root = document.getElementById('view-' + ep); const TL = D.timelines[ep]; const M = D.meta[ep]; const I = LSC.episodes[ep].interactive;
+    const root = document.getElementById('view-' + ep); const TL = D.timelines[ep]; const M = D.meta[ep]; const I = LSC.episodes[ep].interactive; const EP = LSC.episodes[ep];
     const canvas = $(root, 'canvas.stage'); const ctx = canvas.getContext('2d', { alpha: false });
-    const overlay = $(root, '.overlay'), bigplay = $(root, '.bigplay'), mWatch = $(root, '.mWatch'), mPlay = $(root, '.mPlay'), pp = $(root, '.pp'), scrub = $(root, '.scrub'), restart = $(root, '.restart'), hint = $(root, '.hint'), says = $(root, '.says'), cw = $(root, '.canvas-wrap');
+    const overlay = $(root, '.overlay'), bigplay = $(root, '.bigplay'), bigplayText = $(root, '.bigplay .lbl'), mWatch = $(root, '.mWatch'), mPlay = $(root, '.mPlay'), pp = $(root, '.pp'), scrub = $(root, '.scrub'), restart = $(root, '.restart'), fsBtn = $(root, '.fs'), hint = $(root, '.hint'), says = $(root, '.says'), cap = $(root, '.cap'), cw = $(root, '.canvas-wrap');
     const player = LSC.createPlayer(ctx, ep, TL); const audio = new Audio('audio/' + ep + '.mp3'); audio.preload = 'auto';
-    let mode = 'watch', state = null, raf = 0, last = 0, cueAudio = null, started = false, active = false;
-    audio.addEventListener('ended', () => { pp.textContent = 'Play'; });
+    // Curie's short spoken cues for Play mode: one Audio element per cue, created up front so they can be
+    // "unlocked" inside a user gesture (iOS Safari only lets media play after a gesture on that element).
+    const cueAudios = {}; for (const id of Object.keys(M.cues || {})) { const a = new Audio('audio/cues/' + ep + '_' + id + '.mp3'); a.preload = 'auto'; cueAudios[id] = a; }
+    let unlocked = false;
+    function unlockCues() {
+      if (unlocked) return; unlocked = true;
+      for (const a of Object.values(cueAudios)) { a.muted = true; const p = a.play(); if (p && p.then) p.then(() => { a.pause(); a.currentTime = 0; a.muted = false; }).catch(() => { a.muted = false; }); else { a.pause(); a.currentTime = 0; a.muted = false; } }
+    }
+    let mode = 'watch', state = null, raf = 0, last = 0, cueAudio = null, started = false, active = false, lastCueId = '', lastCueAt = 0, lastCap = '';
+    const POSTER_T = 4.6; // Curie waving hello in the park
+    function setPP() { pp.textContent = audio.paused ? 'Play' : 'Pause'; }
+    audio.addEventListener('ended', () => { setPP(); overlay.hidden = false; bigplayText.textContent = 'Watch again'; says.textContent = 'Now tap "Try it" and do the science yourself!'; });
+    audio.addEventListener('pause', setPP); audio.addEventListener('play', setPP);
     function setMode(m) {
       mode = m; mWatch.setAttribute('aria-pressed', String(m === 'watch')); mPlay.setAttribute('aria-pressed', String(m === 'play')); says.textContent = '';
-      if (m === 'watch') { hint.innerHTML = 'Captions are on screen. Scrub to any moment, or tap <b>Play</b> to try it yourself.'; scrub.hidden = false; pp.hidden = false; overlay.hidden = started; }
-      else { audio.pause(); pp.hidden = true; scrub.hidden = true; overlay.hidden = true; hint.innerHTML = '<b>Play:</b> ' + M.hint; state = {}; I.init(state); last = performance.now(); }
+      if (m === 'watch') { hint.innerHTML = 'Captions are on screen. Drag the slider to any moment, or tap <b>Try it</b> to do the science yourself.'; scrub.hidden = false; pp.hidden = false; overlay.hidden = started; setPP(); cap.hidden = false; }
+      else { audio.pause(); pp.hidden = true; scrub.hidden = true; overlay.hidden = true; cap.hidden = true; cap.textContent = ''; lastCap = ''; hint.innerHTML = '<b>Try it:</b> ' + M.hint; state = {}; I.init(state); last = performance.now(); unlockCues(); }
       cancelAnimationFrame(raf); if (active) loop();
     }
-    function cue(id) { says.textContent = 'Curie says: ' + (M.cues[id] || ''); if (cueAudio) cueAudio.pause(); cueAudio = new Audio('audio/cues/' + ep + '_' + id + '.mp3'); cueAudio.play().catch(() => {}); }
+    function cue(id) {
+      const now = performance.now();
+      // never pile cues up: ignore repeats of the same cue within 4 s, and never talk over a cue that is still playing
+      if (id === lastCueId && now - lastCueAt < 4000) return;
+      if (cueAudio && !cueAudio.paused && !cueAudio.ended) return;
+      lastCueId = id; lastCueAt = now; says.textContent = 'Curie says: ' + (M.cues[id] || '');
+      const a = cueAudios[id]; if (!a) return; cueAudio = a; try { a.currentTime = 0; } catch (e) {} a.play().catch(() => {});
+    }
+    function captionAt(t) {
+      for (const ln of EP.lines) { const Ln = TL.lines[ln.id]; if (!Ln) continue; if (t >= Ln.start - 0.15 && t <= Ln.end + 0.7) return ln.text; }
+      return '';
+    }
     function loop() {
       raf = requestAnimationFrame(loop);
-      if (mode === 'watch') { const t = audio.currentTime || 0; player.drawFrame(t); if (!scrub.matches(':active')) scrub.value = String(Math.round(t / TL.duration * 1000)); }
-      else { const now = performance.now(); const dt = Math.min(0.05, (now - last) / 1000); last = now; I.update(state, dt, cue); I.draw(ctx, state, now / 1000); }
+      if (mode === 'watch') {
+        const t = started ? (audio.currentTime || 0) : POSTER_T; player.drawFrame(t);
+        if (!scrub.matches(':active')) scrub.value = String(Math.round((started ? t : 0) / TL.duration * 1000));
+        const c = started ? captionAt(t) : ''; if (c !== lastCap) { lastCap = c; cap.textContent = c; }
+      } else { const now = performance.now(); const dt = Math.min(0.05, (now - last) / 1000); last = now; I.update(state, dt, cue); I.draw(ctx, state, now / 1000); }
     }
     function pos(e) { const r = cw.getBoundingClientRect(); return [(e.clientX - r.left) / r.width * W, (e.clientY - r.top) / r.height * H]; }
-    cw.addEventListener('pointerdown', e => { if (mode !== 'play') return; cw.setPointerCapture(e.pointerId); const [x, y] = pos(e); I.pointer(state, 'down', x, y); e.preventDefault(); });
+    cw.addEventListener('pointerdown', e => { if (mode !== 'play') return; unlockCues(); cw.setPointerCapture(e.pointerId); const [x, y] = pos(e); I.pointer(state, 'down', x, y); e.preventDefault(); });
     cw.addEventListener('pointermove', e => { if (mode !== 'play') return; const [x, y] = pos(e); I.pointer(state, 'move', x, y); });
     cw.addEventListener('pointerup', e => { if (mode !== 'play') return; const [x, y] = pos(e); I.pointer(state, 'up', x, y); });
     cw.addEventListener('pointercancel', () => { if (mode === 'play') I.pointer(state, 'up', 0, 0); });
-    bigplay.addEventListener('click', () => { overlay.hidden = true; started = true; audio.currentTime = 0; audio.play().catch(() => {}); pp.textContent = 'Pause'; });
+    function startWatch() { overlay.hidden = true; started = true; says.textContent = ''; audio.currentTime = 0; audio.play().catch(() => {}); setPP(); }
+    bigplay.addEventListener('click', () => { if (mode !== 'watch') setMode('watch'); startWatch(); });
     mWatch.addEventListener('click', () => setMode('watch')); mPlay.addEventListener('click', () => setMode('play'));
-    pp.addEventListener('click', () => { if (audio.paused) { audio.play().catch(() => {}); pp.textContent = 'Pause'; overlay.hidden = true; started = true; } else { audio.pause(); pp.textContent = 'Play'; } });
-    scrub.addEventListener('input', () => { audio.currentTime = Number(scrub.value) / 1000 * TL.duration; player.drawFrame(audio.currentTime); });
-    restart.addEventListener('click', () => { if (mode === 'watch') { audio.currentTime = 0; audio.play().catch(() => {}); pp.textContent = 'Pause'; overlay.hidden = true; started = true; } else setMode('play'); });
+    pp.addEventListener('click', () => { if (audio.paused) { if (audio.ended || audio.currentTime >= TL.duration - 0.05) audio.currentTime = 0; audio.play().catch(() => {}); overlay.hidden = true; started = true; } else { audio.pause(); } setPP(); });
+    scrub.addEventListener('input', () => { started = true; overlay.hidden = true; audio.currentTime = Number(scrub.value) / 1000 * TL.duration; player.drawFrame(audio.currentTime); });
+    restart.addEventListener('click', () => { if (mode === 'watch') startWatch(); else setMode('play'); });
+    if (fsBtn) { if (!canFullscreen) fsBtn.hidden = true; fsBtn.addEventListener('click', () => { const el = cw; if (document.fullscreenElement || document.webkitFullscreenElement) { (document.exitFullscreen || document.webkitExitFullscreen).call(document); } else if (el.requestFullscreen) el.requestFullscreen().catch(() => {}); else if (el.webkitRequestFullscreen) el.webkitRequestFullscreen(); }); }
     // quiz
     const pipq = $(root, 'canvas.pipq').getContext('2d'); let pipMood = 'happy', pipT = 0; const pipsays = $(root, '.pipsays');
     function drawPipQ() { if (!active) return; pipT += 0.03; pipq.clearRect(0, 0, 240, 240); pipq.fillStyle = 'rgba(78,168,255,0.15)'; pipq.beginPath(); pipq.arc(120, 120, 118, 0, Math.PI * 2); pipq.fill(); LSC.pip(pipq, { x: 120, y: 125, s: 0.72, t: pipT, mood: pipMood, armR: pipMood === 'wow' ? -1.2 : -0.4, armL: 0.6 }); requestAnimationFrame(drawPipQ); }
@@ -238,14 +294,14 @@ section[hidden] { display: none }
       const fb = q.querySelector('.fb'); let done = false;
       q.querySelectorAll('button').forEach(b => b.addEventListener('click', () => {
         if (done) return;
-        if (b.dataset.ok === '1') { done = true; b.classList.add('yes'); q.querySelectorAll('button').forEach(o => { if (o !== b) o.classList.add('no'); }); fb.textContent = praise[qi % praise.length]; pipMood = 'wow'; answered++; pipsays.textContent = answered === 3 ? 'Three out of three! You are a real little scientist!' : praise[qi % praise.length]; }
+        if (b.dataset.ok === '1') { done = true; b.classList.add('yes'); q.querySelectorAll('button').forEach(o => { if (o !== b) o.classList.add('no'); }); fb.textContent = praise[qi % praise.length]; pipMood = 'wow'; answered++; pipsays.textContent = answered === 3 ? 'You found all three answers! You are a real little scientist!' : praise[qi % praise.length]; }
         else { b.classList.add('no'); fb.textContent = nudge[qi % nudge.length]; pipMood = 'think'; pipsays.textContent = nudge[qi % nudge.length]; }
         setTimeout(() => { pipMood = 'happy'; }, 2500);
       }));
     });
     const api = {
-      show() { active = true; player.drawFrame(0.6); setMode(mode); drawPipQ(); },
-      hide() { active = false; cancelAnimationFrame(raf); audio.pause(); pp.textContent = 'Play'; if (cueAudio) cueAudio.pause(); }
+      show() { active = true; player.drawFrame(started ? (audio.currentTime || 0) : POSTER_T); setMode(mode); drawPipQ(); },
+      hide() { active = false; cancelAnimationFrame(raf); audio.pause(); setPP(); if (cueAudio) cueAudio.pause(); }
     };
     mounted[ep] = api; return api;
   }
@@ -258,7 +314,7 @@ section[hidden] { display: none }
     if (current && current !== ep && mounted[current]) mounted[current].hide();
     if (ep) mount(ep).show();
     current = ep; window.scrollTo(0, 0);
-    document.title = ep ? D.meta[ep].title : 'Little Scientists Club';
+    document.title = ep ? D.meta[ep].title + ' · ' + SITE : SITE;
   }
   document.querySelectorAll('canvas.logo').forEach(c => { const g = c.getContext('2d'); g.scale(0.4, 0.4); LSC.logo(g, 160, 160, 1, 0.5); });
   window.addEventListener('hashchange', route);
