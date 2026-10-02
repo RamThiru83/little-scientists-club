@@ -20,50 +20,63 @@
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --bg:#141A2E; --fg:#F2F5FF; --muted:#A9B3CC; --card:#1F2744; --accent:#FFB03B; --accent-ink:#1A1300; --blue:#5FB8FF; --blue-deep:#8FCBFF; --green:#6ED47E; --pink:#FF9BD2; --line:rgba(255,255,255,.12); --shadow:0 10px 30px rgba(0,0,0,.35); color-scheme: dark } }
 :root[data-theme="dark"] { --bg:#141A2E; --fg:#F2F5FF; --muted:#A9B3CC; --card:#1F2744; --accent:#FFB03B; --accent-ink:#1A1300; --blue:#5FB8FF; --blue-deep:#8FCBFF; --green:#6ED47E; --pink:#FF9BD2; --line:rgba(255,255,255,.12); --shadow:0 10px 30px rgba(0,0,0,.35); color-scheme: dark }
 * { box-sizing: border-box }
+html { -webkit-text-size-adjust: 100%; text-size-adjust: 100% }
 html, body { margin: 0 }
-body { background: var(--bg); color: var(--fg); font-family: var(--font-body); font-size: 17px; line-height: 1.5 }
-.wrap { max-width: 1140px; margin: 0 auto; padding-inline: 16px; padding-block: 18px 48px; display: grid; gap: 22px }
-header.top { display: flex; align-items: center; gap: 14px; flex-wrap: wrap }
+body { background: var(--bg); color: var(--fg); font-family: var(--font-body); font-size: 17px; line-height: 1.5; overflow-wrap: break-word }
+a, button, input, .card { touch-action: manipulation; -webkit-tap-highlight-color: transparent }
+.wrap { max-width: 1140px; margin: 0 auto; padding: 18px max(16px, env(safe-area-inset-right)) max(48px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left)); display: grid; gap: 22px }
+.wrap > * { min-width: 0 }
+header.top { display: flex; align-items: center; gap: 12px 14px; flex-wrap: wrap }
 header.top canvas { width: 64px; height: 64px; flex: none }
 header.top .brand { font-family: var(--font-display); font-weight: 700; font-size: 26px; line-height: 1.05; text-decoration: none; color: var(--fg) }
 header.top .brand span { color: var(--blue-deep) }
 header.top nav { margin-left: auto; display: flex; gap: 8px; flex-wrap: wrap }
-.pill { font-family: var(--font-display); font-weight: 600; background: var(--card); color: var(--fg); border: 2px solid var(--line); border-radius: 999px; padding: 9px 16px; text-decoration: none; box-shadow: var(--shadow); cursor: pointer; font-size: 15px }
+.pill { display: inline-flex; align-items: center; justify-content: center; font-family: var(--font-display); font-weight: 600; line-height: 1.5; background: var(--card); color: var(--fg); border: 2px solid var(--line); border-radius: 999px; padding: 9px 16px; text-decoration: none; box-shadow: var(--shadow); cursor: pointer; font-size: 15px }
 .pill:hover { border-color: var(--blue) }
 h1 { font-family: var(--font-display); font-weight: 700; font-size: clamp(30px, 5.2vw, 48px); margin: 0; line-height: 1.08; text-wrap: balance }
 h2 { font-family: var(--font-display); font-weight: 700; font-size: 26px; margin: 0 0 10px }
 .lead { color: var(--muted); margin: 6px 0 0; font-size: 17px }
 .eyebrow { font-family: var(--font-body); font-weight: 700; font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted) }
-.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px }
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr)); gap: 16px }
 @media (min-width: 900px) { .grid { grid-template-columns: repeat(3, 1fr) } }
 .card { background: var(--card); border-radius: 22px; box-shadow: var(--shadow); overflow: hidden; display: grid; grid-template-rows: auto 1fr; align-content: start; text-decoration: none; color: var(--fg); min-width: 0; border: 3px solid transparent }
 .card:hover { border-color: var(--accent) }
-.card img { width: 100%; height: auto; aspect-ratio: 16/9; object-fit: cover; display: block; max-width: 100% }
+.card img { width: 100%; height: auto; aspect-ratio: 16/9; object-fit: cover; display: block; max-width: 100%; background: var(--line) }
 .card .body { padding: 14px 16px 16px; display: grid; gap: 6px }
 .card .title { font-family: var(--font-display); font-weight: 600; font-size: 20px; line-height: 1.2 }
-section.stage { background: var(--card); border-radius: 26px; box-shadow: var(--shadow); overflow: hidden; display: grid }
-.canvas-wrap { position: relative; width: 100%; aspect-ratio: 16/9; max-width: 100%; background: #000; touch-action: none; user-select: none; -webkit-user-select: none }
-.canvas-wrap canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; border-radius: 0; box-shadow: none; background: #000 }
-.canvas-wrap:fullscreen, .canvas-wrap:-webkit-full-screen { aspect-ratio: auto; width: 100vw; height: 100vh; background: #000 }
-.canvas-wrap:fullscreen canvas, .canvas-wrap:-webkit-full-screen canvas { inset: auto; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: min(100vw, calc(100vh * 16 / 9)); height: min(100vh, calc(100vw * 9 / 16)) }
+
+/* ---- the player ---- */
+section.stage { background: var(--card); border-radius: 26px; box-shadow: var(--shadow); overflow: hidden; display: grid; grid-template-columns: minmax(0, 1fr) }
+.canvas-area { position: relative; display: flex; justify-content: center; background: #000; min-width: 0 }
+/* never taller than the window (phones held sideways): the whole picture stays on screen */
+.canvas-wrap { position: relative; width: min(100%, calc((100vh - 24px) * 16 / 9)); aspect-ratio: 16 / 9; background: #000; touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; -webkit-tap-highlight-color: transparent; overscroll-behavior: contain }
+@supports (height: 100svh) { .canvas-wrap { width: min(100%, calc((100svh - 24px) * 16 / 9)) } }
+.canvas-wrap canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; object-fit: contain; border-radius: 0; box-shadow: none; background: #000 }
 .overlay { position: absolute; inset: 0; display: flex; align-items: flex-start; justify-content: center; padding-top: 8%; background: rgba(20,30,60,.2) }
 .overlay[hidden] { display: none }
 .overlay button { font-family: var(--font-display); font-weight: 700; font-size: clamp(20px, 3.5vw, 32px); background: var(--accent); color: var(--accent-ink); border: 4px solid #2B2D42; border-radius: 999px; padding: 16px 34px; cursor: pointer; box-shadow: 0 8px 0 rgba(0,0,0,.25) }
+.rotate-tip { display: none }
+.side { min-width: 0 }
 .bar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; padding: 14px 16px; border-top: 1px solid var(--line) }
 .seg { display: inline-flex; border: 2px solid var(--line); border-radius: 999px; overflow: hidden }
-.seg button { font-family: var(--font-display); font-weight: 600; font-size: 16px; background: transparent; color: var(--fg); border: 0; padding: 10px 18px; cursor: pointer }
+.seg button { font-family: var(--font-display); font-weight: 600; font-size: 16px; line-height: 1.5; background: transparent; color: var(--fg); border: 0; padding: 10px 18px; cursor: pointer }
 .seg button[aria-pressed="true"] { background: var(--blue-deep); color: #fff }
 :root[data-theme="dark"] .seg button[aria-pressed="true"] { background: #2F7FD6 }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .seg button[aria-pressed="true"] { background: #2F7FD6; color: #fff } }
-.btn { font-family: var(--font-display); font-weight: 600; font-size: 16px; background: var(--card); color: var(--fg); border: 2px solid var(--line); border-radius: 999px; padding: 10px 18px; cursor: pointer; text-decoration: none }
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; font-family: var(--font-display); font-weight: 600; font-size: 16px; line-height: 1.5; background: var(--card); color: var(--fg); border: 2px solid var(--line); border-radius: 999px; padding: 10px 18px; cursor: pointer; text-decoration: none }
 .btn[hidden] { display: none }
-.scrub { flex: 1 1 160px; min-width: 120px; accent-color: var(--blue) }
+.btn svg { width: 18px; height: 18px; flex: none }
+.fs .fsIn, .fs .fsOut { display: inline-flex; align-items: center; gap: 6px }
+.fs .fsOut { display: none }
+.btn:active, .pill:active, .seg button:active, .opts button:active { filter: brightness(.94) }
+.scrub { flex: 1 1 160px; min-width: 120px; accent-color: var(--blue); touch-action: manipulation }
 .scrub[hidden] { display: none }
 .hint { padding: 0 16px 14px; color: var(--muted); font-size: 16px; min-height: 1.5em }
 .hint b { color: var(--fg) }
-.says { padding: 0 16px 16px; font-family: var(--font-display); font-weight: 600; font-size: 18px; color: #2563B8; min-height: 1.6em }
+.says { padding: 10px 16px 0; font-family: var(--font-display); font-weight: 600; font-size: 18px; line-height: 1.4; color: #2563B8; min-height: calc(1.4em + 10px) }
 :root[data-theme="dark"] .says { color: #8FCBFF }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .says { color: #8FCBFF } }
+.player[data-mode="watch"]:not(.is-fs) .says:empty { display: none }
 .cap { padding: 10px 16px 0; font-family: var(--font-display); font-weight: 600; font-size: clamp(16px, 2.6vw, 21px); line-height: 1.35; min-height: 1.4em; color: var(--fg) }
 .cap[hidden] { display: none }
 .two { display: grid; grid-template-columns: 1fr 1fr; gap: 16px }
@@ -85,10 +98,101 @@ section.stage { background: var(--card); border-radius: 26px; box-shadow: var(--
 .fb { font-size: 16px; color: var(--muted); min-height: 1.4em }
 .pipbox { display: flex; align-items: center; gap: 14px }
 .pipbox canvas { width: 96px; height: 96px; flex: none }
+.q p:focus { outline: none }
+.q p:focus-visible { outline: 3px solid var(--blue); outline-offset: 4px; border-radius: 8px }
+.quiz-end { display: flex; justify-content: center; margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--line) }
+.qreset { border-color: var(--blue) }
+.qreset:hover { background: var(--bg) }
+.plays { margin: 4px 0 14px; padding-left: 2.2em; columns: 2 16em; column-gap: 36px }
+.plays li { break-inside: avoid; padding: 2px 0 }
+.plays a { color: var(--blue-deep); font-weight: 600 }
 footer { color: var(--muted); font-size: 14px; text-align: center; display: grid; gap: 6px }
 footer a { color: var(--blue-deep) }
-button:focus-visible, a:focus-visible { outline: 3px solid var(--blue); outline-offset: 2px }
+button:focus-visible, a:focus-visible, input:focus-visible { outline: 3px solid var(--blue); outline-offset: 2px }
 @media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto } }
+
+/* ---- phones ---- */
+@media (max-width: 640px) {
+  .bar { gap: 8px; padding: 12px }
+  .bar .seg { flex: 1 1 100% }                              /* the mode switch gets its own row */
+  .bar .seg button { flex: 1 1 0; padding-inline: 8px }
+  .bar .pp { flex: 0 0 auto; min-width: 84px }
+  .bar .scrub { flex: 1 1 calc(100% - 100px); min-width: 0 } /* a wide scrubber next to Play/Pause */
+  .bar .restart, .bar .fs, .bar a.btn { flex: 1 1 auto; padding-inline: 12px }
+  .bar a.btn .long { display: none }
+}
+@media (max-width: 380px) { .bar .fs svg { display: none } }
+@media (max-width: 560px) {
+  .wrap { gap: 18px; padding-top: 12px }
+  header.top canvas { width: 52px; height: 52px }
+  header.top .brand { font-size: 23px }
+  header.top nav { margin-left: 0; flex: 1 1 100% }
+  header.top nav .pill { flex: 1 1 0; padding-inline: 10px }
+  section.stage { margin-inline: calc(-1 * max(16px, env(safe-area-inset-left))) calc(-1 * max(16px, env(safe-area-inset-right))); border-radius: 0 }
+  .panel { padding: 18px 16px; border-radius: 18px }
+  .eyebrow { font-size: 13px }
+  .opts button { flex: 1 1 auto }
+  .pipbox canvas { width: 80px; height: 80px }
+  .steps li { grid-template-columns: 36px 1fr; gap: 10px }
+}
+@media (pointer: coarse) {
+  .btn, .pill, .seg button, .opts button, .overlay button { min-height: 44px }
+  .scrub { min-height: 44px }
+  header.top .brand { display: inline-block; padding-block: 9px }
+  footer a { display: inline-block; padding: 12px 4px }
+  .plays a { display: inline-block; padding: 8px 0 }
+}
+
+/* ---- full screen: the whole player fills the screen (Fullscreen API) or the window (overlay where the API is missing: iPhone) ---- */
+html.fs-lock, html.fs-lock body { overflow: hidden; overscroll-behavior: none }
+.player.is-fs { --fg:#F2F5FF; --muted:#B4BED6; --card:#1F2744; --line:rgba(255,255,255,.18); --blue-deep:#8FCBFF; --shadow:none; color-scheme: dark;
+  position: fixed; inset: 0; z-index: 2147483000; width: auto; height: auto; max-width: none; max-height: none; margin: 0; border-radius: 0; box-shadow: none;
+  background: #0B1020; color: var(--fg); grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) auto; overflow: hidden;
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left); overscroll-behavior: none; user-select: none; -webkit-user-select: none }
+.player.is-fs .canvas-area { background: transparent; display: grid; place-items: center; min-height: 0; overflow: hidden; container-type: size }
+/* the largest 16:9 box that fits (page_player.js sets the same size in pixels for browsers without container units) */
+.player.is-fs .canvas-wrap { width: min(100cqw, 100cqh * 16 / 9); height: auto; max-width: 100%; max-height: 100%; aspect-ratio: 16 / 9 }
+.player.is-fs .side { display: grid; grid-template-columns: minmax(0, 1fr); align-content: end; min-height: 0 }
+.player.is-fs .cap { padding: 6px 16px 0; font-size: clamp(16px, 2.1vw, 23px); line-height: 1.3; min-height: 0; height: calc(2.6em + 6px); overflow: hidden; text-align: center; color: #fff }
+.player.is-fs .says { padding: 4px 16px 0; font-size: clamp(15px, 1.9vw, 21px); line-height: 1.3; min-height: 0; height: calc(1.3em + 4px); overflow: hidden; text-align: center; color: #8FCBFF }
+.player.is-fs[data-mode="play"] .says { height: calc(2.6em + 4px) }
+.player.is-fs .hint { order: 1; padding: 2px 16px 0; font-size: clamp(13px, 1.5vw, 17px); line-height: 1.35; min-height: 0; height: calc(2.7em + 2px); overflow: hidden; text-align: center; color: var(--muted) }
+.player.is-fs .hint b { color: var(--fg) }
+.player.is-fs[data-mode="watch"] .hint { display: none }
+.player.is-fs .bar { order: 2; border-top: 0; justify-content: center; padding: 8px 16px 10px }
+.player.is-fs .bar a.btn { display: none }
+.player.is-fs .seg button[aria-pressed="true"] { background: #2F7FD6; color: #fff }
+.player.is-fs .fs { order: 10; background: var(--accent); color: var(--accent-ink); border-color: transparent }
+.player.is-fs .fs .fsIn { display: none }
+.player.is-fs .fs .fsOut { display: inline-flex }
+@media (max-width: 600px) and (orientation: portrait) {
+  .player.is-fs .cap { height: calc(5.2em + 6px) }
+  .player.is-fs .says { height: calc(2.6em + 4px) }
+  .player.is-fs[data-mode="play"] .says { height: calc(3.9em + 4px) }
+  .player.is-fs .hint { height: calc(5.4em + 2px) }
+  .player.is-fs .canvas-area { place-items: end center }   /* the picture sits just above Curie's words and the controls, within thumb reach */
+  .player.is-fs .rotate-tip { display: block; position: absolute; top: 18%; left: 24px; right: 24px; margin: 0; text-align: center; font-size: 16px; line-height: 1.4; color: var(--muted); pointer-events: none }
+  .player.is-fs .rotate-tip svg { display: block; width: 36px; height: 36px; margin: 0 auto 6px; color: var(--accent) }
+}
+/* short, wide screens (a phone held sideways): controls and words in a column on the right */
+@media (min-aspect-ratio: 3/2) and (max-height: 560px) {
+  .player.is-fs { grid-template-columns: minmax(0, 1fr) clamp(176px, 24vw, 280px); grid-template-rows: minmax(0, 1fr); column-gap: 8px }
+  .player.is-fs .side { align-content: start; overflow: hidden; padding: 8px 8px 8px 0 }
+  .player.is-fs .bar { order: 0; padding: 0; gap: 6px }
+  .player.is-fs .bar > * { flex: 1 1 auto }
+  .player.is-fs .bar .btn, .player.is-fs .seg button { font-size: 15px }
+  .player.is-fs .restart { order: -2; padding-inline: 10px }
+  .player.is-fs .fs { order: -1; padding-inline: 10px }
+  .player.is-fs .fs .fsLong { display: none }
+  .player.is-fs .seg { flex: 1 1 100%; display: grid; grid-template-columns: 1fr 1fr; gap: 6px; border: 0; border-radius: 0; overflow: visible }
+  .player.is-fs .seg button { border: 2px solid var(--line); border-radius: 999px; padding: 8px 6px }
+  .player.is-fs .seg .mWatch:nth-last-child(3) { grid-column: 1 / -1 }
+  .player.is-fs .pp { flex: 0 0 auto; min-width: 76px; padding-inline: 10px }
+  .player.is-fs .scrub { flex: 1 1 0; min-width: 0 }
+  .player.is-fs .cap, .player.is-fs .says, .player.is-fs .hint { order: 1; height: auto; text-align: left; padding: 8px 2px 0; font-size: 14px; line-height: 1.35 }
+  .player.is-fs[data-mode="play"] .says { height: auto }
+  .player.is-fs .hint { order: 2; font-size: 13px }
+}
 
 section[hidden] { display: none }
 </style>
@@ -97,167 +201,318 @@ section[hidden] { display: none }
   <div class="wrap">
   <header class="top"><canvas class="logo" width="128" height="128" aria-hidden="true"></canvas><div><a class="brand" href="#">Little Scientists <span>Club</span></a><div class="eyebrow">Big questions, little scientists</div></div><nav><a class="pill" href="#">All episodes</a><a class="pill" href="https://www.youtube.com/@LittleScientistsClubCurie" target="_blank" rel="noopener">YouTube channel</a></nav></header>
   <section><h1>Pick a question to explore</h1><p class="lead">Every episode has a short animated story and a hands-on simulation you can play with. Made for 5–6-year-olds, with a grown-up nearby.</p></section>
-  <section class="grid" aria-label="Episodes"><a class="card" href="#ep1"><img src="thumbs/ep1.jpg" alt="" width="1280" height="720"><div class="body"><span class="eyebrow">Episode 1</span><span class="title">Why does ice cream melt?</span><span class="lead">Watch with Curie, then play: heat makes things melt.</span></div></a><a class="card" href="#ep2"><img src="thumbs/ep2.jpg" alt="" width="1280" height="720"><div class="body"><span class="eyebrow">Episode 2</span><span class="title">Why does a ball always come down?</span><span class="lead">Watch with Curie, then play: gravity pulls things down.</span></div></a><a class="card" href="#ep3"><img src="thumbs/ep3.jpg" alt="" width="1280" height="720"><div class="body"><span class="eyebrow">Episode 3</span><span class="title">Where does rain come from?</span><span class="lead">Watch with Curie, then play: the sun lifts the water up, and the rain brings it down.</span></div></a><a class="card" href="#ep4"><img src="thumbs/ep4.jpg" alt="" width="1280" height="720"><div class="body"><span class="eyebrow">Episode 4</span><span class="title">Why do I have a shadow?</span><span class="lead">Watch with Curie, then play: a shadow is where the light can't go.</span></div></a><a class="card" href="#ep5"><img src="thumbs/ep5.jpg" alt="" width="1280" height="720"><div class="body"><span class="eyebrow">Episode 5</span><span class="title">Why do boats float?</span><span class="lead">Watch with Curie, then play: water pushes up.</span></div></a><a class="card" href="#ep6"><img src="thumbs/ep6.jpg" alt="" width="1280" height="720"><div class="body"><span class="eyebrow">Episode 6</span><span class="title">What makes things happen?</span><span class="lead">Watch with Curie, then play: lots of pieces make it happen.</span></div></a></section>
-  <section class="panel"><h2>How to use this site</h2><p>Each episode page starts with the story, narrated by Curie with captions. Tap <b>Try it</b> to do the science yourself: drag the sun, throw the ball, make it rain, stretch a shadow, sort things into the pond, or fill Curie's cause pie. Underneath you will find the big idea, an experiment to try at home, and a three-question quiz to talk about together.</p></section>
+  <section class="grid" aria-label="Episodes"><a class="card" href="#ep1"><img src="thumbs/ep1.jpg" alt="" width="1280" height="720" loading="lazy" decoding="async"><div class="body"><span class="eyebrow">Episode 1</span><span class="title">Why does ice cream melt?</span><span class="lead">Watch with Curie, then play: heat makes things melt.</span></div></a><a class="card" href="#ep2"><img src="thumbs/ep2.jpg" alt="" width="1280" height="720" loading="lazy" decoding="async"><div class="body"><span class="eyebrow">Episode 2</span><span class="title">Why does a ball always come down?</span><span class="lead">Watch with Curie, then play: gravity pulls things down.</span></div></a><a class="card" href="#ep3"><img src="thumbs/ep3.jpg" alt="" width="1280" height="720" loading="lazy" decoding="async"><div class="body"><span class="eyebrow">Episode 3</span><span class="title">Where does rain come from?</span><span class="lead">Watch with Curie, then play: the sun lifts the water up, and the rain brings it down.</span></div></a><a class="card" href="#ep4"><img src="thumbs/ep4.jpg" alt="" width="1280" height="720" loading="lazy" decoding="async"><div class="body"><span class="eyebrow">Episode 4</span><span class="title">Why do I have a shadow?</span><span class="lead">Watch with Curie, then play: a shadow is where the light can't go.</span></div></a><a class="card" href="#ep5"><img src="thumbs/ep5.jpg" alt="" width="1280" height="720" loading="lazy" decoding="async"><div class="body"><span class="eyebrow">Episode 5</span><span class="title">Why do boats float?</span><span class="lead">Watch with Curie, then play: water pushes up.</span></div></a><a class="card" href="#ep6"><img src="thumbs/ep6.jpg" alt="" width="1280" height="720" loading="lazy" decoding="async"><div class="body"><span class="eyebrow">Episode 6</span><span class="title">What makes things happen?</span><span class="lead">Watch with Curie, then play: lots of pieces make it happen.</span></div></a><a class="card" href="#ep7"><img src="thumbs/ep7.jpg" alt="" width="1280" height="720" loading="lazy" decoding="async"><div class="body"><span class="eyebrow">Episode 7</span><span class="title">Why do magnets stick?</span><span class="lead">Watch with Curie, then play: magnets pull iron.</span></div></a><a class="card" href="#ep8"><img src="thumbs/ep8.jpg" alt="" width="1280" height="720" loading="lazy" decoding="async"><div class="body"><span class="eyebrow">Episode 8</span><span class="title">How do we hear sounds?</span><span class="lead">Watch with Curie, then play: sounds are wiggles.</span></div></a><a class="card" href="#ep9"><img src="thumbs/ep9.jpg" alt="" width="1280" height="720" loading="lazy" decoding="async"><div class="body"><span class="eyebrow">Episode 9</span><span class="title">Why is it dark at night?</span><span class="lead">Watch with Curie, then play: the Earth spins.</span></div></a><a class="card" href="#ep10"><img src="thumbs/ep10.jpg" alt="" width="1280" height="720" loading="lazy" decoding="async"><div class="body"><span class="eyebrow">Episode 10</span><span class="title">Where does the sugar go?</span><span class="lead">Watch with Curie, then play: sugar dissolves in water, but it's still there.</span></div></a><a class="card" href="#ep11"><img src="thumbs/ep11.jpg" alt="" width="1280" height="720" loading="lazy" decoding="async"><div class="body"><span class="eyebrow">Episode 11</span><span class="title">Why do rolling things stop?</span><span class="lead">Watch with Curie, then play: rubbing slows it down.</span></div></a></section>
+  <section class="panel"><h2>How to use this site</h2><p>Each episode page starts with the story, narrated by Curie with captions. Then tap <b>Try it</b> and do the science yourself. From Episode 7 on, each episode has two activities, <b>Try it 1</b> and <b>Try it 2</b>. In the episodes you can:</p><ol class="plays"><li value="1"><a href="#ep1">drag the sun</a></li><li value="2"><a href="#ep2">throw the ball</a></li><li value="3"><a href="#ep3">make it rain</a></li><li value="4"><a href="#ep4">stretch a shadow</a></li><li value="5"><a href="#ep5">sort things into the pond</a></li><li value="6"><a href="#ep6">fill Curie's cause pie</a></li><li value="7"><a href="#ep7">test things with a magnet</a></li><li value="8"><a href="#ep8">pluck strings and bang a drum</a></li><li value="9"><a href="#ep9">spin the Earth</a></li><li value="10"><a href="#ep10">dissolve sugar in water</a></li><li value="11"><a href="#ep11">race a car down a ramp</a></li></ol><p>Underneath you will find the big idea, an experiment to try at home, and a three-question quiz to talk about together.</p></section>
   <footer><div>Little Scientists Club · <a href="https://www.youtube.com/@LittleScientistsClubCurie" target="_blank" rel="noopener">Watch on YouTube</a></div><div>Sound plays after you tap a button. Nothing here is collected or saved.</div></footer>
   </div></section>
 <section id="view-ep1" hidden><div class="wrap">
-  <header class="top"><canvas class="logo" width="128" height="128" aria-hidden="true"></canvas><div><a class="brand" href="#">Little Scientists <span>Club</span></a><div class="eyebrow">Episode 1 of 6</div></div><nav><a class="pill" href="#">All episodes</a><a class="pill" href="https://www.youtube.com/@LittleScientistsClubCurie" target="_blank" rel="noopener">YouTube channel</a></nav></header>
+  <header class="top"><canvas class="logo" width="128" height="128" aria-hidden="true"></canvas><div><a class="brand" href="#">Little Scientists <span>Club</span></a><div class="eyebrow">Episode 1 of 11</div></div><nav><a class="pill" href="#">All episodes</a><a class="pill" href="https://www.youtube.com/@LittleScientistsClubCurie" target="_blank" rel="noopener">YouTube channel</a></nav></header>
   <section><h1>Why does ice cream melt?</h1><p class="lead">Watch the story first, then tap <b>Try it</b> and do the science yourself.</p></section>
-  <section class="stage" aria-label="Episode player">
-    <div class="canvas-wrap"><canvas class="stage" width="1920" height="1080" role="img" aria-label="Episode animation; the words Curie says are shown below the picture"></canvas><div class="overlay"><button class="bigplay" type="button"><span aria-hidden="true">▶ </span><span class="lbl">Watch with Curie</span></button></div></div>
-    <div class="cap" aria-live="polite"></div>
-    <div class="bar">
-      <div class="seg" role="group" aria-label="Mode"><button class="mWatch" type="button" aria-pressed="true">Watch</button><button class="mPlay" type="button" aria-pressed="false">Try it</button></div>
-      <button class="btn pp" type="button">Pause</button>
-      <input class="scrub" type="range" min="0" max="1000" value="0" aria-label="Move through the episode" id="scrub-ep1">
-      <button class="btn restart" type="button">Start again</button>
-      <button class="btn fs" type="button">Full screen</button>
-      <a class="btn" href="https://youtu.be/geL3uKnslT4" target="_blank" rel="noopener">Watch on YouTube</a>
+  <section class="stage player" aria-label="Episode player" data-mode="watch">
+    <div class="canvas-area"><div class="canvas-wrap"><canvas class="stage" width="1920" height="1080" role="img" aria-label="Episode animation; the words Curie says are shown below the picture"></canvas><div class="overlay"><button class="bigplay" type="button"><span aria-hidden="true">▶ </span><span class="lbl">Watch with Curie</span></button></div></div><p class="rotate-tip" aria-hidden="true"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M20 12a8 8 0 1 1-2.6-5.9M20 4v4.5h-4.5" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>Turn the phone sideways for a bigger picture</p></div>
+    <div class="side">
+      <div class="cap" aria-live="polite"></div>
+      <div class="says" aria-live="polite"></div>
+      <div class="bar">
+        <div class="seg" role="group" aria-label="Mode"><button class="mWatch" type="button" aria-pressed="true">Watch</button><button class="mPlay" data-task="0" type="button" aria-pressed="false">Try it</button></div>
+        <button class="btn pp" type="button">Pause</button>
+        <input class="scrub" type="range" min="0" max="1000" value="0" aria-label="Move through the episode" id="scrub-ep1">
+        <button class="btn restart" type="button">Start again</button>
+        <button class="btn fs" type="button"><span class="fsIn"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 9V4h5M15 4h5v5M20 15v5h-5M9 20H4v-5" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>Full screen</span><span class="fsOut"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>Exit <span class="fsLong">full screen</span></span></button>
+        <a class="btn yt" href="https://youtu.be/geL3uKnslT4" target="_blank" rel="noopener"><span class="long">Watch on </span>YouTube</a>
+      </div>
+      <div class="hint"></div>
     </div>
-    <div class="hint"></div>
-    <div class="says" aria-live="polite"></div>
   </section>
   <section class="two">
     <div class="panel"><span class="eyebrow">Curie's big idea</span><div><div class="idea">Heat makes things melt!</div></div><p>Ice cream is made of tiny bits. When it is cold they hold on to each other tightly, so the ice cream is hard: a solid. Warmth from the sun or a hand gives the bits energy, they wiggle apart and slide past each other, and the ice cream becomes a liquid. In the freezer the bits slow down and grab hold again.</p></div>
     <div class="panel"><span class="eyebrow">Try it at home</span><div class="badge">👋 with a grown-up</div><ol class="steps"><li><span>Ask a grown-up for two ice cubes and two small plates.</span></li><li><span>Put one plate in the sunshine and one in the shade.</span></li><li><span>Guess which cube will melt first, then check every few minutes.</span></li><li><span>Talk about it: what gave the ice cube heat?</span></li></ol></div>
   </section>
-  <section class="panel"><span class="eyebrow">Quick quiz</span><h2>What did you find out?</h2><div class="pipbox"><canvas class="pipq" width="240" height="240" aria-hidden="true"></canvas><div class="says pipsays" style="padding:0">Tap an answer and I'll tell you!</div></div><div class="quiz"><div class="q" data-q="0"><p>1. What makes ice cream melt?</p><div class="opts"><button type="button" data-ok="1">Heat</button><button type="button" data-ok="0">Cold</button><button type="button" data-ok="0">Wind</button></div><div class="fb" aria-live="polite"></div></div><div class="q" data-q="1"><p>2. Cold, hard ice cream is a...</p><div class="opts"><button type="button" data-ok="1">Solid</button><button type="button" data-ok="0">Liquid</button><button type="button" data-ok="0">Cloud</button></div><div class="fb" aria-live="polite"></div></div><div class="q" data-q="2"><p>3. Where does melted ice cream go to get hard again?</p><div class="opts"><button type="button" data-ok="1">The freezer</button><button type="button" data-ok="0">The sun</button><button type="button" data-ok="0">The bath</button></div><div class="fb" aria-live="polite"></div></div></div></section>
+  <section class="panel quizpanel"><span class="eyebrow">Quick quiz</span><h2>What did you find out?</h2><div class="pipbox"><canvas class="pipq" width="240" height="240" aria-hidden="true"></canvas><div class="says pipsays" style="padding:0" aria-live="polite">Tap an answer and I'll tell you!</div></div><div class="quiz"><div class="q" data-q="0"><p>1. What makes ice cream melt?</p><div class="opts"><button type="button" data-ok="1">Heat</button><button type="button" data-ok="0">Cold</button><button type="button" data-ok="0">Wind</button></div><div class="fb" aria-live="polite"></div></div><div class="q" data-q="1"><p>2. Cold, hard ice cream is a...</p><div class="opts"><button type="button" data-ok="1">Solid</button><button type="button" data-ok="0">Liquid</button><button type="button" data-ok="0">Cloud</button></div><div class="fb" aria-live="polite"></div></div><div class="q" data-q="2"><p>3. Where does melted ice cream go to get hard again?</p><div class="opts"><button type="button" data-ok="1">The freezer</button><button type="button" data-ok="0">The sun</button><button type="button" data-ok="0">The bath</button></div><div class="fb" aria-live="polite"></div></div></div><div class="quiz-end"><button class="btn qreset" type="button"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M20 12a8 8 0 1 1-2.6-5.9M20 4v4.5h-4.5" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>Start the quiz again</button></div></section>
   <footer><div><a href="#">All episodes</a> · <a href="https://www.youtube.com/@LittleScientistsClubCurie" target="_blank" rel="noopener">Little Scientists Club on YouTube</a></div><div>Sound plays after you tap a button. Nothing here is collected or saved.</div></footer>
   </div></section>
 <section id="view-ep2" hidden><div class="wrap">
-  <header class="top"><canvas class="logo" width="128" height="128" aria-hidden="true"></canvas><div><a class="brand" href="#">Little Scientists <span>Club</span></a><div class="eyebrow">Episode 2 of 6</div></div><nav><a class="pill" href="#">All episodes</a><a class="pill" href="https://www.youtube.com/@LittleScientistsClubCurie" target="_blank" rel="noopener">YouTube channel</a></nav></header>
+  <header class="top"><canvas class="logo" width="128" height="128" aria-hidden="true"></canvas><div><a class="brand" href="#">Little Scientists <span>Club</span></a><div class="eyebrow">Episode 2 of 11</div></div><nav><a class="pill" href="#">All episodes</a><a class="pill" href="https://www.youtube.com/@LittleScientistsClubCurie" target="_blank" rel="noopener">YouTube channel</a></nav></header>
   <section><h1>Why does a ball always come down?</h1><p class="lead">Watch the story first, then tap <b>Try it</b> and do the science yourself.</p></section>
-  <section class="stage" aria-label="Episode player">
-    <div class="canvas-wrap"><canvas class="stage" width="1920" height="1080" role="img" aria-label="Episode animation; the words Curie says are shown below the picture"></canvas><div class="overlay"><button class="bigplay" type="button"><span aria-hidden="true">▶ </span><span class="lbl">Watch with Curie</span></button></div></div>
-    <div class="cap" aria-live="polite"></div>
-    <div class="bar">
-      <div class="seg" role="group" aria-label="Mode"><button class="mWatch" type="button" aria-pressed="true">Watch</button><button class="mPlay" type="button" aria-pressed="false">Try it</button></div>
-      <button class="btn pp" type="button">Pause</button>
-      <input class="scrub" type="range" min="0" max="1000" value="0" aria-label="Move through the episode" id="scrub-ep2">
-      <button class="btn restart" type="button">Start again</button>
-      <button class="btn fs" type="button">Full screen</button>
-      <a class="btn" href="https://youtu.be/PlfkVBF830E" target="_blank" rel="noopener">Watch on YouTube</a>
+  <section class="stage player" aria-label="Episode player" data-mode="watch">
+    <div class="canvas-area"><div class="canvas-wrap"><canvas class="stage" width="1920" height="1080" role="img" aria-label="Episode animation; the words Curie says are shown below the picture"></canvas><div class="overlay"><button class="bigplay" type="button"><span aria-hidden="true">▶ </span><span class="lbl">Watch with Curie</span></button></div></div><p class="rotate-tip" aria-hidden="true"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M20 12a8 8 0 1 1-2.6-5.9M20 4v4.5h-4.5" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>Turn the phone sideways for a bigger picture</p></div>
+    <div class="side">
+      <div class="cap" aria-live="polite"></div>
+      <div class="says" aria-live="polite"></div>
+      <div class="bar">
+        <div class="seg" role="group" aria-label="Mode"><button class="mWatch" type="button" aria-pressed="true">Watch</button><button class="mPlay" data-task="0" type="button" aria-pressed="false">Try it</button></div>
+        <button class="btn pp" type="button">Pause</button>
+        <input class="scrub" type="range" min="0" max="1000" value="0" aria-label="Move through the episode" id="scrub-ep2">
+        <button class="btn restart" type="button">Start again</button>
+        <button class="btn fs" type="button"><span class="fsIn"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 9V4h5M15 4h5v5M20 15v5h-5M9 20H4v-5" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>Full screen</span><span class="fsOut"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>Exit <span class="fsLong">full screen</span></span></button>
+        <a class="btn yt" href="https://youtu.be/PlfkVBF830E" target="_blank" rel="noopener"><span class="long">Watch on </span>YouTube</a>
+      </div>
+      <div class="hint"></div>
     </div>
-    <div class="hint"></div>
-    <div class="says" aria-live="polite"></div>
   </section>
   <section class="two">
     <div class="panel"><span class="eyebrow">Curie's big idea</span><div><div class="idea">Gravity pulls things down!</div></div><p>The Earth is enormous, and it pulls everything towards itself. We call that pull gravity. It is why a thrown ball always comes back down, why rain falls, and why our feet stay on the ground. Gravity makes big and small things fall together, so a big ball and a small ball dropped at the same time land together.</p></div>
     <div class="panel"><span class="eyebrow">Try it at home</span><div class="badge">👋 with a grown-up</div><ol class="steps"><li><span>Hold a ball in one hand and a toy car or a wooden block in the other, at the same height.</span></li><li><span>Count to three and let go of both at exactly the same time.</span></li><li><span>Watch closely: which one lands first? Try it again to be sure.</span></li><li><span>Now throw the ball up gently. Which way does it always go?</span></li></ol></div>
   </section>
-  <section class="panel"><span class="eyebrow">Quick quiz</span><h2>What did you find out?</h2><div class="pipbox"><canvas class="pipq" width="240" height="240" aria-hidden="true"></canvas><div class="says pipsays" style="padding:0">Tap an answer and I'll tell you!</div></div><div class="quiz"><div class="q" data-q="0"><p>1. What pulls the ball back down?</p><div class="opts"><button type="button" data-ok="1">Gravity</button><button type="button" data-ok="0">The wind</button><button type="button" data-ok="0">A string</button></div><div class="fb" aria-live="polite"></div></div><div class="q" data-q="1"><p>2. A big ball and a small ball dropped together land...</p><div class="opts"><button type="button" data-ok="1">Together</button><button type="button" data-ok="0">Big one first</button><button type="button" data-ok="0">Small one first</button></div><div class="fb" aria-live="polite"></div></div><div class="q" data-q="2"><p>3. Gravity keeps your feet...</p><div class="opts"><button type="button" data-ok="1">On the ground</button><button type="button" data-ok="0">In the sky</button><button type="button" data-ok="0">In the sea</button></div><div class="fb" aria-live="polite"></div></div></div></section>
+  <section class="panel quizpanel"><span class="eyebrow">Quick quiz</span><h2>What did you find out?</h2><div class="pipbox"><canvas class="pipq" width="240" height="240" aria-hidden="true"></canvas><div class="says pipsays" style="padding:0" aria-live="polite">Tap an answer and I'll tell you!</div></div><div class="quiz"><div class="q" data-q="0"><p>1. What pulls the ball back down?</p><div class="opts"><button type="button" data-ok="1">Gravity</button><button type="button" data-ok="0">The wind</button><button type="button" data-ok="0">A string</button></div><div class="fb" aria-live="polite"></div></div><div class="q" data-q="1"><p>2. A big ball and a small ball dropped together land...</p><div class="opts"><button type="button" data-ok="1">Together</button><button type="button" data-ok="0">Big one first</button><button type="button" data-ok="0">Small one first</button></div><div class="fb" aria-live="polite"></div></div><div class="q" data-q="2"><p>3. Gravity keeps your feet...</p><div class="opts"><button type="button" data-ok="1">On the ground</button><button type="button" data-ok="0">In the sky</button><button type="button" data-ok="0">In the sea</button></div><div class="fb" aria-live="polite"></div></div></div><div class="quiz-end"><button class="btn qreset" type="button"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M20 12a8 8 0 1 1-2.6-5.9M20 4v4.5h-4.5" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>Start the quiz again</button></div></section>
   <footer><div><a href="#">All episodes</a> · <a href="https://www.youtube.com/@LittleScientistsClubCurie" target="_blank" rel="noopener">Little Scientists Club on YouTube</a></div><div>Sound plays after you tap a button. Nothing here is collected or saved.</div></footer>
   </div></section>
 <section id="view-ep3" hidden><div class="wrap">
-  <header class="top"><canvas class="logo" width="128" height="128" aria-hidden="true"></canvas><div><a class="brand" href="#">Little Scientists <span>Club</span></a><div class="eyebrow">Episode 3 of 6</div></div><nav><a class="pill" href="#">All episodes</a><a class="pill" href="https://www.youtube.com/@LittleScientistsClubCurie" target="_blank" rel="noopener">YouTube channel</a></nav></header>
+  <header class="top"><canvas class="logo" width="128" height="128" aria-hidden="true"></canvas><div><a class="brand" href="#">Little Scientists <span>Club</span></a><div class="eyebrow">Episode 3 of 11</div></div><nav><a class="pill" href="#">All episodes</a><a class="pill" href="https://www.youtube.com/@LittleScientistsClubCurie" target="_blank" rel="noopener">YouTube channel</a></nav></header>
   <section><h1>Where does rain come from?</h1><p class="lead">Watch the story first, then tap <b>Try it</b> and do the science yourself.</p></section>
-  <section class="stage" aria-label="Episode player">
-    <div class="canvas-wrap"><canvas class="stage" width="1920" height="1080" role="img" aria-label="Episode animation; the words Curie says are shown below the picture"></canvas><div class="overlay"><button class="bigplay" type="button"><span aria-hidden="true">▶ </span><span class="lbl">Watch with Curie</span></button></div></div>
-    <div class="cap" aria-live="polite"></div>
-    <div class="bar">
-      <div class="seg" role="group" aria-label="Mode"><button class="mWatch" type="button" aria-pressed="true">Watch</button><button class="mPlay" type="button" aria-pressed="false">Try it</button></div>
-      <button class="btn pp" type="button">Pause</button>
-      <input class="scrub" type="range" min="0" max="1000" value="0" aria-label="Move through the episode" id="scrub-ep3">
-      <button class="btn restart" type="button">Start again</button>
-      <button class="btn fs" type="button">Full screen</button>
-      <a class="btn" href="https://youtu.be/6TXyuOozO98" target="_blank" rel="noopener">Watch on YouTube</a>
+  <section class="stage player" aria-label="Episode player" data-mode="watch">
+    <div class="canvas-area"><div class="canvas-wrap"><canvas class="stage" width="1920" height="1080" role="img" aria-label="Episode animation; the words Curie says are shown below the picture"></canvas><div class="overlay"><button class="bigplay" type="button"><span aria-hidden="true">▶ </span><span class="lbl">Watch with Curie</span></button></div></div><p class="rotate-tip" aria-hidden="true"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M20 12a8 8 0 1 1-2.6-5.9M20 4v4.5h-4.5" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>Turn the phone sideways for a bigger picture</p></div>
+    <div class="side">
+      <div class="cap" aria-live="polite"></div>
+      <div class="says" aria-live="polite"></div>
+      <div class="bar">
+        <div class="seg" role="group" aria-label="Mode"><button class="mWatch" type="button" aria-pressed="true">Watch</button><button class="mPlay" data-task="0" type="button" aria-pressed="false">Try it</button></div>
+        <button class="btn pp" type="button">Pause</button>
+        <input class="scrub" type="range" min="0" max="1000" value="0" aria-label="Move through the episode" id="scrub-ep3">
+        <button class="btn restart" type="button">Start again</button>
+        <button class="btn fs" type="button"><span class="fsIn"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 9V4h5M15 4h5v5M20 15v5h-5M9 20H4v-5" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>Full screen</span><span class="fsOut"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>Exit <span class="fsLong">full screen</span></span></button>
+        <a class="btn yt" href="https://youtu.be/6TXyuOozO98" target="_blank" rel="noopener"><span class="long">Watch on </span>YouTube</a>
+      </div>
+      <div class="hint"></div>
     </div>
-    <div class="hint"></div>
-    <div class="says" aria-live="polite"></div>
   </section>
   <section class="two">
     <div class="panel"><span class="eyebrow">Curie's big idea</span><div><div class="idea">The sun lifts the water up, and the rain brings it down!</div></div><p>The sun warms the sea, and tiny bits of water float up into the air as invisible water vapour. High in the sky it is cold, so the bits huddle into droplets, and millions of droplets make a cloud. The droplets bump and join until they are too heavy to float, then they fall as rain, which runs back to the sea. Round and round: the water cycle.</p></div>
     <div class="panel"><span class="eyebrow">Try it at home</span><div class="badge">👋 with a grown-up</div><ol class="steps"><li><span>Ask a grown-up for a glass or cup of very cold water with ice cubes.</span></li><li><span>Leave it on the table and wait a few minutes.</span></li><li><span>Look at the outside of the glass. Where did the little drops come from?</span></li><li><span>Breathe on a cold window or mirror and watch a tiny cloud appear.</span></li></ol></div>
   </section>
-  <section class="panel"><span class="eyebrow">Quick quiz</span><h2>What did you find out?</h2><div class="pipbox"><canvas class="pipq" width="240" height="240" aria-hidden="true"></canvas><div class="says pipsays" style="padding:0">Tap an answer and I'll tell you!</div></div><div class="quiz"><div class="q" data-q="0"><p>1. What lifts water up into the sky?</p><div class="opts"><button type="button" data-ok="1">The warm sun</button><button type="button" data-ok="0">The moon</button><button type="button" data-ok="0">A fan</button></div><div class="fb" aria-live="polite"></div></div><div class="q" data-q="1"><p>2. Millions of tiny droplets make a...</p><div class="opts"><button type="button" data-ok="1">Cloud</button><button type="button" data-ok="0">Rock</button><button type="button" data-ok="0">Tree</button></div><div class="fb" aria-live="polite"></div></div><div class="q" data-q="2"><p>3. Rain falls when the drops get too...</p><div class="opts"><button type="button" data-ok="1">Heavy</button><button type="button" data-ok="0">Light</button><button type="button" data-ok="0">Warm</button></div><div class="fb" aria-live="polite"></div></div></div></section>
+  <section class="panel quizpanel"><span class="eyebrow">Quick quiz</span><h2>What did you find out?</h2><div class="pipbox"><canvas class="pipq" width="240" height="240" aria-hidden="true"></canvas><div class="says pipsays" style="padding:0" aria-live="polite">Tap an answer and I'll tell you!</div></div><div class="quiz"><div class="q" data-q="0"><p>1. What lifts water up into the sky?</p><div class="opts"><button type="button" data-ok="1">The warm sun</button><button type="button" data-ok="0">The moon</button><button type="button" data-ok="0">A fan</button></div><div class="fb" aria-live="polite"></div></div><div class="q" data-q="1"><p>2. Millions of tiny droplets make a...</p><div class="opts"><button type="button" data-ok="1">Cloud</button><button type="button" data-ok="0">Rock</button><button type="button" data-ok="0">Tree</button></div><div class="fb" aria-live="polite"></div></div><div class="q" data-q="2"><p>3. Rain falls when the drops get too...</p><div class="opts"><button type="button" data-ok="1">Heavy</button><button type="button" data-ok="0">Light</button><button type="button" data-ok="0">Warm</button></div><div class="fb" aria-live="polite"></div></div></div><div class="quiz-end"><button class="btn qreset" type="button"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M20 12a8 8 0 1 1-2.6-5.9M20 4v4.5h-4.5" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>Start the quiz again</button></div></section>
   <footer><div><a href="#">All episodes</a> · <a href="https://www.youtube.com/@LittleScientistsClubCurie" target="_blank" rel="noopener">Little Scientists Club on YouTube</a></div><div>Sound plays after you tap a button. Nothing here is collected or saved.</div></footer>
   </div></section>
 <section id="view-ep4" hidden><div class="wrap">
-  <header class="top"><canvas class="logo" width="128" height="128" aria-hidden="true"></canvas><div><a class="brand" href="#">Little Scientists <span>Club</span></a><div class="eyebrow">Episode 4 of 6</div></div><nav><a class="pill" href="#">All episodes</a><a class="pill" href="https://www.youtube.com/@LittleScientistsClubCurie" target="_blank" rel="noopener">YouTube channel</a></nav></header>
+  <header class="top"><canvas class="logo" width="128" height="128" aria-hidden="true"></canvas><div><a class="brand" href="#">Little Scientists <span>Club</span></a><div class="eyebrow">Episode 4 of 11</div></div><nav><a class="pill" href="#">All episodes</a><a class="pill" href="https://www.youtube.com/@LittleScientistsClubCurie" target="_blank" rel="noopener">YouTube channel</a></nav></header>
   <section><h1>Why do I have a shadow?</h1><p class="lead">Watch the story first, then tap <b>Try it</b> and do the science yourself.</p></section>
-  <section class="stage" aria-label="Episode player">
-    <div class="canvas-wrap"><canvas class="stage" width="1920" height="1080" role="img" aria-label="Episode animation; the words Curie says are shown below the picture"></canvas><div class="overlay"><button class="bigplay" type="button"><span aria-hidden="true">▶ </span><span class="lbl">Watch with Curie</span></button></div></div>
-    <div class="cap" aria-live="polite"></div>
-    <div class="bar">
-      <div class="seg" role="group" aria-label="Mode"><button class="mWatch" type="button" aria-pressed="true">Watch</button><button class="mPlay" type="button" aria-pressed="false">Try it</button></div>
-      <button class="btn pp" type="button">Pause</button>
-      <input class="scrub" type="range" min="0" max="1000" value="0" aria-label="Move through the episode" id="scrub-ep4">
-      <button class="btn restart" type="button">Start again</button>
-      <button class="btn fs" type="button">Full screen</button>
-      <a class="btn" href="https://youtu.be/7os5rLiTKPw" target="_blank" rel="noopener">Watch on YouTube</a>
+  <section class="stage player" aria-label="Episode player" data-mode="watch">
+    <div class="canvas-area"><div class="canvas-wrap"><canvas class="stage" width="1920" height="1080" role="img" aria-label="Episode animation; the words Curie says are shown below the picture"></canvas><div class="overlay"><button class="bigplay" type="button"><span aria-hidden="true">▶ </span><span class="lbl">Watch with Curie</span></button></div></div><p class="rotate-tip" aria-hidden="true"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M20 12a8 8 0 1 1-2.6-5.9M20 4v4.5h-4.5" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>Turn the phone sideways for a bigger picture</p></div>
+    <div class="side">
+      <div class="cap" aria-live="polite"></div>
+      <div class="says" aria-live="polite"></div>
+      <div class="bar">
+        <div class="seg" role="group" aria-label="Mode"><button class="mWatch" type="button" aria-pressed="true">Watch</button><button class="mPlay" data-task="0" type="button" aria-pressed="false">Try it</button></div>
+        <button class="btn pp" type="button">Pause</button>
+        <input class="scrub" type="range" min="0" max="1000" value="0" aria-label="Move through the episode" id="scrub-ep4">
+        <button class="btn restart" type="button">Start again</button>
+        <button class="btn fs" type="button"><span class="fsIn"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 9V4h5M15 4h5v5M20 15v5h-5M9 20H4v-5" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>Full screen</span><span class="fsOut"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>Exit <span class="fsLong">full screen</span></span></button>
+        <a class="btn yt" href="https://youtu.be/7os5rLiTKPw" target="_blank" rel="noopener"><span class="long">Watch on </span>YouTube</a>
+      </div>
+      <div class="hint"></div>
     </div>
-    <div class="hint"></div>
-    <div class="says" aria-live="polite"></div>
   </section>
   <section class="two">
     <div class="panel"><span class="eyebrow">Curie's big idea</span><div><div class="idea">A shadow is where the light can't go!</div></div><p>Light travels in straight lines. When it hits your body it stops, because it cannot go through you, so the ground or wall behind you gets no light. That dark patch is your shadow. When the sun is low in the morning or evening, shadows stretch long; at noon, when the sun is high, they are short.</p></div>
     <div class="panel"><span class="eyebrow">Try it at home</span><div class="badge">👋 with a grown-up</div><ol class="steps"><li><span>Ask a grown-up for a torch and make the room dark. Never shine it in anyone's eyes.</span></li><li><span>Shine the torch on a wall and put your hand in the light.</span></li><li><span>Make a dog, a bird or a rabbit with your hands.</span></li><li><span>Move your hand closer to the torch. Does the shadow get bigger or smaller?</span></li></ol></div>
   </section>
-  <section class="panel"><span class="eyebrow">Quick quiz</span><h2>What did you find out?</h2><div class="pipbox"><canvas class="pipq" width="240" height="240" aria-hidden="true"></canvas><div class="says pipsays" style="padding:0">Tap an answer and I'll tell you!</div></div><div class="quiz"><div class="q" data-q="0"><p>1. A shadow is where...</p><div class="opts"><button type="button" data-ok="1">Light can't go</button><button type="button" data-ok="0">Light is brightest</button><button type="button" data-ok="0">Water is</button></div><div class="fb" aria-live="polite"></div></div><div class="q" data-q="1"><p>2. When the sun is low, your shadow is...</p><div class="opts"><button type="button" data-ok="1">Long</button><button type="button" data-ok="0">Short</button><button type="button" data-ok="0">Gone</button></div><div class="fb" aria-live="polite"></div></div><div class="q" data-q="2"><p>3. Light travels in...</p><div class="opts"><button type="button" data-ok="1">Straight lines</button><button type="button" data-ok="0">Circles</button><button type="button" data-ok="0">Zigzags</button></div><div class="fb" aria-live="polite"></div></div></div></section>
+  <section class="panel quizpanel"><span class="eyebrow">Quick quiz</span><h2>What did you find out?</h2><div class="pipbox"><canvas class="pipq" width="240" height="240" aria-hidden="true"></canvas><div class="says pipsays" style="padding:0" aria-live="polite">Tap an answer and I'll tell you!</div></div><div class="quiz"><div class="q" data-q="0"><p>1. A shadow is where...</p><div class="opts"><button type="button" data-ok="1">Light can't go</button><button type="button" data-ok="0">Light is brightest</button><button type="button" data-ok="0">Water is</button></div><div class="fb" aria-live="polite"></div></div><div class="q" data-q="1"><p>2. When the sun is low, your shadow is...</p><div class="opts"><button type="button" data-ok="1">Long</button><button type="button" data-ok="0">Short</button><button type="button" data-ok="0">Gone</button></div><div class="fb" aria-live="polite"></div></div><div class="q" data-q="2"><p>3. Light travels in...</p><div class="opts"><button type="button" data-ok="1">Straight lines</button><button type="button" data-ok="0">Circles</button><button type="button" data-ok="0">Zigzags</button></div><div class="fb" aria-live="polite"></div></div></div><div class="quiz-end"><button class="btn qreset" type="button"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M20 12a8 8 0 1 1-2.6-5.9M20 4v4.5h-4.5" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>Start the quiz again</button></div></section>
   <footer><div><a href="#">All episodes</a> · <a href="https://www.youtube.com/@LittleScientistsClubCurie" target="_blank" rel="noopener">Little Scientists Club on YouTube</a></div><div>Sound plays after you tap a button. Nothing here is collected or saved.</div></footer>
   </div></section>
 <section id="view-ep5" hidden><div class="wrap">
-  <header class="top"><canvas class="logo" width="128" height="128" aria-hidden="true"></canvas><div><a class="brand" href="#">Little Scientists <span>Club</span></a><div class="eyebrow">Episode 5 of 6</div></div><nav><a class="pill" href="#">All episodes</a><a class="pill" href="https://www.youtube.com/@LittleScientistsClubCurie" target="_blank" rel="noopener">YouTube channel</a></nav></header>
+  <header class="top"><canvas class="logo" width="128" height="128" aria-hidden="true"></canvas><div><a class="brand" href="#">Little Scientists <span>Club</span></a><div class="eyebrow">Episode 5 of 11</div></div><nav><a class="pill" href="#">All episodes</a><a class="pill" href="https://www.youtube.com/@LittleScientistsClubCurie" target="_blank" rel="noopener">YouTube channel</a></nav></header>
   <section><h1>Why do boats float?</h1><p class="lead">Watch the story first, then tap <b>Try it</b> and do the science yourself.</p></section>
-  <section class="stage" aria-label="Episode player">
-    <div class="canvas-wrap"><canvas class="stage" width="1920" height="1080" role="img" aria-label="Episode animation; the words Curie says are shown below the picture"></canvas><div class="overlay"><button class="bigplay" type="button"><span aria-hidden="true">▶ </span><span class="lbl">Watch with Curie</span></button></div></div>
-    <div class="cap" aria-live="polite"></div>
-    <div class="bar">
-      <div class="seg" role="group" aria-label="Mode"><button class="mWatch" type="button" aria-pressed="true">Watch</button><button class="mPlay" type="button" aria-pressed="false">Try it</button></div>
-      <button class="btn pp" type="button">Pause</button>
-      <input class="scrub" type="range" min="0" max="1000" value="0" aria-label="Move through the episode" id="scrub-ep5">
-      <button class="btn restart" type="button">Start again</button>
-      <button class="btn fs" type="button">Full screen</button>
-      <a class="btn" href="https://youtu.be/HmYO-thndTA" target="_blank" rel="noopener">Watch on YouTube</a>
+  <section class="stage player" aria-label="Episode player" data-mode="watch">
+    <div class="canvas-area"><div class="canvas-wrap"><canvas class="stage" width="1920" height="1080" role="img" aria-label="Episode animation; the words Curie says are shown below the picture"></canvas><div class="overlay"><button class="bigplay" type="button"><span aria-hidden="true">▶ </span><span class="lbl">Watch with Curie</span></button></div></div><p class="rotate-tip" aria-hidden="true"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M20 12a8 8 0 1 1-2.6-5.9M20 4v4.5h-4.5" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>Turn the phone sideways for a bigger picture</p></div>
+    <div class="side">
+      <div class="cap" aria-live="polite"></div>
+      <div class="says" aria-live="polite"></div>
+      <div class="bar">
+        <div class="seg" role="group" aria-label="Mode"><button class="mWatch" type="button" aria-pressed="true">Watch</button><button class="mPlay" data-task="0" type="button" aria-pressed="false">Try it</button></div>
+        <button class="btn pp" type="button">Pause</button>
+        <input class="scrub" type="range" min="0" max="1000" value="0" aria-label="Move through the episode" id="scrub-ep5">
+        <button class="btn restart" type="button">Start again</button>
+        <button class="btn fs" type="button"><span class="fsIn"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 9V4h5M15 4h5v5M20 15v5h-5M9 20H4v-5" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>Full screen</span><span class="fsOut"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>Exit <span class="fsLong">full screen</span></span></button>
+        <a class="btn yt" href="https://youtu.be/HmYO-thndTA" target="_blank" rel="noopener"><span class="long">Watch on </span>YouTube</a>
+      </div>
+      <div class="hint"></div>
     </div>
-    <div class="hint"></div>
-    <div class="says" aria-live="polite"></div>
   </section>
   <section class="two">
     <div class="panel"><span class="eyebrow">Curie's big idea</span><div><div class="idea">Water pushes up!</div></div><p>When something sits in water it pushes some water out of the way, and the water pushes back up. A small, heavy stone pushes only a little water aside, so the push is too small and it sinks. A wide, hollow boat full of air pushes a lot of water aside, so the water pushes up hard enough to hold it. The same clay sinks as a ball and floats as a boat.</p></div>
     <div class="panel"><span class="eyebrow">Try it at home</span><div class="badge">👋 with a grown-up</div><ol class="steps"><li><span>Ask a grown-up for a bowl of water.</span></li><li><span>Collect a spoon, a coin, a cork, a plastic lid and a leaf.</span></li><li><span>Guess first: will it sink or float? Then drop it in.</span></li><li><span>Roll some clay or foil into a ball, then shape it into a boat. Test both!</span></li></ol></div>
   </section>
-  <section class="panel"><span class="eyebrow">Quick quiz</span><h2>What did you find out?</h2><div class="pipbox"><canvas class="pipq" width="240" height="240" aria-hidden="true"></canvas><div class="says pipsays" style="padding:0">Tap an answer and I'll tell you!</div></div><div class="quiz"><div class="q" data-q="0"><p>1. Water pushes...</p><div class="opts"><button type="button" data-ok="1">Up</button><button type="button" data-ok="0">Down</button><button type="button" data-ok="0">Sideways</button></div><div class="fb" aria-live="polite"></div></div><div class="q" data-q="1"><p>2. A small stone sinks because it pushes away only a little...</p><div class="opts"><button type="button" data-ok="1">Water</button><button type="button" data-ok="0">Air</button><button type="button" data-ok="0">Sand</button></div><div class="fb" aria-live="polite"></div></div><div class="q" data-q="2"><p>3. The same clay floats when it is shaped like a...</p><div class="opts"><button type="button" data-ok="1">Boat</button><button type="button" data-ok="0">Ball</button><button type="button" data-ok="0">Cube</button></div><div class="fb" aria-live="polite"></div></div></div></section>
+  <section class="panel quizpanel"><span class="eyebrow">Quick quiz</span><h2>What did you find out?</h2><div class="pipbox"><canvas class="pipq" width="240" height="240" aria-hidden="true"></canvas><div class="says pipsays" style="padding:0" aria-live="polite">Tap an answer and I'll tell you!</div></div><div class="quiz"><div class="q" data-q="0"><p>1. Water pushes...</p><div class="opts"><button type="button" data-ok="1">Up</button><button type="button" data-ok="0">Down</button><button type="button" data-ok="0">Sideways</button></div><div class="fb" aria-live="polite"></div></div><div class="q" data-q="1"><p>2. A small stone sinks because it pushes away only a little...</p><div class="opts"><button type="button" data-ok="1">Water</button><button type="button" data-ok="0">Air</button><button type="button" data-ok="0">Sand</button></div><div class="fb" aria-live="polite"></div></div><div class="q" data-q="2"><p>3. The same clay floats when it is shaped like a...</p><div class="opts"><button type="button" data-ok="1">Boat</button><button type="button" data-ok="0">Ball</button><button type="button" data-ok="0">Cube</button></div><div class="fb" aria-live="polite"></div></div></div><div class="quiz-end"><button class="btn qreset" type="button"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M20 12a8 8 0 1 1-2.6-5.9M20 4v4.5h-4.5" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>Start the quiz again</button></div></section>
   <footer><div><a href="#">All episodes</a> · <a href="https://www.youtube.com/@LittleScientistsClubCurie" target="_blank" rel="noopener">Little Scientists Club on YouTube</a></div><div>Sound plays after you tap a button. Nothing here is collected or saved.</div></footer>
   </div></section>
 <section id="view-ep6" hidden><div class="wrap">
-  <header class="top"><canvas class="logo" width="128" height="128" aria-hidden="true"></canvas><div><a class="brand" href="#">Little Scientists <span>Club</span></a><div class="eyebrow">Episode 6 of 6</div></div><nav><a class="pill" href="#">All episodes</a><a class="pill" href="https://www.youtube.com/@LittleScientistsClubCurie" target="_blank" rel="noopener">YouTube channel</a></nav></header>
+  <header class="top"><canvas class="logo" width="128" height="128" aria-hidden="true"></canvas><div><a class="brand" href="#">Little Scientists <span>Club</span></a><div class="eyebrow">Episode 6 of 11</div></div><nav><a class="pill" href="#">All episodes</a><a class="pill" href="https://www.youtube.com/@LittleScientistsClubCurie" target="_blank" rel="noopener">YouTube channel</a></nav></header>
   <section><h1>What makes things happen?</h1><p class="lead">Watch the story first, then tap <b>Try it</b> and do the science yourself.</p></section>
-  <section class="stage" aria-label="Episode player">
-    <div class="canvas-wrap"><canvas class="stage" width="1920" height="1080" role="img" aria-label="Episode animation; the words Curie says are shown below the picture"></canvas><div class="overlay"><button class="bigplay" type="button"><span aria-hidden="true">▶ </span><span class="lbl">Watch with Curie</span></button></div></div>
-    <div class="cap" aria-live="polite"></div>
-    <div class="bar">
-      <div class="seg" role="group" aria-label="Mode"><button class="mWatch" type="button" aria-pressed="true">Watch</button><button class="mPlay" type="button" aria-pressed="false">Try it</button></div>
-      <button class="btn pp" type="button">Pause</button>
-      <input class="scrub" type="range" min="0" max="1000" value="0" aria-label="Move through the episode" id="scrub-ep6">
-      <button class="btn restart" type="button">Start again</button>
-      <button class="btn fs" type="button">Full screen</button>
-      <a class="btn" href="https://youtu.be/Bt2rQEQ8HDk" target="_blank" rel="noopener">Watch on YouTube</a>
+  <section class="stage player" aria-label="Episode player" data-mode="watch">
+    <div class="canvas-area"><div class="canvas-wrap"><canvas class="stage" width="1920" height="1080" role="img" aria-label="Episode animation; the words Curie says are shown below the picture"></canvas><div class="overlay"><button class="bigplay" type="button"><span aria-hidden="true">▶ </span><span class="lbl">Watch with Curie</span></button></div></div><p class="rotate-tip" aria-hidden="true"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M20 12a8 8 0 1 1-2.6-5.9M20 4v4.5h-4.5" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>Turn the phone sideways for a bigger picture</p></div>
+    <div class="side">
+      <div class="cap" aria-live="polite"></div>
+      <div class="says" aria-live="polite"></div>
+      <div class="bar">
+        <div class="seg" role="group" aria-label="Mode"><button class="mWatch" type="button" aria-pressed="true">Watch</button><button class="mPlay" data-task="0" type="button" aria-pressed="false">Try it</button></div>
+        <button class="btn pp" type="button">Pause</button>
+        <input class="scrub" type="range" min="0" max="1000" value="0" aria-label="Move through the episode" id="scrub-ep6">
+        <button class="btn restart" type="button">Start again</button>
+        <button class="btn fs" type="button"><span class="fsIn"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 9V4h5M15 4h5v5M20 15v5h-5M9 20H4v-5" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>Full screen</span><span class="fsOut"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>Exit <span class="fsLong">full screen</span></span></button>
+        <a class="btn yt" href="https://youtu.be/Bt2rQEQ8HDk" target="_blank" rel="noopener"><span class="long">Watch on </span>YouTube</a>
+      </div>
+      <div class="hint"></div>
     </div>
-    <div class="hint"></div>
-    <div class="says" aria-live="polite"></div>
   </section>
   <section class="two">
     <div class="panel"><span class="eyebrow">Curie's big idea</span><div><div class="idea">Lots of pieces make it happen!</div></div><p>Things rarely have just one cause. A flower needs soil, a seed, water and sunshine all together, and it takes time. Epidemiologists draw this as a causal pie (Kenneth Rothman's sufficient-component cause model): each slice is a component cause, and the thing happens only when the whole pie is complete. The pieces need not act at the same time: the flower shows once the last piece has done its work (Rothman calls that gap the induction period). Because every slice is needed, taking any one away stops that pie, which is how prevention works: wash the germs off your hands and that tummy ache cannot happen. The same thing can also happen through a different pie (a flower can get its water from rain instead of a watering can), so removing one piece prevents the cases that needed it, not every case. To find out whether something really is a cause, scientists test it by taking it away and seeing whether the result changes. Teddy sat beside the pot all week, but the flower grew just the same without him: being there is not the same as being a cause.</p></div>
     <div class="panel"><span class="eyebrow">Try it at home</span><div class="badge">👋 with a grown-up</div><ol class="steps"><li><span>Ask a grown-up for two clear cups, some cotton wool and two dried bean seeds.</span></li><li><span>Put cotton wool and a bean in each cup, and stand both cups on a sunny windowsill.</span></li><li><span>Water one cup a little every day so the wool stays damp. Keep the other cup dry.</span></li><li><span>Check every day for a week. Which bean grows? Which piece of the pie was missing?</span></li></ol></div>
   </section>
-  <section class="panel"><span class="eyebrow">Quick quiz</span><h2>What did you find out?</h2><div class="pipbox"><canvas class="pipq" width="240" height="240" aria-hidden="true"></canvas><div class="says pipsays" style="padding:0">Tap an answer and I'll tell you!</div></div><div class="quiz"><div class="q" data-q="0"><p>1. What does a flower need to grow?</p><div class="opts"><button type="button" data-ok="1">All the pieces together</button><button type="button" data-ok="0">Just a seed</button><button type="button" data-ok="0">A teddy</button></div><div class="fb" aria-live="polite"></div></div><div class="q" data-q="1"><p>2. Take one piece away and the flower...</p><div class="opts"><button type="button" data-ok="1">Does not grow</button><button type="button" data-ok="0">Grows faster</button><button type="button" data-ok="0">Turns blue</button></div><div class="fb" aria-live="polite"></div></div><div class="q" data-q="2"><p>3. Teddy sat next to the pot every day. Is teddy a cause?</p><div class="opts"><button type="button" data-ok="1">No, teddy was just there</button><button type="button" data-ok="0">Yes, teddy made it grow</button><button type="button" data-ok="0">Only on Sundays</button></div><div class="fb" aria-live="polite"></div></div></div></section>
+  <section class="panel quizpanel"><span class="eyebrow">Quick quiz</span><h2>What did you find out?</h2><div class="pipbox"><canvas class="pipq" width="240" height="240" aria-hidden="true"></canvas><div class="says pipsays" style="padding:0" aria-live="polite">Tap an answer and I'll tell you!</div></div><div class="quiz"><div class="q" data-q="0"><p>1. What does a flower need to grow?</p><div class="opts"><button type="button" data-ok="1">All the pieces together</button><button type="button" data-ok="0">Just a seed</button><button type="button" data-ok="0">A teddy</button></div><div class="fb" aria-live="polite"></div></div><div class="q" data-q="1"><p>2. Take one piece away and the flower...</p><div class="opts"><button type="button" data-ok="1">Does not grow</button><button type="button" data-ok="0">Grows faster</button><button type="button" data-ok="0">Turns blue</button></div><div class="fb" aria-live="polite"></div></div><div class="q" data-q="2"><p>3. Teddy sat next to the pot every day. Is teddy a cause?</p><div class="opts"><button type="button" data-ok="1">No, teddy was just there</button><button type="button" data-ok="0">Yes, teddy made it grow</button><button type="button" data-ok="0">Only on Sundays</button></div><div class="fb" aria-live="polite"></div></div></div><div class="quiz-end"><button class="btn qreset" type="button"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M20 12a8 8 0 1 1-2.6-5.9M20 4v4.5h-4.5" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>Start the quiz again</button></div></section>
+  <footer><div><a href="#">All episodes</a> · <a href="https://www.youtube.com/@LittleScientistsClubCurie" target="_blank" rel="noopener">Little Scientists Club on YouTube</a></div><div>Sound plays after you tap a button. Nothing here is collected or saved.</div></footer>
+  </div></section>
+<section id="view-ep7" hidden><div class="wrap">
+  <header class="top"><canvas class="logo" width="128" height="128" aria-hidden="true"></canvas><div><a class="brand" href="#">Little Scientists <span>Club</span></a><div class="eyebrow">Episode 7 of 11</div></div><nav><a class="pill" href="#">All episodes</a><a class="pill" href="https://www.youtube.com/@LittleScientistsClubCurie" target="_blank" rel="noopener">YouTube channel</a></nav></header>
+  <section><h1>Why do magnets stick?</h1><p class="lead">Watch the story first, then tap <b>Try it</b> and do the science yourself.</p></section>
+  <section class="stage player" aria-label="Episode player" data-mode="watch">
+    <div class="canvas-area"><div class="canvas-wrap"><canvas class="stage" width="1920" height="1080" role="img" aria-label="Episode animation; the words Curie says are shown below the picture"></canvas><div class="overlay"><button class="bigplay" type="button"><span aria-hidden="true">▶ </span><span class="lbl">Watch with Curie</span></button></div></div><p class="rotate-tip" aria-hidden="true"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M20 12a8 8 0 1 1-2.6-5.9M20 4v4.5h-4.5" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>Turn the phone sideways for a bigger picture</p></div>
+    <div class="side">
+      <div class="cap" aria-live="polite"></div>
+      <div class="says" aria-live="polite"></div>
+      <div class="bar">
+        <div class="seg" role="group" aria-label="Mode"><button class="mWatch" type="button" aria-pressed="true">Watch</button><button class="mPlay" data-task="0" type="button" aria-pressed="false" title="Magnet test">Try it 1</button><button class="mPlay" data-task="1" type="button" aria-pressed="false" title="Push or pull">Try it 2</button></div>
+        <button class="btn pp" type="button">Pause</button>
+        <input class="scrub" type="range" min="0" max="1000" value="0" aria-label="Move through the episode" id="scrub-ep7">
+        <button class="btn restart" type="button">Start again</button>
+        <button class="btn fs" type="button"><span class="fsIn"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 9V4h5M15 4h5v5M20 15v5h-5M9 20H4v-5" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>Full screen</span><span class="fsOut"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>Exit <span class="fsLong">full screen</span></span></button>
+        <a class="btn yt" href="https://youtu.be/rIY9Yfk7nh8" target="_blank" rel="noopener"><span class="long">Watch on </span>YouTube</a>
+      </div>
+      <div class="hint"></div>
+    </div>
+  </section>
+  <section class="two">
+    <div class="panel"><span class="eyebrow">Curie's big idea</span><div><div class="idea">Magnets pull iron!</div></div><p>A magnet pulls on things that contain iron, such as steel paper clips, iron nails, steel bottle caps and the steel door of many fridges (steel is mostly iron). Things without iron, such as wood, plastic, paper and leaves, are not pulled, and neither are most other metals: aluminium foil, most drink cans, copper and brass are not magnetic. The iron in foods such as spinach or dates is a tiny amount locked inside other substances, so a magnet does not pull them. Coins, keys and spoons vary, which makes them unreliable tests, and some stainless steel does not hold a magnet at all, so a steel paper clip is the surest first test. (Nickel and cobalt are magnetic too, but iron and steel are the ones children meet.) The pull works across a gap, even through paper, but we cannot see it. Every magnet has two ends, called poles (north and south, shown here as red and blue): opposite poles pull together and like poles push apart. Scientists find out which materials are magnetic by testing them one at a time, just as children do in the home experiment. Safety: use a large fridge magnet, and keep small, strong magnets away from young children because they are dangerous if swallowed.</p></div>
+    <div class="panel"><span class="eyebrow">Try it at home</span><div class="badge">👋 with a grown-up</div><ol class="steps"><li><span>Ask a grown-up for a large fridge magnet. Magnets never go in your mouth.</span></li><li><span>Collect a paper clip, a pencil, a leaf and a piece of kitchen foil.</span></li><li><span>Guess first: will the magnet pull it? Then touch each thing with the flat back of the magnet (the side that sticks to the fridge) and sort them into two piles: pulled and not pulled.</span></li><li><span>Which things did the magnet pull? Talk about what they have in common. Then try the fridge door!</span></li></ol></div>
+  </section>
+  <section class="panel quizpanel"><span class="eyebrow">Quick quiz</span><h2>What did you find out?</h2><div class="pipbox"><canvas class="pipq" width="240" height="240" aria-hidden="true"></canvas><div class="says pipsays" style="padding:0" aria-live="polite">Tap an answer and I'll tell you!</div></div><div class="quiz"><div class="q" data-q="0"><p>1. What does a magnet pull?</p><div class="opts"><button type="button" data-ok="0">Paper</button><button type="button" data-ok="1">Things with iron in them</button><button type="button" data-ok="0">Wood</button></div><div class="fb" aria-live="polite"></div></div><div class="q" data-q="1"><p>2. Kitchen foil is shiny metal. Does a magnet pull it?</p><div class="opts"><button type="button" data-ok="0">Yes, every metal sticks</button><button type="button" data-ok="0">Only when it is cold</button><button type="button" data-ok="1">No, it has no iron</button></div><div class="fb" aria-live="polite"></div></div><div class="q" data-q="2"><p>3. Two magnets, red end to red end. What happens?</p><div class="opts"><button type="button" data-ok="1">They push apart</button><button type="button" data-ok="0">They pull together</button><button type="button" data-ok="0">They melt</button></div><div class="fb" aria-live="polite"></div></div></div><div class="quiz-end"><button class="btn qreset" type="button"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M20 12a8 8 0 1 1-2.6-5.9M20 4v4.5h-4.5" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>Start the quiz again</button></div></section>
+  <footer><div><a href="#">All episodes</a> · <a href="https://www.youtube.com/@LittleScientistsClubCurie" target="_blank" rel="noopener">Little Scientists Club on YouTube</a></div><div>Sound plays after you tap a button. Nothing here is collected or saved.</div></footer>
+  </div></section>
+<section id="view-ep8" hidden><div class="wrap">
+  <header class="top"><canvas class="logo" width="128" height="128" aria-hidden="true"></canvas><div><a class="brand" href="#">Little Scientists <span>Club</span></a><div class="eyebrow">Episode 8 of 11</div></div><nav><a class="pill" href="#">All episodes</a><a class="pill" href="https://www.youtube.com/@LittleScientistsClubCurie" target="_blank" rel="noopener">YouTube channel</a></nav></header>
+  <section><h1>How do we hear sounds?</h1><p class="lead">Watch the story first, then tap <b>Try it</b> and do the science yourself.</p></section>
+  <section class="stage player" aria-label="Episode player" data-mode="watch">
+    <div class="canvas-area"><div class="canvas-wrap"><canvas class="stage" width="1920" height="1080" role="img" aria-label="Episode animation; the words Curie says are shown below the picture"></canvas><div class="overlay"><button class="bigplay" type="button"><span aria-hidden="true">▶ </span><span class="lbl">Watch with Curie</span></button></div></div><p class="rotate-tip" aria-hidden="true"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M20 12a8 8 0 1 1-2.6-5.9M20 4v4.5h-4.5" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>Turn the phone sideways for a bigger picture</p></div>
+    <div class="side">
+      <div class="cap" aria-live="polite"></div>
+      <div class="says" aria-live="polite"></div>
+      <div class="bar">
+        <div class="seg" role="group" aria-label="Mode"><button class="mWatch" type="button" aria-pressed="true">Watch</button><button class="mPlay" data-task="0" type="button" aria-pressed="false" title="Pluck the strings">Try it 1</button><button class="mPlay" data-task="1" type="button" aria-pressed="false" title="Tap the drum">Try it 2</button></div>
+        <button class="btn pp" type="button">Pause</button>
+        <input class="scrub" type="range" min="0" max="1000" value="0" aria-label="Move through the episode" id="scrub-ep8">
+        <button class="btn restart" type="button">Start again</button>
+        <button class="btn fs" type="button"><span class="fsIn"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 9V4h5M15 4h5v5M20 15v5h-5M9 20H4v-5" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>Full screen</span><span class="fsOut"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>Exit <span class="fsLong">full screen</span></span></button>
+        <a class="btn yt" href="https://youtu.be/HvZwQBTgaqo" target="_blank" rel="noopener"><span class="long">Watch on </span>YouTube</a>
+      </div>
+      <div class="hint"></div>
+    </div>
+  </section>
+  <section class="two">
+    <div class="panel"><span class="eyebrow">Curie's big idea</span><div><div class="idea">Sounds are wiggles!</div></div><p>Every sound starts with a vibration: something moving back and forth very quickly, such as a plucked string, a drum skin or the vocal cords in your throat. The vibrating object pushes on the air next to it, and each little bit of air passes the push on to the next bit, so a sound wave travels through the air to your ear. The air itself does not travel from the string to your ear; each bit only wiggles a little and passes the push along. In the ear, the wave makes the eardrum vibrate too, and the brain hears a sound. Two separate things change a sound. Bigger vibrations are louder (hit the drum harder and the rice jumps higher), and faster vibrations are higher (a short or tightly stretched string vibrates faster than a long or loose one, so it gives a higher note). Plucking the same string harder makes it louder, not higher. Humming with fingers on the throat lets children feel the vibration that makes their own voice.</p></div>
+    <div class="panel"><span class="eyebrow">Try it at home</span><div class="badge">👋 with a grown-up</div><ol class="steps"><li><span>Ask a grown-up to join you. Put your fingers gently on your throat and hum. Can you feel the wiggle?</span></li><li><span>Ask your grown-up to stretch a rubber band over an open box or a plastic tub.</span></li><li><span>Pluck the rubber band gently, and keep it away from your face. Watch it wiggle and listen to the sound.</span></li><li><span>Ask your grown-up to pull the band at the side of the box a little tighter and hold it (not too tight!), then pluck again. Is the sound higher or lower?</span></li></ol></div>
+  </section>
+  <section class="panel quizpanel"><span class="eyebrow">Quick quiz</span><h2>What did you find out?</h2><div class="pipbox"><canvas class="pipq" width="240" height="240" aria-hidden="true"></canvas><div class="says pipsays" style="padding:0" aria-live="polite">Tap an answer and I'll tell you!</div></div><div class="quiz"><div class="q" data-q="0"><p>1. What makes a sound?</p><div class="opts"><button type="button" data-ok="0">Something sleeping</button><button type="button" data-ok="1">Something wiggling</button><button type="button" data-ok="0">Something cold</button></div><div class="fb" aria-live="polite"></div></div><div class="q" data-q="1"><p>2. A short string wiggles faster. Its sound is...</p><div class="opts"><button type="button" data-ok="0">Low</button><button type="button" data-ok="0">Silent</button><button type="button" data-ok="1">High</button></div><div class="fb" aria-live="polite"></div></div><div class="q" data-q="2"><p>3. Bang the drum harder and the sound gets...</p><div class="opts"><button type="button" data-ok="1">Louder</button><button type="button" data-ok="0">Quieter</button><button type="button" data-ok="0">Colder</button></div><div class="fb" aria-live="polite"></div></div></div><div class="quiz-end"><button class="btn qreset" type="button"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M20 12a8 8 0 1 1-2.6-5.9M20 4v4.5h-4.5" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>Start the quiz again</button></div></section>
+  <footer><div><a href="#">All episodes</a> · <a href="https://www.youtube.com/@LittleScientistsClubCurie" target="_blank" rel="noopener">Little Scientists Club on YouTube</a></div><div>Sound plays after you tap a button. Nothing here is collected or saved.</div></footer>
+  </div></section>
+<section id="view-ep9" hidden><div class="wrap">
+  <header class="top"><canvas class="logo" width="128" height="128" aria-hidden="true"></canvas><div><a class="brand" href="#">Little Scientists <span>Club</span></a><div class="eyebrow">Episode 9 of 11</div></div><nav><a class="pill" href="#">All episodes</a><a class="pill" href="https://www.youtube.com/@LittleScientistsClubCurie" target="_blank" rel="noopener">YouTube channel</a></nav></header>
+  <section><h1>Why is it dark at night?</h1><p class="lead">Watch the story first, then tap <b>Try it</b> and do the science yourself.</p></section>
+  <section class="stage player" aria-label="Episode player" data-mode="watch">
+    <div class="canvas-area"><div class="canvas-wrap"><canvas class="stage" width="1920" height="1080" role="img" aria-label="Episode animation; the words Curie says are shown below the picture"></canvas><div class="overlay"><button class="bigplay" type="button"><span aria-hidden="true">▶ </span><span class="lbl">Watch with Curie</span></button></div></div><p class="rotate-tip" aria-hidden="true"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M20 12a8 8 0 1 1-2.6-5.9M20 4v4.5h-4.5" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>Turn the phone sideways for a bigger picture</p></div>
+    <div class="side">
+      <div class="cap" aria-live="polite"></div>
+      <div class="says" aria-live="polite"></div>
+      <div class="bar">
+        <div class="seg" role="group" aria-label="Mode"><button class="mWatch" type="button" aria-pressed="true">Watch</button><button class="mPlay" data-task="0" type="button" aria-pressed="false" title="Spin the Earth">Try it 1</button><button class="mPlay" data-task="1" type="button" aria-pressed="false" title="Sunrise, sunset">Try it 2</button></div>
+        <button class="btn pp" type="button">Pause</button>
+        <input class="scrub" type="range" min="0" max="1000" value="0" aria-label="Move through the episode" id="scrub-ep9">
+        <button class="btn restart" type="button">Start again</button>
+        <button class="btn fs" type="button"><span class="fsIn"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 9V4h5M15 4h5v5M20 15v5h-5M9 20H4v-5" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>Full screen</span><span class="fsOut"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>Exit <span class="fsLong">full screen</span></span></button>
+        <a class="btn yt" href="https://youtu.be/h2r1cMopdJc" target="_blank" rel="noopener"><span class="long">Watch on </span>YouTube</a>
+      </div>
+      <div class="hint"></div>
+    </div>
+  </section>
+  <section class="two">
+    <div class="panel"><span class="eyebrow">Curie's big idea</span><div><div class="idea">The Earth spins!</div></div><p>The Earth is a huge ball that spins all the time, making one full turn about every 24 hours. The sun does not switch off, go to sleep or travel round us at night: it keeps shining, but it can only light the half of the Earth that faces it, so that half has day and the half turned away is in shadow and has night. As the Earth turns, each place is carried into the sunlit half (morning), through the day, and out into the shadowed half (evening), so one full turn gives one day and one night. That is also why the sun seems to come up, cross the sky and go down, although it is really the ground under our feet that is turning. When it is midday on one side of the Earth it is midnight on the opposite side: midday in India, for example, is night-time in the Americas. In our pictures we look down from above the North Pole, where the Earth turns counter-clockwise. The pictures are not to scale: the sun is far bigger than the Earth and very far away. The torch-and-ball experiment is a small model: the torch is the sun, the ball is the Earth and the sticker is your home.</p></div>
+    <div class="panel"><span class="eyebrow">Try it at home</span><div class="badge">👋 with a grown-up</div><ol class="steps"><li><span>Ask a grown-up for a torch and a ball (an orange works too). Put a small sticker on it: that is your house.</span></li><li><span>Make the room dark. Your grown-up shines the torch at the ball from a few steps away (never into anyone's eyes), so the whole near half of the ball is lit up.</span></li><li><span>Turn the ball slowly, like the Earth spinning. Watch your sticker.</span></li><li><span>When is your house in the light, so it is day? When is it in the dark, so it is night?</span></li></ol></div>
+  </section>
+  <section class="panel quizpanel"><span class="eyebrow">Quick quiz</span><h2>What did you find out?</h2><div class="pipbox"><canvas class="pipq" width="240" height="240" aria-hidden="true"></canvas><div class="says pipsays" style="padding:0" aria-live="polite">Tap an answer and I'll tell you!</div></div><div class="quiz"><div class="q" data-q="0"><p>1. Why do we have day and night?</p><div class="opts"><button type="button" data-ok="0">The sun switches off</button><button type="button" data-ok="1">The Earth spins</button><button type="button" data-ok="0">The moon hides the sun</button></div><div class="fb" aria-live="polite"></div></div><div class="q" data-q="1"><p>2. When your side of the Earth faces the sun, it is...</p><div class="opts"><button type="button" data-ok="1">Day</button><button type="button" data-ok="0">Night</button><button type="button" data-ok="0">Bedtime</button></div><div class="fb" aria-live="polite"></div></div><div class="q" data-q="2"><p>3. When it is day for you, on the other side of the Earth it is...</p><div class="opts"><button type="button" data-ok="0">Also day</button><button type="button" data-ok="0">Raining</button><button type="button" data-ok="1">Night</button></div><div class="fb" aria-live="polite"></div></div></div><div class="quiz-end"><button class="btn qreset" type="button"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M20 12a8 8 0 1 1-2.6-5.9M20 4v4.5h-4.5" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>Start the quiz again</button></div></section>
+  <footer><div><a href="#">All episodes</a> · <a href="https://www.youtube.com/@LittleScientistsClubCurie" target="_blank" rel="noopener">Little Scientists Club on YouTube</a></div><div>Sound plays after you tap a button. Nothing here is collected or saved.</div></footer>
+  </div></section>
+<section id="view-ep10" hidden><div class="wrap">
+  <header class="top"><canvas class="logo" width="128" height="128" aria-hidden="true"></canvas><div><a class="brand" href="#">Little Scientists <span>Club</span></a><div class="eyebrow">Episode 10 of 11</div></div><nav><a class="pill" href="#">All episodes</a><a class="pill" href="https://www.youtube.com/@LittleScientistsClubCurie" target="_blank" rel="noopener">YouTube channel</a></nav></header>
+  <section><h1>Where does the sugar go?</h1><p class="lead">Watch the story first, then tap <b>Try it</b> and do the science yourself.</p></section>
+  <section class="stage player" aria-label="Episode player" data-mode="watch">
+    <div class="canvas-area"><div class="canvas-wrap"><canvas class="stage" width="1920" height="1080" role="img" aria-label="Episode animation; the words Curie says are shown below the picture"></canvas><div class="overlay"><button class="bigplay" type="button"><span aria-hidden="true">▶ </span><span class="lbl">Watch with Curie</span></button></div></div><p class="rotate-tip" aria-hidden="true"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M20 12a8 8 0 1 1-2.6-5.9M20 4v4.5h-4.5" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>Turn the phone sideways for a bigger picture</p></div>
+    <div class="side">
+      <div class="cap" aria-live="polite"></div>
+      <div class="says" aria-live="polite"></div>
+      <div class="bar">
+        <div class="seg" role="group" aria-label="Mode"><button class="mWatch" type="button" aria-pressed="true">Watch</button><button class="mPlay" data-task="0" type="button" aria-pressed="false" title="Stir the sugar">Try it 1</button><button class="mPlay" data-task="1" type="button" aria-pressed="false" title="Does it dissolve?">Try it 2</button></div>
+        <button class="btn pp" type="button">Pause</button>
+        <input class="scrub" type="range" min="0" max="1000" value="0" aria-label="Move through the episode" id="scrub-ep10">
+        <button class="btn restart" type="button">Start again</button>
+        <button class="btn fs" type="button"><span class="fsIn"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 9V4h5M15 4h5v5M20 15v5h-5M9 20H4v-5" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>Full screen</span><span class="fsOut"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>Exit <span class="fsLong">full screen</span></span></button>
+        <a class="btn yt" href="https://youtu.be/iVGf9KFRxYc" target="_blank" rel="noopener"><span class="long">Watch on </span>YouTube</a>
+      </div>
+      <div class="hint"></div>
+    </div>
+  </section>
+  <section class="two">
+    <div class="panel"><span class="eyebrow">Curie's big idea</span><div><div class="idea">Sugar dissolves in water, but it's still there!</div></div><p>Sugar and salt are made of particles far too small to see, just like the ice cream in Episode 1. When sugar goes into water, the water particles pull the sugar particles away from the crystal, and they spread out evenly between the water particles: the sugar dissolves. We cannot see it any more, but it has not gone: the water tastes sweet, and if salty water is left to dry up, the salt crystals appear again. Dissolving is different from melting. Melting is a solid turning into a liquid when it is heated (Episode 1); dissolving is the particles of a solid spreading out through a liquid. Sugar dissolves even in cold water, just more slowly than in warm water, and stirring speeds it up by bringing fresh water to the crystals. Not everything dissolves: sand and pebbles sink to the bottom and stay there. Only taste with an adult's permission, and never taste the sand water.</p></div>
+    <div class="panel"><span class="eyebrow">Try it at home</span><div class="badge">👋 with a grown-up</div><ol class="steps"><li><span>Ask a grown-up for two clear glasses of water, a spoon of sugar, a spoon of sand (or uncooked rice, if you have no sand) and two clean spoons for stirring.</span></li><li><span>Put the sugar in one glass and the sand in the other. Stir each glass with its own spoon for a minute or two, until you can't see the sugar. Then wash your hands.</span></li><li><span>Look closely: which one disappears? Which one sinks to the bottom and stays there?</span></li><li><span>With your grown-up's OK, taste a tiny sip of the sugar water. Is the sugar still there? How do you know? (Never taste the sand water, or the rice water!)</span></li></ol></div>
+  </section>
+  <section class="panel quizpanel"><span class="eyebrow">Quick quiz</span><h2>What did you find out?</h2><div class="pipbox"><canvas class="pipq" width="240" height="240" aria-hidden="true"></canvas><div class="says pipsays" style="padding:0" aria-live="polite">Tap an answer and I'll tell you!</div></div><div class="quiz"><div class="q" data-q="0"><p>1. When sugar dissolves in water, the sugar is...</p><div class="opts"><button type="button" data-ok="0">Gone forever</button><button type="button" data-ok="1">Still there, in tiny bits</button><button type="button" data-ok="0">Turned into sand</button></div><div class="fb" aria-live="polite"></div></div><div class="q" data-q="1"><p>2. Which one does NOT dissolve in water?</p><div class="opts"><button type="button" data-ok="1">Sand</button><button type="button" data-ok="0">Salt</button><button type="button" data-ok="0">Sugar</button></div><div class="fb" aria-live="polite"></div></div><div class="q" data-q="2"><p>3. How can you tell the sugar is still in the water?</p><div class="opts"><button type="button" data-ok="0">The water turns green</button><button type="button" data-ok="0">The glass sings</button><button type="button" data-ok="1">The water tastes sweet</button></div><div class="fb" aria-live="polite"></div></div></div><div class="quiz-end"><button class="btn qreset" type="button"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M20 12a8 8 0 1 1-2.6-5.9M20 4v4.5h-4.5" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>Start the quiz again</button></div></section>
+  <footer><div><a href="#">All episodes</a> · <a href="https://www.youtube.com/@LittleScientistsClubCurie" target="_blank" rel="noopener">Little Scientists Club on YouTube</a></div><div>Sound plays after you tap a button. Nothing here is collected or saved.</div></footer>
+  </div></section>
+<section id="view-ep11" hidden><div class="wrap">
+  <header class="top"><canvas class="logo" width="128" height="128" aria-hidden="true"></canvas><div><a class="brand" href="#">Little Scientists <span>Club</span></a><div class="eyebrow">Episode 11 of 11</div></div><nav><a class="pill" href="#">All episodes</a><a class="pill" href="https://www.youtube.com/@LittleScientistsClubCurie" target="_blank" rel="noopener">YouTube channel</a></nav></header>
+  <section><h1>Why do rolling things stop?</h1><p class="lead">Watch the story first, then tap <b>Try it</b> and do the science yourself.</p></section>
+  <section class="stage player" aria-label="Episode player" data-mode="watch">
+    <div class="canvas-area"><div class="canvas-wrap"><canvas class="stage" width="1920" height="1080" role="img" aria-label="Episode animation; the words Curie says are shown below the picture"></canvas><div class="overlay"><button class="bigplay" type="button"><span aria-hidden="true">▶ </span><span class="lbl">Watch with Curie</span></button></div></div><p class="rotate-tip" aria-hidden="true"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M20 12a8 8 0 1 1-2.6-5.9M20 4v4.5h-4.5" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>Turn the phone sideways for a bigger picture</p></div>
+    <div class="side">
+      <div class="cap" aria-live="polite"></div>
+      <div class="says" aria-live="polite"></div>
+      <div class="bar">
+        <div class="seg" role="group" aria-label="Mode"><button class="mWatch" type="button" aria-pressed="true">Watch</button><button class="mPlay" data-task="0" type="button" aria-pressed="false" title="Ramp race">Try it 1</button><button class="mPlay" data-task="1" type="button" aria-pressed="false" title="Push the box">Try it 2</button></div>
+        <button class="btn pp" type="button">Pause</button>
+        <input class="scrub" type="range" min="0" max="1000" value="0" aria-label="Move through the episode" id="scrub-ep11">
+        <button class="btn restart" type="button">Start again</button>
+        <button class="btn fs" type="button"><span class="fsIn"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 9V4h5M15 4h5v5M20 15v5h-5M9 20H4v-5" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>Full screen</span><span class="fsOut"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>Exit <span class="fsLong">full screen</span></span></button>
+        <a class="btn yt" href="https://youtu.be/S15KJvwr8uA" target="_blank" rel="noopener"><span class="long">Watch on </span>YouTube</a>
+      </div>
+      <div class="hint"></div>
+    </div>
+  </section>
+  <section class="two">
+    <div class="panel"><span class="eyebrow">Curie's big idea</span><div><div class="idea">Rubbing slows it down!</div></div><p>A rolling or sliding object slows down because of friction, the force that acts where two surfaces rub against each other (air resistance adds a little). Rough or soft surfaces such as carpet, grass and sand produce more friction than smooth, hard ones, and ice produces very little, so the same car rolls much further on ice than on carpet. For wheels this is rolling friction: soft floors such as carpet squash under the wheels, and the axles rub a little. In the Try it activities the car and the box slow down steadily: the rougher the surface, the stronger the pull back, so the sooner they stop. Friction is also useful: it lets shoe soles grip the ground, lets us hold a pencil, and is how bicycle brakes stop the wheels. Letting the same car roll from the same place on different surfaces, as in the home experiment, is a fair test: only the surface changes, so any difference in distance comes from the surface.</p></div>
+    <div class="panel"><span class="eyebrow">Try it at home</span><div class="badge">👋 with a grown-up</div><ol class="steps"><li><span>Ask a grown-up to help you make a ramp: lean a big book against a cushion or a box.</span></li><li><span>Let a toy car roll down onto a smooth floor. Put a block where it stops.</span></li><li><span>Now spread a towel at the bottom of the ramp and roll the car again from the same place. Mark where it stops.</span></li><li><span>Where did it go further? Which floor rubbed more?</span></li></ol></div>
+  </section>
+  <section class="panel quizpanel"><span class="eyebrow">Quick quiz</span><h2>What did you find out?</h2><div class="pipbox"><canvas class="pipq" width="240" height="240" aria-hidden="true"></canvas><div class="says pipsays" style="padding:0" aria-live="polite">Tap an answer and I'll tell you!</div></div><div class="quiz"><div class="q" data-q="0"><p>1. What slows a rolling car down?</p><div class="opts"><button type="button" data-ok="0">Sunshine</button><button type="button" data-ok="1">Rubbing</button><button type="button" data-ok="0">Singing</button></div><div class="fb" aria-live="polite"></div></div><div class="q" data-q="1"><p>2. On which floor does the car roll the furthest?</p><div class="opts"><button type="button" data-ok="0">Grass</button><button type="button" data-ok="0">Carpet</button><button type="button" data-ok="1">Ice</button></div><div class="fb" aria-live="polite"></div></div><div class="q" data-q="2"><p>3. Rubbing helps your shoes...</p><div class="opts"><button type="button" data-ok="1">Grip, so you don't slip</button><button type="button" data-ok="0">Change colour</button><button type="button" data-ok="0">Grow bigger</button></div><div class="fb" aria-live="polite"></div></div></div><div class="quiz-end"><button class="btn qreset" type="button"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M20 12a8 8 0 1 1-2.6-5.9M20 4v4.5h-4.5" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>Start the quiz again</button></div></section>
   <footer><div><a href="#">All episodes</a> · <a href="https://www.youtube.com/@LittleScientistsClubCurie" target="_blank" rel="noopener">Little Scientists Club on YouTube</a></div><div>Sound plays after you tap a button. Nothing here is collected or saved.</div></footer>
   </div></section>
 <script src="lib.js"></script><script src="data.js"></script>
-<script>/* Single-page site: hub + one view per episode, routed by location.hash (#ep1 … #ep5). */
+<script>/* Single-page site: hub + one view per episode, routed by location.hash (#ep1, #ep2, ...).
+   An episode has one Try-it task (`interactive`, Episodes 1-6) or several (`interactives`, two from Episode 7).
+   Full screen holds the whole player (picture, Watch / Try it buttons, Curie's words, controls, Exit). Where the
+   Fullscreen API is missing (iPhone Safari) or refused, a fixed overlay covers the window instead ("pseudo").
+   The canvas backing store follows its displayed size (round(min(1920, css width x devicePixelRatio)) wide, 16:9) and
+   a base transform keeps every drawing in 1920 x 1080 units; pointers are mapped through the drawn picture's rectangle. */
 (function(){
   const D = window.LSC_DATA; const EPS = Object.keys(D.timelines);
   const mounted = {}; const W = 1920, H = 1080; const SITE = 'Little Scientists Club';
   function $(root, sel) { return root.querySelector(sel); }
-  const canFullscreen = !!(document.fullscreenEnabled || document.webkitFullscreenEnabled);
+  const nativeFs = !!(document.fullscreenEnabled || document.webkitFullscreenEnabled) && !!(Element.prototype.requestFullscreen || Element.prototype.webkitRequestFullscreen);
+  const fsElement = () => document.fullscreenElement || document.webkitFullscreenElement || null;
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 
   function mount(ep) {
     if (mounted[ep]) return mounted[ep];
-    const root = document.getElementById('view-' + ep); const TL = D.timelines[ep]; const M = D.meta[ep]; const I = LSC.episodes[ep].interactive; const EP = LSC.episodes[ep];
-    const canvas = $(root, 'canvas.stage'); const ctx = canvas.getContext('2d', { alpha: false });
-    const overlay = $(root, '.overlay'), bigplay = $(root, '.bigplay'), bigplayText = $(root, '.bigplay .lbl'), mWatch = $(root, '.mWatch'), mPlay = $(root, '.mPlay'), pp = $(root, '.pp'), scrub = $(root, '.scrub'), restart = $(root, '.restart'), fsBtn = $(root, '.fs'), hint = $(root, '.hint'), says = $(root, '.says'), cap = $(root, '.cap'), cw = $(root, '.canvas-wrap');
+    const root = document.getElementById('view-' + ep); const TL = D.timelines[ep]; const M = D.meta[ep]; const EP = LSC.episodes[ep];
+    const TASKS = Array.isArray(EP.interactives) ? EP.interactives : [EP.interactive]; let task = 0, I = TASKS[0];
+    const tryName = k => TASKS.length > 1 ? 'Try it ' + (k + 1) : 'Try it';
+    const stage = $(root, 'section.stage'), area = $(root, '.canvas-area'), canvas = $(root, 'canvas.stage'); const ctx = canvas.getContext('2d', { alpha: false });
+    const overlay = $(root, '.overlay'), bigplay = $(root, '.bigplay'), bigplayText = $(root, '.bigplay .lbl'), mWatch = $(root, '.mWatch'), mPlays = [...root.querySelectorAll('.mPlay')], pp = $(root, '.pp'), scrub = $(root, '.scrub'), restart = $(root, '.restart'), fsBtn = $(root, '.fs'), hint = $(root, '.hint'), says = $(root, '.says'), cap = $(root, '.cap'), cw = $(root, '.canvas-wrap');
     const player = LSC.createPlayer(ctx, ep, TL); const audio = new Audio('audio/' + ep + '.mp3'); audio.preload = 'auto';
     // Curie's short spoken cues for Play mode: one Audio element per cue, created up front so they can be
     // "unlocked" inside a user gesture (iOS Safari only lets media play after a gesture on that element).
@@ -268,68 +523,183 @@ section[hidden] { display: none }
       for (const a of Object.values(cueAudios)) { a.muted = true; const p = a.play(); if (p && p.then) p.then(() => { a.pause(); a.currentTime = 0; a.muted = false; }).catch(() => { a.muted = false; }); else { a.pause(); a.currentTime = 0; a.muted = false; } }
     }
     let mode = 'watch', state = null, raf = 0, last = 0, cueAudio = null, started = false, active = false, lastCueId = '', lastCueAt = 0, lastCap = '';
+    let shownT = -1, dirty = true;     // Watch mode redraws only when the time moved, or after a resize / mode change
     const POSTER_T = 4.6; // Curie waving hello in the park
-    function setPP() { pp.textContent = audio.paused ? 'Play' : 'Pause'; }
-    audio.addEventListener('ended', () => { setPP(); overlay.hidden = false; bigplayText.textContent = 'Watch again'; says.textContent = 'Now tap "Try it" and do the science yourself!'; });
-    audio.addEventListener('pause', setPP); audio.addEventListener('play', setPP);
-    function setMode(m) {
-      mode = m; mWatch.setAttribute('aria-pressed', String(m === 'watch')); mPlay.setAttribute('aria-pressed', String(m === 'play')); says.textContent = '';
-      if (m === 'watch') { hint.innerHTML = 'Captions are on screen. Drag the slider to any moment, or tap <b>Try it</b> to do the science yourself.'; scrub.hidden = false; pp.hidden = false; overlay.hidden = started; setPP(); cap.hidden = false; }
-      else { audio.pause(); pp.hidden = true; scrub.hidden = true; overlay.hidden = true; cap.hidden = true; cap.textContent = ''; lastCap = ''; hint.innerHTML = '<b>Try it:</b> ' + M.hint; state = {}; I.init(state); last = performance.now(); pendingCue = ''; lastCueId = ''; lastCueAt = 0; if (cueAudio) { cueAudio.pause(); cueAudio = null; } unlockCues(); }
-      cancelAnimationFrame(raf); if (active) loop();
+
+    // ---- resolution: backing store matched to the displayed size; drawing code keeps 1920 x 1080 units ----
+    function prepare() {
+      const r = canvas.getBoundingClientRect(); if (!(r.width > 0)) return false;
+      const w = Math.max(16, Math.round(Math.min(W, r.width * (window.devicePixelRatio || 1)))), h = Math.round(w * H / W);
+      if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h; dirty = true; }   // (this also clears the canvas)
+      ctx.setTransform(w / W, 0, 0, h / H, 0, 0); return true;
     }
-    let pendingCue = '';
+    function frameWatch() {
+      const t = started && !audio.ended ? (audio.currentTime || 0) : POSTER_T;
+      if (prepare() && (dirty || t !== shownT)) { player.drawFrame(t); shownT = t; dirty = false; }
+      if (!scrub.matches(':active')) scrub.value = String(Math.round((started ? t : 0) / TL.duration * 1000));
+      const c = started ? captionAt(t) : ''; if (c !== lastCap) { lastCap = c; cap.textContent = c; }
+    }
+    function framePlay(now) { if (prepare()) { I.draw(ctx, state, now / 1000); dirty = false; } }
+    function loop() {
+      raf = 0; if (!active || document.hidden) return;   // nothing runs while the page is hidden
+      if (mode === 'watch') { if (!audio.paused) raf = requestAnimationFrame(loop); frameWatch(); }   // paused: no frame loop at all
+      else { raf = requestAnimationFrame(loop); const now = performance.now(); const dt = Math.min(0.05, (now - last) / 1000); last = now; I.update(state, dt, cue); framePlay(now); }
+    }
+    function kick() { if (raf) cancelAnimationFrame(raf); raf = 0; loop(); }      // one frame now; the loop continues while needed
+    function wake() { if (!raf && active && !document.hidden) raf = requestAnimationFrame(loop); }
+
+    function setPP() { pp.textContent = audio.paused ? 'Play' : 'Pause'; }
+    audio.addEventListener('ended', () => { setPP(); overlay.hidden = false; bigplayText.textContent = 'Watch again'; says.textContent = TASKS.length > 1 ? 'Now tap "Try it 1" or "Try it 2" and do the science yourself!' : 'Now tap "Try it" and do the science yourself!'; wake(); });
+    audio.addEventListener('pause', () => { setPP(); wake(); }); audio.addEventListener('play', () => { setPP(); wake(); }); audio.addEventListener('seeked', wake);
+    function setMode(m, k) {
+      mode = m; if (m === 'play') { task = Math.max(0, Math.min(TASKS.length - 1, k || 0)); I = TASKS[task]; }
+      stage.dataset.mode = m; pointerId = null;
+      mWatch.setAttribute('aria-pressed', String(m === 'watch')); mPlays.forEach((b, j) => b.setAttribute('aria-pressed', String(m === 'play' && j === task))); says.textContent = '';
+      if (m === 'watch') { hint.innerHTML = 'Captions are on screen. Drag the slider to any moment, or tap <b>' + (TASKS.length > 1 ? 'Try it 1</b> or <b>Try it 2' : 'Try it') + '</b> to do the science yourself.'; scrub.hidden = false; pp.hidden = false; overlay.hidden = started; setPP(); cap.hidden = false; }
+      else { audio.pause(); pp.hidden = true; scrub.hidden = true; overlay.hidden = true; cap.hidden = true; cap.textContent = ''; lastCap = ''; const T = TASKS.length > 1 ? M.tasks[task] : null; setHint(tryName(task) + (T && T.title ? ': ' + T.title.trim() : ''), T ? T.hint : M.hint); state = {}; I.init(state); last = performance.now(); pendingCue = ''; lastCueId = ''; lastCueAt = 0; if (cueAudio) { cueAudio.pause(); cueAudio = null; } unlockCues(); }
+      dirty = true; fitWrap(); kick();
+    }
+    function setHint(head, text) {   // "Try it 2: Does it dissolve?" takes no colon after its question mark
+      const b = document.createElement('b'); b.textContent = /[?!.:]$/.test(head) ? head : head + ':'; hint.textContent = ''; hint.append(b, ' ' + (text || ''));
+    }
+    // Curie's cues never pile up: one plays and at most one (the latest request) waits for it.
+    //  - the same cue again within 4 s is skipped, and that also cancels a different cue waiting behind it
+    //    (the child is back to what Curie is saying: soft, loud, soft must not end on "loud");
+    //  - a waiting cue that is more than 3 s old when the playing one ends is dropped (the picture has moved on).
+    let pendingCue = '', pendingAt = 0; const cueLog = [];   // cueLog: the last decisions, for tests ({t, act, id})
+    const logCue = (act, id) => { cueLog.push({ t: Math.round(performance.now()), act, id }); if (cueLog.length > 80) cueLog.shift(); };
     function cue(id) {
       const now = performance.now();
-      // never pile cues up: ignore repeats of the same cue within 4 s; a different cue requested while one is still playing waits its turn
-      if (id === lastCueId && now - lastCueAt < 4000) return;
-      if (cueAudio && !cueAudio.paused && !cueAudio.ended) { pendingCue = id; return; }
-      pendingCue = ''; lastCueId = id; lastCueAt = now; says.textContent = 'Curie says: ' + (M.cues[id] || '');
+      if (id === lastCueId && now - lastCueAt < 4000) { if (pendingCue) { logCue('cancel', pendingCue); pendingCue = ''; } logCue('skip', id); return; }
+      if (cueAudio && !cueAudio.paused && !cueAudio.ended) { pendingCue = id; pendingAt = now; logCue('queue', id); return; }
+      pendingCue = ''; lastCueId = id; lastCueAt = now; says.textContent = 'Curie says: ' + (M.cues[id] || ''); logCue('play', id);
       const a = cueAudios[id]; if (!a) return; cueAudio = a; try { a.currentTime = 0; } catch (e) {} a.play().catch(() => {});
     }
-    for (const a of Object.values(cueAudios)) a.addEventListener('ended', () => { if (pendingCue && mode === 'play' && active) { const id = pendingCue; pendingCue = ''; cue(id); } });
+    for (const a of Object.values(cueAudios)) a.addEventListener('ended', () => {
+      if (!pendingCue || mode !== 'play' || !active) return; const id = pendingCue; pendingCue = '';
+      if (performance.now() - pendingAt > 3000) { logCue('drop', id); return; }
+      cue(id);
+    });
     function captionAt(t) {
       for (const ln of EP.lines) { const Ln = TL.lines[ln.id]; if (!Ln) continue; if (t >= Ln.start - 0.15 && t <= Ln.end + 0.7) return ln.text; }
       return '';
     }
-    function loop() {
-      raf = requestAnimationFrame(loop);
-      if (mode === 'watch') {
-        const t = started && !audio.ended ? (audio.currentTime || 0) : POSTER_T; player.drawFrame(t);
-        if (!scrub.matches(':active')) scrub.value = String(Math.round((started ? t : 0) / TL.duration * 1000));
-        const c = started ? captionAt(t) : ''; if (c !== lastCap) { lastCap = c; cap.textContent = c; }
-      } else { const now = performance.now(); const dt = Math.min(0.05, (now - last) / 1000); last = now; I.update(state, dt, cue); I.draw(ctx, state, now / 1000); }
+
+    // ---- pointers: client point -> 1920 x 1080 units through the drawn picture (letterboxed if the box is not 16:9) ----
+    let pointerId = null, lastPointer = null;
+    function toCanvas(e) {
+      const r = canvas.getBoundingClientRect(); const pw = Math.min(r.width, r.height * W / H), ph = pw * H / W; if (!(pw > 0)) return null;
+      const x = (e.clientX - r.left - (r.width - pw) / 2) / pw * W, y = (e.clientY - r.top - (r.height - ph) / 2) / ph * H;
+      return { x, y, inside: x >= -2 && x <= W + 2 && y >= -2 && y <= H + 2 };
     }
-    function pos(e) { const r = cw.getBoundingClientRect(); return [(e.clientX - r.left) / r.width * W, (e.clientY - r.top) / r.height * H]; }
-    cw.addEventListener('pointerdown', e => { if (mode !== 'play') return; unlockCues(); cw.setPointerCapture(e.pointerId); const [x, y] = pos(e); I.pointer(state, 'down', x, y); e.preventDefault(); });
-    cw.addEventListener('pointermove', e => { if (mode !== 'play') return; const [x, y] = pos(e); I.pointer(state, 'move', x, y); });
-    cw.addEventListener('pointerup', e => { if (mode !== 'play') return; const [x, y] = pos(e); I.pointer(state, 'up', x, y); });
-    cw.addEventListener('pointercancel', () => { if (mode === 'play') I.pointer(state, 'up', 0, 0); });
-    function startWatch() { overlay.hidden = true; started = true; says.textContent = ''; audio.currentTime = 0; audio.play().catch(() => {}); setPP(); }
+    function send(type, p) { const x = clamp(p.x, 0, W), y = clamp(p.y, 0, H); lastPointer = { type, x, y }; I.pointer(state, type, x, y); }
+    cw.addEventListener('pointerdown', e => {
+      if (mode !== 'play') return; unlockCues(); if (LSC.sound) LSC.sound.unlock();
+      const p = toCanvas(e); if (!p || !p.inside || pointerId !== null) return;   // touches outside the picture and a second finger are ignored
+      pointerId = e.pointerId; try { cw.setPointerCapture(e.pointerId); } catch (err) {}
+      send('down', p); e.preventDefault();
+    });
+    cw.addEventListener('pointermove', e => {   // the dragging pointer (clamped to the picture), or a hovering mouse
+      if (mode !== 'play' || (pointerId !== null ? e.pointerId !== pointerId : e.pointerType !== 'mouse')) return;
+      const p = toCanvas(e); if (p) send('move', p);
+    });
+    function release(e, cancelled) { if (mode !== 'play' || pointerId === null || e.pointerId !== pointerId) return; pointerId = null; if (LSC.sound) LSC.sound.unlock(); const p = cancelled ? null : toCanvas(e); send('up', p || lastPointer || { x: 0, y: 0 }); }
+    cw.addEventListener('pointerup', e => release(e, false));
+    cw.addEventListener('pointercancel', e => release(e, true));
+    cw.addEventListener('lostpointercapture', e => release(e, true));
+    cw.addEventListener('contextmenu', e => { if (mode === 'play') e.preventDefault(); });   // long-press menus would interrupt a drag
+
+    function startWatch() { overlay.hidden = true; started = true; says.textContent = ''; audio.currentTime = 0; audio.play().catch(() => {}); setPP(); dirty = true; wake(); }
     bigplay.addEventListener('click', () => { if (mode !== 'watch') setMode('watch'); startWatch(); });
-    mWatch.addEventListener('click', () => setMode('watch')); mPlay.addEventListener('click', () => setMode('play'));
-    pp.addEventListener('click', () => { if (audio.paused) { if (audio.ended || audio.currentTime >= TL.duration - 0.05) audio.currentTime = 0; audio.play().catch(() => {}); overlay.hidden = true; started = true; } else { audio.pause(); } setPP(); });
-    scrub.addEventListener('input', () => { started = true; overlay.hidden = true; audio.currentTime = Number(scrub.value) / 1000 * TL.duration; player.drawFrame(audio.currentTime); });
-    restart.addEventListener('click', () => { if (mode === 'watch') startWatch(); else setMode('play'); });
-    if (fsBtn) { if (!canFullscreen) fsBtn.hidden = true; fsBtn.addEventListener('click', () => { const el = cw; if (document.fullscreenElement || document.webkitFullscreenElement) { (document.exitFullscreen || document.webkitExitFullscreen).call(document); } else if (el.requestFullscreen) el.requestFullscreen().catch(() => {}); else if (el.webkitRequestFullscreen) el.webkitRequestFullscreen(); }); }
+    mWatch.addEventListener('click', () => setMode('watch')); mPlays.forEach((b, j) => b.addEventListener('click', () => setMode('play', j)));
+    pp.addEventListener('click', () => { if (audio.paused) { if (audio.ended || audio.currentTime >= TL.duration - 0.05) audio.currentTime = 0; audio.play().catch(() => {}); overlay.hidden = true; started = true; } else { audio.pause(); } setPP(); wake(); });
+    scrub.addEventListener('input', () => { started = true; overlay.hidden = true; audio.currentTime = Number(scrub.value) / 1000 * TL.duration; dirty = true; if (mode === 'watch') kick(); });
+    restart.addEventListener('click', () => { if (mode === 'watch') startWatch(); else setMode('play', task); });
+
+    // ---- full screen: the whole player; the Fullscreen API where it exists, otherwise a fixed overlay (iPhone) ----
+    let fsMode = '', fsPending = false;   // fsMode: '' | 'native' | 'pseudo'
+    function fitWrap() {   // in full screen .canvas-wrap is the largest 16:9 box inside .canvas-area (CSS does the same with container units)
+      if (!fsMode) { if (cw.style.width || cw.style.height) { cw.style.width = ''; cw.style.height = ''; } return; }
+      const aw = area.clientWidth, ah = area.clientHeight; if (!aw || !ah) return;
+      const w = Math.floor(Math.min(aw, ah * W / H)); cw.style.width = w + 'px'; cw.style.height = Math.floor(w * H / W) + 'px';
+    }
+    function refit() { fitWrap(); dirty = true; if (!active || document.hidden) return; if (mode === 'watch') frameWatch(); else if (state) framePlay(performance.now()); }
+    function setFs(m) {
+      fsMode = m; const on = !!m;
+      stage.classList.toggle('is-fs', on); stage.classList.toggle('fs-pseudo', m === 'pseudo');
+      document.documentElement.classList.toggle('fs-lock', m === 'pseudo');                 // no page scrolling behind the overlay
+      for (const n of stage.parentElement.children) if (n !== stage) n.inert = on;          // keyboard focus stays in the player
+      refit();
+    }
+    function lockLandscape() { try { const o = screen.orientation; if (o && o.lock) { const p = o.lock('landscape'); if (p && p.catch) p.catch(() => {}); } } catch (e) {} }
+    function unlockOrientation() { try { const o = screen.orientation; if (o && o.unlock) o.unlock(); } catch (e) {} }
+    function enterFs() {
+      if (fsMode || fsPending) return;
+      if (!nativeFs) { setFs('pseudo'); return; }
+      fsPending = true; const fail = () => { if (fsPending && fsElement() !== stage) { fsPending = false; setFs('pseudo'); } };
+      try { const p = stage.requestFullscreen ? stage.requestFullscreen({ navigationUI: 'hide' }) : stage.webkitRequestFullscreen(); if (p && p.then) p.catch(fail); }
+      catch (e) { fail(); return; }
+      setTimeout(fail, 2500);   // no answer at all (old WebKit without events): use the overlay; a late real entry still takes over
+    }
+    function exitFs() {
+      fsPending = false;
+      if (fsElement() === stage) { try { const p = (document.exitFullscreen || document.webkitExitFullscreen).call(document); if (p && p.catch) p.catch(() => {}); } catch (e) {} }   // fullscreenchange finishes
+      else if (fsMode) { if (fsMode === 'native') unlockOrientation(); setFs(''); }
+    }
+    function onFsChange() {
+      const el = fsElement();
+      if (el === stage) { fsPending = false; if (fsMode !== 'native') { setFs('native'); lockLandscape(); } }   // Android: turn sideways (ignored where not allowed)
+      else if (fsMode === 'native') { unlockOrientation(); setFs(''); }
+    }
+    for (const t of ['fullscreenchange', 'webkitfullscreenchange']) document.addEventListener(t, onFsChange);
+    for (const t of ['fullscreenerror', 'webkitfullscreenerror']) document.addEventListener(t, () => { if (fsPending) { fsPending = false; if (fsElement() !== stage) setFs('pseudo'); } });
+    fsBtn.hidden = false; fsBtn.addEventListener('click', () => { if (fsMode || fsElement() === stage) exitFs(); else enterFs(); });
+    document.addEventListener('keydown', e => { if (fsMode && active && (e.key === 'Escape' || e.key === 'Esc')) { e.preventDefault(); exitFs(); } });
+    // the overlay must not scroll or zoom the page underneath (iOS ignores overflow: hidden for touch scrolling on older versions)
+    stage.addEventListener('touchmove', e => { if (fsMode === 'pseudo' && !(e.target.closest && e.target.closest('.scrub'))) e.preventDefault(); }, { passive: false });
+    stage.addEventListener('gesturestart', e => { if (fsMode === 'pseudo') e.preventDefault(); });
+    if (window.ResizeObserver) new ResizeObserver(refit).observe(area);
+    window.addEventListener('resize', refit); window.addEventListener('orientationchange', () => setTimeout(refit, 60));
+    document.addEventListener('visibilitychange', () => { if (document.hidden) { if (raf) cancelAnimationFrame(raf); raf = 0; } else if (active) { last = performance.now(); dirty = true; kick(); kickPip(); } });
+
     // quiz
-    const pipq = $(root, 'canvas.pipq').getContext('2d'); let pipMood = 'happy', pipT = 0; const pipsays = $(root, '.pipsays');
-    function drawPipQ() { if (!active) return; pipT += 0.03; pipq.clearRect(0, 0, 240, 240); pipq.fillStyle = 'rgba(78,168,255,0.15)'; pipq.beginPath(); pipq.arc(120, 120, 118, 0, Math.PI * 2); pipq.fill(); LSC.pip(pipq, { x: 120, y: 125, s: 0.72, t: pipT, mood: pipMood, armR: pipMood === 'wow' ? -1.2 : -0.4, armL: 0.6 }); requestAnimationFrame(drawPipQ); }
+    const pipCanvas = $(root, 'canvas.pipq'); const pipq = pipCanvas.getContext('2d'); let pipMood = 'happy', pipT = 0, pipRaf = 0, pipSeen = true; const pipsays = $(root, '.pipsays');
+    function drawPipQ() { pipRaf = 0; if (!active || document.hidden || !pipSeen) return; pipRaf = requestAnimationFrame(drawPipQ); pipT += 0.03; pipq.clearRect(0, 0, 240, 240); pipq.fillStyle = 'rgba(78,168,255,0.15)'; pipq.beginPath(); pipq.arc(120, 120, 118, 0, Math.PI * 2); pipq.fill(); LSC.pip(pipq, { x: 120, y: 125, s: 0.72, t: pipT, mood: pipMood, armR: pipMood === 'wow' ? -1.2 : -0.4, armL: 0.6 }); }
+    function kickPip() { if (!pipRaf) drawPipQ(); }
+    if (window.IntersectionObserver) new IntersectionObserver(es => { pipSeen = es[es.length - 1].isIntersecting; if (pipSeen) kickPip(); }).observe(pipCanvas);   // only animate Curie while she is on screen
     const praise = ['Yes! That\'s it!', 'You got it, little scientist!', 'Brilliant!']; const nudge = ['Not quite. Try another one!', 'Hmm, have another think!', 'Close! Try again.'];
-    let answered = 0;
-    root.querySelectorAll('.q').forEach((q, qi) => {
-      const fb = q.querySelector('.fb'); let done = false;
-      q.querySelectorAll('button').forEach(b => b.addEventListener('click', () => {
-        if (done) return;
-        if (b.dataset.ok === '1') { done = true; b.classList.add('yes'); q.querySelectorAll('button').forEach(o => { if (o !== b) o.classList.add('no'); }); fb.textContent = praise[qi % praise.length]; pipMood = 'wow'; answered++; pipsays.textContent = answered === 3 ? 'You found all three answers! You are a real little scientist!' : praise[qi % praise.length]; }
+    let answered = 0, moodTimer = 0; const qs = [...root.querySelectorAll('.q')];
+    qs.forEach((q, qi) => {
+      const fb = q.querySelector('.fb');
+      q.querySelectorAll('.opts button').forEach(b => b.addEventListener('click', () => {
+        if (q.dataset.done === '1') return;
+        if (b.dataset.ok === '1') { q.dataset.done = '1'; b.classList.add('yes'); q.querySelectorAll('.opts button').forEach(o => { if (o !== b) o.classList.add('no'); }); fb.textContent = praise[qi % praise.length]; pipMood = 'wow'; answered++; pipsays.textContent = answered === 3 ? 'You found all three answers! You are a real little scientist!' : praise[qi % praise.length]; }
         else { b.classList.add('no'); fb.textContent = nudge[qi % nudge.length]; pipMood = 'think'; pipsays.textContent = nudge[qi % nudge.length]; }
-        setTimeout(() => { pipMood = 'happy'; }, 2500);
+        clearTimeout(moodTimer); moodTimer = setTimeout(() => { pipMood = 'happy'; }, 2500);
       }));
     });
+    // "Start the quiz again": every question answerable again, with its options in a new order in which the right
+    // answer (data-ok travels with its button) sits somewhere else, so a second go is not remembering positions
+    function reshuffle(opts) {
+      const bs = [...opts.children]; if (bs.length < 2) return; const ri = Math.max(0, bs.findIndex(b => b.dataset.ok === '1'));
+      const rest = bs.filter((_, i) => i !== ri); for (let i = rest.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [rest[i], rest[j]] = [rest[j], rest[i]]; }
+      let at = Math.floor(Math.random() * (bs.length - 1)); if (at >= ri) at++;
+      rest.splice(at, 0, bs[ri]); for (const b of rest) opts.appendChild(b);
+    }
+    $(root, '.qreset').addEventListener('click', () => {
+      answered = 0; clearTimeout(moodTimer); pipMood = 'happy';
+      for (const q of qs) { delete q.dataset.done; q.querySelector('.fb').textContent = ''; q.querySelectorAll('.opts button').forEach(b => b.classList.remove('yes', 'no')); reshuffle(q.querySelector('.opts')); }
+      pipsays.textContent = "Let's try again! Tap an answer.";
+      const first = qs[0] && qs[0].querySelector('p'); if (first) { first.tabIndex = -1; first.focus(); }   // keyboard and screen-reader users start at question 1
+    });
     const api = {
-      get state() { return state; }, get mode() { return mode; },
-      show() { active = true; player.drawFrame(started ? (audio.currentTime || 0) : POSTER_T); setMode(mode); drawPipQ(); },
-      hide() { active = false; cancelAnimationFrame(raf); audio.pause(); setPP(); if (cueAudio) cueAudio.pause(); }
+      get state() { return state; }, get mode() { return mode; }, get task() { return task; }, tasks: TASKS.length,
+      get lastPointer() { return lastPointer && { x: lastPointer.x, y: lastPointer.y, type: lastPointer.type }; },   // last pointer sent to the activity, 1920 x 1080 units
+      get fullscreen() { return fsMode; },                                                                            // '' | 'native' | 'pseudo'
+      get cueLog() { return cueLog.slice(); }, cue(id) { if (mode === 'play' && active) cue(id); },                // tests: the queue's decisions; request a cue as an activity would
+      get speaking() { return !!(cueAudio && !cueAudio.paused && !cueAudio.ended); },                                  // tests: Curie is saying a cue right now
+      show() { active = true; dirty = true; setMode(mode); kickPip(); },
+      hide() { active = false; if (fsMode || fsPending) exitFs(); if (raf) cancelAnimationFrame(raf); raf = 0; audio.pause(); setPP(); if (cueAudio) cueAudio.pause(); }
     };
     mounted[ep] = api; window.__lsc = mounted; return api;
   }
