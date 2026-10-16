@@ -7560,3 +7560,654 @@
     ]
   };
 })(typeof window !== 'undefined' ? window : globalThis);
+
+/* Episode 17 — Where do rainbows come from?
+   Story: the rain stops, the sun peeks out (low, behind Curie), a rainbow! -> look closer: sunlight is all the colours mixed together;
+   a prism spreads them out (red bends least, violet most); a raindrop is a tiny prism: in, bend, bounce off the back, bend again
+   on the way out (refraction); millions of drops send their colours to your eyes (red from higher drops, violet from lower ones).
+   -> test: facing the sun, no rainbow; sun behind, rain in front, there it is. -> wow fact: a rainbow is a whole circle, the
+   ground hides the bottom. -> say it -> try at home
+   (spray bottle, sun behind you). Try it 1 "Make a rainbow" (drag the sun), Try it 2 "Split the light" (prism or raindrop).
+   Optics: the prism and raindrop pictures are real ray traces (Snell's law, reflection) with each colour's bending made
+   about ten times bigger than in real glass or water, so the fan can be seen; the order of the colours is the real one. */
+(function (global) {
+  const L = global.LSC; const LSC = L; const { W, H, P, E, seg, clamp, lerp, circle, ellipse, text, roundRect } = L;
+  L.episodes = L.episodes || {};
+  const PI = Math.PI, TAU = PI * 2;
+
+  // ---------- colours: red (outside of the bow) ... violet (inside) ----------
+  const SPEC = ['#FF3B3B', '#FF8C1A', '#FFD21F', '#3CC75A', '#3D8BFF', '#9B4DFF'];
+  const SPEC_NAMES = ['red', 'orange', 'yellow', 'green', 'blue', 'violet'];
+  const N_PRISM = [1.42, 1.45, 1.48, 1.51, 1.54, 1.58];   // glass, bending exaggerated (real: about 1.51 red .. 1.53 violet)
+  const N_DROP = [1.31, 1.326, 1.342, 1.358, 1.374, 1.39]; // water, exaggerated (real: about 1.331 red .. 1.343 violet)
+  const N_DROP_W = 1.35;                                   // the single white path of e4
+  const LAB = '#1E2A47', LAB_LINE = 'rgba(120,170,255,0.10)', DROP_FILL = 'rgba(150,215,255,0.42)';
+  const sstep = (a, b, x) => { const p = clamp((x - a) / (b - a), 0, 1); return p * p * (3 - 2 * p); };
+
+  // ---------- 2D vectors and the optics (Snell's law; reflection) ----------
+  const dot = (a, b) => a[0] * b[0] + a[1] * b[1], add = (a, b) => [a[0] + b[0], a[1] + b[1]], sub = (a, b) => [a[0] - b[0], a[1] - b[1]], mul = (a, k) => [a[0] * k, a[1] * k];
+  const unit = a => { const l = Math.hypot(a[0], a[1]) || 1; return [a[0] / l, a[1] / l]; };
+  function refract(d, n, eta) { const ci = -dot(n, d), k = 1 - eta * eta * (1 - ci * ci); if (k < 0) return null; return unit(add(mul(d, eta), mul(n, eta * ci - Math.sqrt(k)))); }
+  const reflect = (d, n) => sub(d, mul(n, 2 * dot(d, n)));
+  function segHit(o, d, a, b) { const e = sub(b, a), den = d[0] * e[1] - d[1] * e[0]; if (Math.abs(den) < 1e-9) return null; const w = sub(a, o), t = (w[0] * e[1] - w[1] * e[0]) / den, u = (w[0] * d[1] - w[1] * d[0]) / den; return (t > 1e-6 && u >= 0 && u <= 1) ? t : null; }
+  function prismVerts(cx, cy, s, rot) { return [0, 1, 2].map(i => { const a = -PI / 2 + i * TAU / 3 + rot; return [cx + Math.cos(a) * s / Math.sqrt(3), cy + Math.sin(a) * s / Math.sqrt(3)]; }); }
+  // a ray (o, d) through a glass triangle V with index n -> {pts: [entry, ..., exit], out: direction after leaving} or null (missed)
+  function prismTrace(V, o, d, n) {
+    const cen = [(V[0][0] + V[1][0] + V[2][0]) / 3, (V[0][1] + V[1][1] + V[2][1]) / 3], ed = [[V[0], V[1]], [V[1], V[2]], [V[2], V[0]]];
+    const outward = (a, b) => { let nn = unit([b[1] - a[1], -(b[0] - a[0])]); if (dot(nn, sub(mul(add(a, b), 0.5), cen)) < 0) nn = mul(nn, -1); return nn; };
+    let best = null; ed.forEach((e, i) => { const t = segHit(o, d, e[0], e[1]); if (t != null && (!best || t < best.t)) best = { t, i }; });
+    if (!best) return null;
+    const p1 = add(o, mul(d, best.t)); let dd = refract(d, outward(...ed[best.i]), 1 / n); const pts = [p1]; let cur = p1, ei = best.i;
+    for (let k = 0; k < 4; k++) {
+      let nb = null; ed.forEach((e, i) => { if (i === ei) return; const t = segHit(cur, dd, e[0], e[1]); if (t != null && (!nb || t < nb.t)) nb = { t, i }; });
+      if (!nb) return { pts, out: dd };
+      const p = add(cur, mul(dd, nb.t)); pts.push(p); const on = outward(...ed[nb.i]), r = refract(dd, mul(on, -1), n);
+      if (r) return { pts, out: r, face: nb.i, entry: best.i };
+      dd = reflect(dd, on); cur = p; ei = nb.i;
+    }
+    return { pts, out: dd };
+  }
+  // a ray (o, d) into a round drop (centre c, radius R): in (bends), bounces off the back, out (bends again) -> {pts: [in, back, out], out, b} or null
+  function dropTrace(c, R, o, d, n) {
+    const oc = sub(o, c), b = dot(oc, d), cc = dot(oc, oc) - R * R, disc = b * b - cc; if (disc < 0) return null;
+    const t1 = -b - Math.sqrt(disc); if (t1 < 0) return null;
+    const p1 = add(o, mul(d, t1)), N1 = mul(sub(p1, c), 1 / R), d1 = refract(d, N1, 1 / n);
+    const p2 = add(p1, mul(d1, -2 * dot(d1, sub(p1, c)))), d2 = reflect(d1, mul(sub(p2, c), 1 / R));
+    const p3 = add(p2, mul(d2, -2 * dot(d2, sub(p2, c)))), d3 = refract(d2, mul(sub(p3, c), -1 / R), n);
+    const imp = (oc[0] * d[1] - oc[1] * d[0]) / R;   // signed impact: how far from the middle the ray hits (-1..1)
+    return { pts: [p1, p2, p3], out: d3, b: imp };
+  }
+
+  // ---------- drawing helpers ----------
+  // a light ray along points pts (polyline), drawn up to length `len` (Infinity = all); glow under a bright core
+  function polyLen(pts) { let s = 0; for (let i = 1; i < pts.length; i++) s += Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]); return s; }
+  function beam(ctx, pts, len, color, lw, alpha) {
+    if (len <= 0 || alpha <= 0) return;
+    const path = []; let left = len; path.push(pts[0]);
+    for (let i = 1; i < pts.length && left > 0; i++) { const a = pts[i - 1], b = pts[i], l = Math.hypot(b[0] - a[0], b[1] - a[1]); if (l <= left) { path.push(b); left -= l; } else { const k = left / l; path.push([a[0] + (b[0] - a[0]) * k, a[1] + (b[1] - a[1]) * k]); left = 0; } }
+    ctx.save(); ctx.globalAlpha = clamp(alpha, 0, 1); ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    const line = () => { ctx.beginPath(); ctx.moveTo(path[0][0], path[0][1]); for (let i = 1; i < path.length; i++) ctx.lineTo(path[i][0], path[i][1]); ctx.stroke(); };
+    ctx.strokeStyle = color; ctx.globalAlpha = clamp(alpha, 0, 1) * 0.25; ctx.lineWidth = lw * 2.6; line();
+    ctx.globalAlpha = clamp(alpha, 0, 1); ctx.lineWidth = lw; line();
+    if (color === '#FFFFFF') { ctx.strokeStyle = '#FFF6C8'; ctx.lineWidth = lw * 0.4; line(); }
+    ctx.restore();
+  }
+  // a rainbow: six bands, red outermost. (cx, cy) centre, R outer radius, band = width of one colour. o: {a0, a1, reveal 0..1, alpha, ghost}
+  function rainbow(ctx, cx, cy, R, band, o) {
+    o = o || {}; const a0 = o.a0 == null ? PI : o.a0, a1 = o.a1 == null ? TAU : o.a1, rev = o.reveal == null ? 1 : o.reveal, al = o.alpha == null ? 0.9 : o.alpha;
+    if (rev <= 0 || al <= 0) return; const end = a0 + (a1 - a0) * clamp(rev, 0, 1);
+    ctx.save(); ctx.globalAlpha = al; ctx.lineCap = 'butt';
+    const fd = o.fade || 0;
+    if (fd > 0) { const n = 8; for (let k = 0; k < n; k++) { ctx.globalAlpha = al * (k + 0.5) / n; SPEC.forEach((c, i) => { ctx.strokeStyle = c; ctx.lineWidth = band + 1.5; ctx.beginPath(); ctx.arc(cx, cy, R - band * (i + 0.5), a0 + fd * k / n, a0 + fd * (k + 1) / n + 0.003); ctx.stroke(); }); } ctx.globalAlpha = al; }
+    SPEC.forEach((c, i) => { ctx.strokeStyle = c; ctx.lineWidth = band + 1.5; ctx.beginPath(); ctx.arc(cx, cy, R - band * (i + 0.5), a0 + fd, Math.max(a0 + fd, end)); ctx.stroke(); });
+    if (o.shine !== false) { ctx.globalAlpha = al * 0.25; ctx.strokeStyle = P.white; ctx.lineWidth = band * 0.6; ctx.beginPath(); ctx.arc(cx, cy, R + band * 0.4, a0 + fd, Math.max(a0 + fd, end)); ctx.stroke(); }
+    ctx.restore();
+  }
+  function labBg(ctx) {
+    ctx.fillStyle = LAB; ctx.fillRect(-W, -H, 3 * W, 3 * H);
+    ctx.strokeStyle = LAB_LINE; ctx.lineWidth = 3;
+    for (let x = -W; x <= 2 * W; x += 120) { ctx.beginPath(); ctx.moveTo(x, -H); ctx.lineTo(x, 2 * H); ctx.stroke(); }
+    for (let y = -H; y <= 2 * H; y += 120) { ctx.beginPath(); ctx.moveTo(-W, y); ctx.lineTo(2 * W, y); ctx.stroke(); }
+  }
+  // a glass prism: triangle V
+  function prism(ctx, V, a) {
+    if (a <= 0) return; ctx.save(); ctx.globalAlpha = clamp(a, 0, 1); ctx.lineJoin = 'round';
+    ctx.beginPath(); ctx.moveTo(V[0][0], V[0][1]); ctx.lineTo(V[1][0], V[1][1]); ctx.lineTo(V[2][0], V[2][1]); ctx.closePath();
+    ctx.fillStyle = 'rgba(190,230,255,0.30)'; ctx.fill(); ctx.strokeStyle = '#DFF3FF'; ctx.lineWidth = 9; ctx.stroke();
+    // shine stripes
+    const c = [(V[0][0] + V[1][0] + V[2][0]) / 3, (V[0][1] + V[1][1] + V[2][1]) / 3];
+    ctx.strokeStyle = 'rgba(255,255,255,0.55)'; ctx.lineWidth = 8; ctx.lineCap = 'round';
+    const q = (i, k) => [lerp(V[i][0], c[0], k), lerp(V[i][1], c[1], k)];
+    const p0 = q(0, 0.35), p2 = q(2, 0.3); ctx.beginPath(); ctx.moveTo(p0[0], p0[1]); ctx.lineTo(lerp(p0[0], p2[0], 0.45), lerp(p0[1], p2[1], 0.45)); ctx.stroke();
+    ctx.restore();
+  }
+  // a raindrop with a calm face: centre (x, y), radius r. o: {face: 0..1, fx, fy (face offset in r), fs (face size in r), t, alpha, sq (squash)}
+  function drop(ctx, x, y, r, o) {
+    o = o || {}; const t = o.t || 0, al = o.alpha == null ? 1 : o.alpha; if (al <= 0 || r <= 0) return;
+    const sq = o.sq || 0; ctx.save(); ctx.globalAlpha = al; ctx.translate(x, y); ctx.scale(1 + sq, 1 - sq);
+    circle(ctx, 0, 0, r, o.fill || DROP_FILL);
+    ctx.strokeStyle = '#BFE6FF'; ctx.lineWidth = Math.max(4, r * 0.035); ctx.beginPath(); ctx.arc(0, 0, r, 0, TAU); ctx.stroke();
+    ctx.fillStyle = 'rgba(255,255,255,0.6)'; ctx.beginPath(); ctx.ellipse(-r * 0.42, -r * 0.5, r * 0.16, r * 0.08, -0.7, 0, TAU); ctx.fill();
+    const fa = o.face == null ? 1 : o.face;
+    if (fa > 0) {
+      const fs = (o.fs || 0.55) * r, fx = (o.fx || 0) * r, fy = (o.fy || 0) * r, md = o.mood || 'happy'; ctx.save(); ctx.globalAlpha = al * fa; ctx.translate(fx, fy);
+      const ink = '#16304F', lw = Math.max(3, fs * 0.09); ctx.lineCap = 'round'; ctx.strokeStyle = ink; ctx.lineWidth = lw;
+      const blink = ((t * 0.45 + 0.3) % 1) > 0.93;
+      for (const sx of [-1, 1]) {
+        const ex = sx * fs * 0.38, ey = -fs * 0.12;
+        if (blink) { ctx.beginPath(); ctx.arc(ex, ey + fs * 0.06, fs * 0.13, PI * 1.1, PI * 1.9); ctx.stroke(); }
+        else { ellipse(ctx, ex, ey, fs * 0.12, fs * 0.16, ink); circle(ctx, ex - fs * 0.04, ey - fs * 0.06, fs * 0.045, P.white); }
+      }
+      circle(ctx, -fs * 0.62, fs * 0.12, fs * 0.11, 'rgba(255,120,150,0.55)'); circle(ctx, fs * 0.62, fs * 0.12, fs * 0.11, 'rgba(255,120,150,0.55)');
+      { ctx.beginPath(); ctx.arc(0, fs * 0.02, fs * 0.24, 0.2 * PI, 0.8 * PI); ctx.stroke(); }
+      ctx.restore();
+    }
+    ctx.restore();
+  }
+  // a little falling raindrop (teardrop streak for rain)
+  function rainStreaks(ctx, x0, x1, y0, y1, t, a, seed, n, speed) {
+    if (a <= 0) return; const r = L.rng(seed || 3); ctx.save(); ctx.globalAlpha = clamp(a, 0, 1); ctx.strokeStyle = 'rgba(120,170,230,0.85)'; ctx.lineWidth = 5; ctx.lineCap = 'round';
+    for (let i = 0; i < (n || 40); i++) { const x = x0 + r() * (x1 - x0), ph = r(), sp = (speed || 700) * (0.8 + 0.4 * r()), h = y1 - y0, y = y0 + ((ph * h + t * sp) % h); ctx.beginPath(); ctx.moveTo(x - 4, y - 26); ctx.lineTo(x, y); ctx.stroke(); }
+    ctx.restore();
+  }
+  function greyCloud(ctx, x, y, s, a) { if (a <= 0) return; ctx.save(); ctx.globalAlpha = clamp(a, 0, 1); L.cloud(ctx, x, y, s, '#AEB8C6', { outline: '#8D98A8' }); ctx.restore(); }
+  function puddle(ctx, x, y, w, t) { ellipse(ctx, x, y, w, w * 0.18, '#8CC8F0', '#6FA9D6', 4); ctx.save(); ctx.globalAlpha = 0.6; ellipse(ctx, x - w * 0.25, y - 3, w * 0.3, w * 0.04, P.white); ctx.restore(); const k = (t * 0.6) % 1; ctx.save(); ctx.globalAlpha = 0.5 * (1 - k); ctx.strokeStyle = P.white; ctx.lineWidth = 3; ctx.beginPath(); ctx.ellipse(x + w * 0.2, y, w * 0.3 * k + 6, w * 0.06 * k + 2, 0, 0, TAU); ctx.stroke(); ctx.restore(); }
+  function stk(ctx, str, x, y, pIn, pOut, o) { L.sticker(ctx, str, x, y, pIn * (1 - (pOut || 0)), o); }
+  function popAt(ctx, cx, cy, p, fn) { if (p <= 0) return; const k = E.outBack(clamp(p, 0, 1)); ctx.save(); ctx.translate(cx, cy); ctx.scale(k, k); ctx.translate(-cx, -cy); fn(); ctx.restore(); }
+  function tick(ctx, x, y, s, p) { if (p <= 0) return; popAt(ctx, x, y, p, () => { circle(ctx, x, y, 62 * s, P.green, P.ink, 7); ctx.strokeStyle = P.white; ctx.lineWidth = 16 * s; ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.beginPath(); ctx.moveTo(x - 28 * s, y + 2 * s); ctx.lineTo(x - 6 * s, y + 24 * s); ctx.lineTo(x + 30 * s, y - 22 * s); ctx.stroke(); }); }
+  function cross(ctx, x, y, s, p) { if (p <= 0) return; popAt(ctx, x, y, p, () => { circle(ctx, x, y, 62 * s, P.red, P.ink, 7); ctx.strokeStyle = P.white; ctx.lineWidth = 16 * s; ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(x - 24 * s, y - 24 * s); ctx.lineTo(x + 24 * s, y + 24 * s); ctx.moveTo(x + 24 * s, y - 24 * s); ctx.lineTo(x - 24 * s, y + 24 * s); ctx.stroke(); }); }
+
+  // ---------- props ----------
+  // Curie. o = L.pip options + hop (px up) + shade (0..1: her right hand comes up over her eyes against a bright sun)
+  function curie(ctx, o) {
+    const s = o.s || 1, hop = o.hop || 0, sh = o.shade || 0;
+    ctx.save(); if (hop) ctx.translate(0, -hop);
+    L.pip(ctx, sh > 0 ? Object.assign({}, o, { armR: lerp(o.armR == null ? 0.5 : o.armR, 1.4, sh) }) : o);
+    if (sh > 0) {
+      const bob = o.bob === false ? 0 : Math.sin((o.t || 0) * 2.2) * 4;
+      ctx.save(); ctx.translate(o.x, o.y); ctx.scale(s * (o.flip ? -1 : 1), s); ctx.translate(0, bob); ctx.lineCap = 'round';
+      const hx = lerp(110, 46, sh), hy = lerp(60, -66, sh);
+      ctx.strokeStyle = P.pipDark; ctx.lineWidth = 32; ctx.beginPath(); ctx.moveTo(92, 20); ctx.quadraticCurveTo(118, -10, hx, hy); ctx.stroke();
+      ctx.strokeStyle = P.pip; ctx.lineWidth = 22; ctx.stroke();
+      ctx.save(); ctx.translate(hx - 4, hy - 4); ctx.rotate(-0.15); ellipse(ctx, 0, 0, 44, 15, P.pip, P.pipDark, 5); ctx.restore();
+      ctx.restore();
+    }
+    ctx.restore();
+  }
+  // spray bottle: nozzle tip at (x, y) pointing right
+  function sprayBottle(ctx, x, y, s) {
+    ctx.save(); ctx.translate(x, y); ctx.scale(s, s); ctx.lineJoin = 'round'; ctx.strokeStyle = P.ink; ctx.lineWidth = 6;
+    ctx.fillStyle = '#FF9BD2'; roundRect(ctx, -120, -36, 70, 46, 12); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = '#FF9BD2'; ctx.beginPath(); ctx.moveTo(-104, 10); ctx.lineTo(-96, 40); ctx.lineTo(-74, 40); ctx.lineTo(-66, 10); ctx.closePath(); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = 'rgba(160,220,255,0.85)'; roundRect(ctx, -140, 40, 110, 170, 26); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = 'rgba(80,170,240,0.6)'; ctx.fillRect(-134, 100, 98, 104);
+    ctx.fillStyle = '#FF9BD2'; roundRect(ctx, -54, -24, 54, 22, 8); ctx.fill(); ctx.stroke();
+    ctx.restore();
+  }
+  // a generic child seen from the side (a dark silhouette, facing right); feet at (x, y)
+  function child(ctx, x, y, s, armUp) {
+    ctx.save(); ctx.translate(x, y); ctx.scale(s, s); ctx.fillStyle = '#3B4466'; ctx.strokeStyle = '#3B4466'; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    ctx.lineWidth = 30; ctx.beginPath(); ctx.moveTo(-14, -10); ctx.lineTo(-10, -150); ctx.moveTo(18, -10); ctx.lineTo(12, -150); ctx.stroke();
+    roundRect(ctx, -46, -300, 90, 170, 40); ctx.fill();
+    circle(ctx, 0, -360, 62, '#3B4466'); ctx.beginPath(); ctx.moveTo(40, -380); ctx.quadraticCurveTo(76, -366, 58, -340); ctx.fill();
+    ctx.lineWidth = 26; ctx.beginPath(); ctx.moveTo(10, -260); ctx.lineTo(90, -250 - 30 * (armUp || 0)); ctx.lineTo(150, -250 - 40 * (armUp || 0)); ctx.stroke();
+    ctx.restore();
+  }
+
+  // ======================= THE PARK (s1, look) =======================
+  const PK = { cx: 560, cy: 690, s: 1.3, rbx: 1380, rby: 1010, rbR: 640, band: 34, sunX: 190, sunY: 610 };   // a low sun (about 20 degrees up), left of and behind Curie
+  function parkBg(ctx, t, Lt, o) {
+    // sky: grey while it rains, blue once the sun peeks out
+    const clear = Lt.cwin('s1', 'the sun is peeking', 1.6, E.inOut, -0.2);
+    L.sky(ctx, { top: '#8E9BAD', bottom: '#C7CED8' });
+    if (clear > 0) { ctx.save(); ctx.globalAlpha = clear; L.sky(ctx); ctx.restore(); }
+    // the sun, low on the left (behind Curie); a grey cloud slides off it
+    L.sun(ctx, PK.sunX, PK.sunY, 92, t);
+    const cs = Lt.cwin('s1', 'the sun is peeking', 1.4, E.inOut); greyCloud(ctx, PK.sunX - 20 - 480 * cs, PK.sunY - 10 - 40 * cs, 1.25, 1 - 0.3 * cs);
+    if (clear > 0) { ctx.save(); ctx.globalAlpha = clear; L.cloud(ctx, 760 + Math.sin(t * 0.3) * 15, 130, 0.7); ctx.restore(); }
+    // the rain cloud far away on the right, still raining there (rain in front of Curie)
+    greyCloud(ctx, 1500 + Math.sin(t * 0.2) * 10, 150, 1.5, 1); greyCloud(ctx, 1760, 190, 1.2, 1); greyCloud(ctx, 1240, 200, 1.0, 1);
+    rainStreaks(ctx, 1120, 1900, 230, 800, t, 0.5, 5, 46, 650);
+    // the rainbow (in front of Curie, opposite the sun)
+    if (o.rb > 0) rainbow(ctx, PK.rbx, PK.rby, PK.rbR, PK.band, { reveal: o.rb, alpha: 0.85 });
+    // rain over the park at the start: it stops
+    const stop = 1 - Lt.win('s1', 0.2, 1.4); rainStreaks(ctx, 0, 1120, -40, 840, t, stop * 0.9, 9, 60, 900);
+    L.ground(ctx, 820);
+    L.tree(ctx, 1840, 840, 0.8);
+    puddle(ctx, 1000, 860, 120, t); puddle(ctx, 1540, 900, 90, t + 0.5); puddle(ctx, 300, 900, 80, t + 0.2);
+  }
+  function parkScene(ctx, t, Lt) {
+    const rbP = Lt.cwin('s1', 'a rainbow', 1.3, E.inOut, 0.05);
+    parkBg(ctx, t, Lt, { rb: rbP });
+    // Curie's long shadow, pointing away from the low sun (once the sun is out)
+    const shA = Lt.cwin('s1', 'the sun is peeking', 1.2, E.inOut, 0.3); if (shA > 0) { ctx.save(); ctx.globalAlpha = 0.18 * shA; ellipse(ctx, PK.cx + 230, 838, 250, 18, P.ink); ctx.restore(); }
+    if (rbP > 0 && rbP < 1) L.sparkles(ctx, PK.rbx - PK.rbR * Math.cos(PI * rbP), PK.rby - PK.rbR * Math.sin(PI * rbP) * 0.98, t, 7, 6, 60, P.white);
+    // Curie looks right, at the rain and the rainbow (the sun is behind her)
+    let mood = 'talk', armR = -0.3, armL = 0.6, lookY = -0.3;
+    if (Lt.cafter('s1', 'and look')) { armR = -0.5; lookY = -0.5; }
+    if (Lt.cafter('s1', 'a rainbow')) { const j = Lt.cwin('s1', 'a rainbow', 0.6); mood = 'wow'; armR = lerp(-0.5, -0.9, j); }
+    if (Lt.after('look')) { mood = 'think'; armR = -0.6; armL = 0.5; lookY = -0.4; }
+    curie(ctx, { x: PK.cx, y: PK.cy, s: PK.s, t, mood, armR, armL, lookX: 0.8, lookY });
+  }
+  // the look-closer zoom: the same park, then a magnifier on one raindrop grows into the lab
+  const LK = { x: 1590, y: 470 };
+  function lookScene(ctx, t, Lt) {
+    parkScene(ctx, t, Lt);
+    // a drop hanging in the air in the rain (it will be zoomed)
+    const dp = Lt.cwin('look', "let's look", 0.4, E.outBack);
+    if (dp > 0) { drop(ctx, LK.x, LK.y, 26 * dp, { face: 0, t }); L.sparkles(ctx, LK.x, LK.y, t, 4, 4, 50, P.white); }
+    const p = seg(t, Lt.chunk('look', "let's look") + 0.35, Lt.end('look') + 0.7, E.in);
+    if (p > 0) {
+      const r = lerp(120, 2300, p);
+      ctx.save(); ctx.beginPath(); ctx.arc(LK.x, LK.y, r, 0, TAU); ctx.clip(); ctx.translate((LK.x - 960) * (1 - p), (LK.y - 470) * (1 - p)); ctx.translate(960, 470); ctx.scale(lerp(0.3, 1, p), lerp(0.3, 1, p)); ctx.translate(-960, -470);
+      labBg(ctx); drop(ctx, 960, 470, 200, { t, mood: 'happy', fs: 0.6 }); ctx.restore();
+      if (p < 1) L.magnifier(ctx, LK.x, LK.y, r, p);
+    }
+  }
+
+  // ======================= THE LAB (e1 .. e5) =======================
+  // e1: sunlight, white; zoom: it is all the colours mixed. e2: prism. e3: a drop is a tiny prism. e4: the path in the drop. e5: the colours fan out.
+  const PR = { cx: 880, cy: 420, s: 420, rot: -0.1, ang: -28 * PI / 180, off: -20 };
+  PR.V = prismVerts(PR.cx, PR.cy, PR.s, PR.rot); PR.d = [Math.cos(PR.ang), Math.sin(PR.ang)];
+  PR.o = [PR.cx - PR.d[0] * 700 - PR.d[1] * PR.off, PR.cy - PR.d[1] * 700 + PR.d[0] * PR.off];
+  PR.cardX = 1580;
+  PR.trace = N_PRISM.map(n => prismTrace(PR.V, PR.o, PR.d, n));
+  // the colour rays out of the prism, ending on the card
+  function prismRays(tr) { return tr.map(r => { const ex = r.pts[r.pts.length - 1], k = (PR.cardX - ex[0]) / r.out[0]; return { inside: [r.pts[0], ex], out: [ex, add(ex, mul(r.out, k))], end: add(ex, mul(r.out, k)) }; }); }
+  PR.rays = prismRays(PR.trace);
+  const DR = { cx: 1200, cy: 330, R: 235, ang: 32 * PI / 180, b: 0.86, endX: 520 };
+  DR.d = [Math.cos(DR.ang), Math.sin(DR.ang)]; DR.up = [Math.sin(DR.ang), -Math.cos(DR.ang)];
+  DR.o = add(sub([DR.cx, DR.cy], mul(DR.d, 900)), mul(DR.up, DR.b * DR.R));
+  function dropRays(n) { const r = dropTrace([DR.cx, DR.cy], DR.R, DR.o, DR.d, n); const k = (DR.endX - r.pts[2][0]) / r.out[0]; r.end = add(r.pts[2], mul(r.out, k)); return r; }
+  DR.white = dropRays(N_DROP_W); DR.cols = N_DROP.map(dropRays);
+  // where the incoming ray enters the picture (top edge)
+  DR.top = (() => { const p1 = DR.white.pts[0], k = (p1[1] - (-10)) / DR.d[1]; return sub(p1, mul(DR.d, k)); })();
+  // braided colour threads inside the zoom lens: the white beam is all the colours twisted together
+  function braid(ctx, x0, x1, y, amp, t, a) {
+    if (a <= 0) return; ctx.save(); ctx.globalAlpha = clamp(a, 0, 1); ctx.lineCap = 'round';
+    SPEC.forEach((c, i) => { ctx.strokeStyle = c; ctx.lineWidth = 14; ctx.beginPath(); for (let x = x0; x <= x1; x += 8) { const yy = y + amp * Math.sin((x - x0) / 55 - t * 4 + i * TAU / 6); x === x0 ? ctx.moveTo(x, yy) : ctx.lineTo(x, yy); } ctx.stroke(); });
+    ctx.restore();
+  }
+  function lens(ctx, cx, cy, r, p, inner) {
+    if (p <= 0) return; const k = E.outBack(clamp(p, 0, 1)), R = r * k;
+    ctx.save(); ctx.beginPath(); ctx.arc(cx, cy, R, 0, TAU); ctx.clip(); ctx.translate(cx, cy); ctx.scale(k, k); inner(ctx); ctx.restore();
+    L.magnifier(ctx, cx, cy, R, 1);
+  }
+  function labScene(ctx, t, Lt) {
+    labBg(ctx);
+    const inE2 = Lt.after('e2'), inE3 = Lt.after('e3');
+    // ---- the drop from the zoom: it shrinks to the corner and watches (e1, e2), then comes back as the big drop (e3 ..) ----
+    const shrink = Lt.win('e1', 0, 0.9, E.inOut), back = Lt.cwin('e3', 'raindrops', 0.9, E.inOut);
+    const DX = lerp(lerp(960, 1720, shrink), DR.cx, back), DY = lerp(lerp(470, 150, shrink), DR.cy, back), DRr = lerp(lerp(200, 72, shrink), DR.R, back);
+    const faceShift = Lt.cwin('e4', 0, 0.6, E.inOut);
+    const dmood = 'happy';   // a calm face
+    // ---- e1: the sunbeam ----
+    const e1a = (1 - Lt.cwin('e2', 'a prism', 0.6)) * Lt.win('e1', 0.3, 0.8);
+    if (e1a > 0) {
+      ctx.save(); ctx.globalAlpha = e1a; L.sun(ctx, 70, 400, 110, t, { face: false }); ctx.restore();
+      const len = seg(t, Lt.start('e1') + 0.4, Lt.start('e1') + 1.4) * 1900; beam(ctx, [[150, 400], [2000, 400]], len, '#FFFFFF', 30, e1a);
+      // the secret: inside the lens the white beam is all the colours twisted together
+      const lp = Lt.cwin('e1', 'it is all', 0.6, E.outBack) * (1 - Lt.cwin('e2', 'a prism', 0.4));
+      lens(ctx, 960, 400, 230, lp, c => { c.fillStyle = LAB; c.fillRect(-300, -300, 600, 600); braid(c, -260, 260, 0, 34, t, Lt.cwin('e1', 'it is all', 0.8, null, 0.3)); });
+      if (Lt.cafter('e1', 'but it has')) { const sp = Lt.cwin('e1', 'but it has', 0.4, E.outBack) * (1 - Lt.cwin('e1', 'it is all', 0.3)); if (sp > 0) L.questionMark(ctx, 960, 250, 0.8 * sp, t, P.sun); }
+    }
+    // ---- e2: the prism ----
+    const pa = Lt.cwin('e2', 'a prism', 0.6, E.outBack), shrinkP = Lt.cwin('e3', 'raindrops', 0.9, E.inOut), gone = Lt.cwin('e3', 'every drop', 0.7, E.inOut, 0.5);
+    if (pa > 0 && gone < 1) {
+      // in e3 the prism (and its rays) shrinks into a little icon on the left, then flies into the drop
+      const ic = [lerp(PR.cx, 470, shrinkP), lerp(PR.cy, 300, shrinkP)], ks = lerp(1, 0.4, shrinkP);
+      const fly = gone; const fx = lerp(ic[0], DR.cx, E.in(fly)), fy = lerp(ic[1], DR.cy, E.in(fly)), fk = ks * (1 - 0.8 * fly);
+      ctx.save(); ctx.globalAlpha = 1 - fly * 0.6; ctx.translate(fx, fy); ctx.scale(fk, fk); ctx.translate(-PR.cx, -PR.cy);
+      const tLight = Lt.cwin('e2', 'when light', 0.9), tIn = Lt.cwin('e2', 'when light', 0.5, null, 0.8), tFan = Lt.cwin('e2', 'spread', 0.7);
+      // the torch and the white beam to the prism
+      const entry = PR.trace[0].pts[0], src = add(PR.o, mul(PR.d, 60)), tq = sub(src, mul(PR.d, 32));
+      L.torch(ctx, tq[0], tq[1], PR.ang, tLight > 0, 0.8);
+      const Lin = Math.hypot(entry[0] - src[0], entry[1] - src[1]);
+      beam(ctx, [src, entry], tLight * Lin, '#FFFFFF', 22, 1);
+      // the colours: dim fan on "spread out", each one lights up as it is named
+      // each colour lights up as it is named (word starts measured in the narration as fractions of the chunk "Red, orange, yellow, green...", then "blue, and violet!")
+      const tR = Lt.chunkN('e2', E2_RED), dR = Lt.chunkN('e2', E2_RED + 1) - tR - 0.55, tV = Lt.chunk('e2', 'violet');
+      const named = [tR + 0.02 * dR, tR + 0.17 * dR, tR + 0.57 * dR, tR + 0.77 * dR, tV, tV + 1.18];   // measured on the Achernar narration, 15 Oct 2026
+      PR.rays.forEach((r, i) => {
+        const lit = seg(t, named[i] - 0.05, named[i] + 0.3), a = Math.max(0.0, tIn > 0 ? 0.3 * tIn : 0) * (1 - lit) + lit;
+        beam(ctx, r.inside, tIn * 400, SPEC[i], 8, tIn * (0.5 + 0.5 * Math.max(lit, tFan)));
+        const L2 = Math.hypot(r.out[1][0] - r.out[0][0], r.out[1][1] - r.out[0][1]);
+        beam(ctx, r.out, tFan * L2, SPEC[i], 14, Math.max(a, tFan * 0.45));
+      });
+      prism(ctx, PR.V, pa);
+      // the card where the colours land
+      if (shrinkP < 0.5) {
+        const ca = Lt.cwin('e2', 'spread', 0.5) * (1 - shrinkP * 2); ctx.save(); ctx.globalAlpha = ca; ctx.fillStyle = '#F5F7FB'; ctx.strokeStyle = P.ink; ctx.lineWidth = 6; roundRect(ctx, PR.cardX, 380, 36, 360, 10); ctx.fill(); ctx.stroke();
+        PR.rays.forEach((r, i) => { const lit = seg(t, named[i] - 0.05, named[i] + 0.3); ctx.fillStyle = SPEC[i]; ctx.globalAlpha = ca * Math.max(0.35 * tFan, lit); ctx.fillRect(PR.cardX + 4, r.end[1] - 13, 28, 26); if (lit > 0) { const ly = 560 + (i - 2.5) * 50; ctx.globalAlpha = ca * lit; ctx.strokeStyle = SPEC[i]; ctx.lineWidth = 4; ctx.beginPath(); ctx.moveTo(PR.cardX + 40, r.end[1]); ctx.lineTo(PR.cardX + 64, ly); ctx.stroke(); text(ctx, SPEC_NAMES[i], PR.cardX + 72, ly + 1, { size: 42, weight: 700, color: SPEC[i], align: 'left', stroke: P.ink, strokeWidth: 8 }); } });
+        ctx.restore();
+      }
+      ctx.restore();
+    }
+    // ---- e3 .. e5: the drop and the light inside it ----
+    const k3 = inE3 ? 1 : 0;
+    drop(ctx, DX, DY, DRr, { t, mood: dmood, fx: -0.32 * faceShift, fy: 0.02 * faceShift, fs: lerp(0.62, 0.42, faceShift) * (DRr > 120 ? 1 : 1.1), alpha: 1 });
+    if (Lt.after('e4')) {
+      const wa = 1 - Lt.cwin('e5', 'each colour', 0.6);
+      const tA = Lt.chunk('e4', 'light goes'), tB = Lt.chunk('e4', 'and bends.'), tC = Lt.chunk('e4', 'it bounces'), tD = Lt.chunk('e4', 'and bends again');
+      const W1 = DR.white, segs = [[DR.top, W1.pts[0]], [W1.pts[0], W1.pts[1]], [W1.pts[1], W1.pts[2]], [W1.pts[2], W1.end]];
+      const prog = [seg(t, tA + 0.1, tA + 1.0), seg(t, tB, tB + 0.6), seg(t, tC + 0.1, tC + 0.6), seg(t, tD + 0.1, tD + 1.1)];
+      segs.forEach((sg, i) => { const l = Math.hypot(sg[1][0] - sg[0][0], sg[1][1] - sg[0][1]); beam(ctx, sg, prog[i] * l, '#FFFFFF', 16, wa); });
+      // glowing marks where it bends and bounces
+      const mark = (p, a, c) => { if (a <= 0) return; ctx.save(); ctx.globalAlpha = clamp(a, 0, 1) * (0.6 + 0.4 * Math.sin(t * 6)); ctx.strokeStyle = c; ctx.lineWidth = 7; ctx.setLineDash([12, 9]); ctx.beginPath(); ctx.arc(p[0], p[1], 40, 0, TAU); ctx.stroke(); ctx.restore(); };
+      const m1 = Lt.cwin('e4', 'and bends.', 0.4) * (1 - Lt.cwin('e4', 'it bounces', 0.3)), m2 = Lt.cwin('e4', 'it bounces', 0.4, null, 0.2) * (1 - Lt.cwin('e4', 'and bends again', 0.3)), m3 = Lt.cwin('e4', 'and bends again', 0.4, null, 0.3) * (1 - Lt.cwin('e5', 0, 0.3));
+      mark(W1.pts[0], m1, P.sun); mark(W1.pts[1], m2, P.pink); mark(W1.pts[2], m3, P.sun);
+      if (Lt.after('e4')) { const sl = Lt.win('e4', 0, 0.5); ctx.save(); ctx.globalAlpha = sl * wa; text(ctx, 'sunlight', DR.top[0] + 150, 60, { size: 40, weight: 700, color: '#FFF3B0', stroke: P.ink, strokeWidth: 8 }); ctx.restore(); }
+      // e5: each colour bends a different amount: the fan
+      if (Lt.after('e5')) {
+        const ca = Lt.cwin('e5', 'each colour', 0.8), fan = Lt.cwin('e5', 'fan out', 0.9, E.out);
+        DR.cols.forEach((r, i) => {
+          const segsC = [[DR.top, r.pts[0]], [r.pts[0], r.pts[1]], [r.pts[1], r.pts[2]], [r.pts[2], r.end]];
+          segsC.forEach((sg, j) => { const l = Math.hypot(sg[1][0] - sg[0][0], sg[1][1] - sg[0][1]); beam(ctx, sg, (j < 3 ? ca : Math.max(ca * 0.25, fan)) * l, j === 0 ? '#FFFFFF' : SPEC[i], j === 0 ? 16 : 9, j === 0 ? ca * 0.8 : ca); });
+        });
+        if (fan > 0.6) { ctx.save(); ctx.globalAlpha = seg(fan, 0.6, 1); text(ctx, 'red', DR.cols[0].end[0] - 20, DR.cols[0].end[1] + 4, { size: 36, weight: 700, color: SPEC[0], align: 'right', stroke: P.ink, strokeWidth: 8 }); text(ctx, 'violet', DR.cols[5].end[0] - 20, DR.cols[5].end[1] - 4, { size: 36, weight: 700, color: SPEC[5], align: 'right', stroke: P.ink, strokeWidth: 8 }); ctx.restore(); }
+      }
+    }
+    if (inE3 && !Lt.after('e4')) { const eq = Lt.cwin('e3', 'every drop', 0.5, E.outBack); if (eq > 0 && gone < 1) text(ctx, '=', 720, 320, { size: 120 * eq, weight: 700, color: P.white, stroke: P.ink, strokeWidth: 12 }); }
+    // ---- Curie, small, watching ----
+    const cpos = inE3 ? { x: 250, y: 640, armR: -0.4, lookX: 0.9, lookY: -0.3 } : inE2 ? { x: 230, y: 260, armR: 0.3, lookX: 0.9, lookY: 0.5 } : { x: 1640, y: 640, armR: -0.7, lookX: -0.9, lookY: -0.4 };
+    const cmood = Lt.cafter('e1', 'it is all', 0.6) && !inE2 ? 'wow' : Lt.cafter('e5', 'fan out', 0.5) ? 'wow' : 'talk';
+    curie(ctx, { x: cpos.x, y: cpos.y, s: 0.8, t, mood: cmood, armR: cpos.armR, armL: 0.6, lookX: cpos.lookX, lookY: cpos.lookY });
+    // ---- stickers (one at a time) ----
+    const o = { size: 76, rot: -0.04 };
+    stk(ctx, 'white?', 600, 140, Lt.cwin('e1', 'sunlight looks', 0.5, null, 0.4), Lt.cwin('e1', 'it is all', 0.25), Object.assign({ bg: P.white }, o));
+    stk(ctx, 'ALL the colours!', 960, 120, Lt.cwin('e1', 'it is all', 0.5, null, 0.4), Lt.cwin('e2', 0, 0.25), Object.assign({ bg: P.sun }, o));
+    stk(ctx, 'PRISM!', 1350, 130, Lt.cwin('e2', 'a prism', 0.5, null, 0.2), Lt.cwin('e3', 0, 0.25), Object.assign({ bg: P.blue, color: P.white, size: 96 }, o));
+    stk(ctx, 'tiny prism!', 560, 150, Lt.cwin('e3', 'every drop', 0.5, null, 0.6), Lt.cwin('e4', 0, 0.25), Object.assign({ bg: P.pink }, o));
+    stk(ctx, 'bends!', 520, 150, Lt.cwin('e4', 'and bends.', 0.5), Lt.cwin('e4', 'it bounces', 0.25), Object.assign({ bg: P.sun }, o));
+    stk(ctx, 'bounces!', 520, 150, Lt.cwin('e4', 'it bounces', 0.5, null, 0.3), Lt.cwin('e4', 'and bends again', 0.25), Object.assign({ bg: P.pink }, o));
+    stk(ctx, 'bends again!', 520, 150, Lt.cwin('e4', 'and bends again', 0.5, null, 0.2), Lt.cwin('e5', 0, 0.25), Object.assign({ bg: P.sun }, o));
+    stk(ctx, 'REFRACTION', 560, 150, Lt.cwin('e5', 'scientists call', 0.6, null, REFR_OFF), Lt.cwin('e6', 0, 0.25), { bg: P.red, color: P.white, size: 92, rot: -0.04 });
+  }
+  const REFR_OFF = 2.36;   // the word "refraction" starts this long after the start of its chunk "Scientists call this bending... refraction."
+  const E2_RED = 3;       // e2's chunk "Red, orange, yellow, green..." is chunk number 3
+
+  // ======================= MILLIONS OF DROPS (e6) =======================
+  const MD = { ex: 420, ey: 640, sunA: 20 * PI / 180, K: 760, phi: [46, 44, 42, 40, 38, 36].map(a => a * PI / 180) };
+  MD.d = [Math.cos(MD.sunA), Math.sin(MD.sunA)]; MD.C = add([MD.ex, MD.ey], mul(MD.d, MD.K));
+  MD.drops = MD.phi.map((ph, i) => { const a = MD.sunA - ph, dist = MD.K / Math.cos(ph); return { x: MD.ex + Math.cos(a) * dist, y: MD.ey + Math.sin(a) * dist, r: MD.K * Math.tan(ph), i }; });
+  const RAIN_DROPS = (() => { const r = L.rng(17), a = []; for (let i = 0; i < 90; i++) a.push([960 + r() * 900, 120 + r() * 640, 6 + r() * 7, r() * 6]); return a; })();
+  function manyScene(ctx, t, Lt) {
+    L.sky(ctx); L.sun(ctx, 110, 525, 90, t);   // low sun on the line the sunlight comes along (20 degrees up from Curie's eye)
+    greyCloud(ctx, 1300, 70, 1.6, 1); greyCloud(ctx, 1650, 90, 1.4, 1);
+    const many = Lt.cwin('e6', 'millions', 1.0), send = Lt.cwin('e6', 'millions', 1.6, null, 1.2), see = Lt.cwin('e6', 'and you see', 1.1, E.inOut);
+    // the rainbow band appears where the rain is
+    if (see > 0) { const Ro = MD.drops[0].r + 22, a0 = TAU - Math.acos((1000 - MD.C[0]) / Ro); rainbow(ctx, MD.C[0], MD.C[1], Ro, (MD.drops[0].r - MD.drops[5].r + 44) / 6, { alpha: 0.75 * see, a0, a1: TAU, fade: 0.35 }); }
+    // lots of drops
+    RAIN_DROPS.forEach(([x, y, r, ph], i) => { const a = seg(many, i / 120, i / 120 + 0.3); if (a > 0) drop(ctx, x, y + 6 * Math.sin(t * 2 + ph), r * E.outBack(a), { face: 0 }); });
+    L.ground(ctx, 820);
+    // sunlight into six drops, and each sends one colour to Curie's eye: red from the higher drops, violet from the lower ones
+    MD.drops.forEach((dp, i) => {
+      const p = clamp(send * 1.6 - i * 0.12, 0, 1);
+      const sIn = sub([dp.x, dp.y], mul(MD.d, 1400)); beam(ctx, [sIn, [dp.x, dp.y]], 1400 * clamp(p * 2, 0, 1), '#FFFFFF', 6, 0.75);
+      const toEye = [[dp.x, dp.y], [MD.ex + 14, MD.ey - 4]]; beam(ctx, toEye, Math.hypot(dp.x - MD.ex, dp.y - MD.ey) * clamp(p * 2 - 1, 0, 1), SPEC[i], 8, 1);
+      drop(ctx, dp.x, dp.y, 30, { face: 0, fill: 'rgba(170,225,255,0.85)' }); if (p > 0.5) { ctx.save(); ctx.globalAlpha = seg(p, 0.5, 1); circle(ctx, dp.x, dp.y, 13, SPEC[i]); ctx.restore(); }
+    });
+    curie(ctx, { x: MD.ex - 34 * 0.95, y: MD.ey + 21 * 0.95, s: 0.95, t, mood: see > 0.3 ? 'wow' : 'talk', armR: -0.5, armL: 0.6, lookX: 0.9, lookY: -0.6 });
+    const o = { size: 76, rot: -0.04 };
+    stk(ctx, 'higher drops: red', 700, 140, Lt.cwin('e6', 'millions', 0.5, null, 2.2), Lt.cwin('e6', 'and you see', 0.25), Object.assign({ bg: SPEC[0], color: P.white }, o));
+    stk(ctx, 'lower drops: violet', 700, 290, Lt.cwin('e6', 'millions', 0.5, null, 3.0), Lt.cwin('e6', 'and you see', 0.25), Object.assign({ bg: SPEC[5], color: P.white }, o));
+    stk(ctx, 'a rainbow!', 690, 200, Lt.cwin('e6', 'and you see', 0.5, null, 0.6), 0, Object.assign({ bg: P.sun, size: 96 }, o));
+  }
+
+  // ======================= THE TEST (test, t1) =======================
+  const TS = { sunX: 210, sunY: 610, cx: 900, cy: 690, s: 1.3, rbx: 1560, rby: 950, rbR: 600 };
+  function testScene(ctx, t, Lt) {
+    L.sky(ctx);
+    L.sun(ctx, TS.sunX, TS.sunY, 100, t);
+    greyCloud(ctx, 1480, 150, 1.5, 1); greyCloud(ctx, 1740, 190, 1.2, 1); greyCloud(ctx, 1250, 190, 1.0, 1);
+    rainStreaks(ctx, 1130, 1900, 220, 800, t, 0.6, 5, 46, 650);
+    const tTurn = Lt.chunk('t1', 'sun behind me'), turn = seg(t, tTurn + 0.1, tTurn + 0.6, E.inOut);
+    const there = Lt.cwin('t1', 'there it is', 1.2, E.inOut, 0.1);
+    if (there > 0) rainbow(ctx, TS.rbx, TS.rby, TS.rbR, 34, { reveal: there, alpha: 0.85 });
+    L.ground(ctx, 820);
+    // glare from the sun while Curie faces it
+    const facing = Lt.cafter('test', 'in front of me') && t < tTurn + 0.35;
+    // "front" and "behind" pointers on the test line
+    const pf = Lt.cwin('test', 'in front of me', 0.5, E.outBack) * (1 - Lt.cwin('test', 'or behind me', 0.25));
+    const pb = Lt.cwin('test', 'or behind me', 0.5, E.outBack) * (1 - Lt.cwin('t1', 0, 0.25));
+    // facing the sun: she turns to the left (flip), hand shading her eyes
+    const spinK = Lt.after('t1') ? Math.cos(PI * turn) : facing ? Math.cos(PI * Lt.cwin('test', 'in front of me', 0.5, E.inOut)) : 1;   // scaleX: 1 facing right .. -1 facing left
+    const flip = spinK < 0, sx = Math.max(0.08, Math.abs(spinK));
+    const shade = Lt.after('t1') && t < tTurn;
+    const mood = there > 0.3 ? 'wow' : shade ? 'think' : 'talk';
+    ctx.save(); ctx.translate(TS.cx, 0); ctx.scale(sx, 1); ctx.translate(-TS.cx, 0);
+    const shP = Lt.win('t1', 0, 0.4, E.out) * (1 - seg(t, tTurn, tTurn + 0.3));
+    curie(ctx, { x: TS.cx, y: TS.cy, s: TS.s, t, mood, flip, shade: shP, armR: there > 0 ? -1.0 : -0.4, armL: there > 0 ? -1.0 : 0.6, lookX: 0.9, lookY: shade ? -0.2 : -0.5 });
+    ctx.restore();
+    if (shade) { ctx.save(); ctx.globalAlpha = 0.55 + 0.25 * Math.sin(t * 8); ctx.strokeStyle = '#FFE680'; ctx.lineWidth = 10; ctx.lineCap = 'round'; for (let i = 0; i < 5; i++) { const a = -0.5 + i * 0.25; ctx.beginPath(); ctx.moveTo(TS.sunX + Math.cos(a) * 150, TS.sunY + Math.sin(a) * 150); ctx.lineTo(TS.sunX + Math.cos(a) * 260, TS.sunY + Math.sin(a) * 260); ctx.stroke(); } ctx.restore(); }
+    if (pf > 0) { ctx.save(); ctx.globalAlpha = clamp(pf, 0, 1); L.arrow(ctx, TS.cx - 210, 560, TS.cx - 520, 540, P.red, 16); ctx.restore(); }
+    if (pb > 0) { ctx.save(); ctx.globalAlpha = clamp(pb, 0, 1); L.arrow(ctx, TS.cx + 210, 520, TS.cx + 470, 440, P.blue, 16); text(ctx, 'behind?', TS.cx + 470, 380, { size: 52, weight: 700, color: P.blue, stroke: P.white, strokeWidth: 10 }); ctx.restore(); }
+    if (pf > 0) { ctx.save(); ctx.globalAlpha = clamp(pf, 0, 1); text(ctx, 'in front?', TS.cx - 470, 450, { size: 52, weight: 700, color: P.red, stroke: P.white, strokeWidth: 10 }); ctx.restore(); }
+    // results
+    cross(ctx, 560, 230, 1.0, Lt.cwin('t1', 'no rainbow', 0.5, null, 0.1) * (1 - Lt.cwin('t1', 'there it is', 0.3)));
+    tick(ctx, 1560, 520, 1.0, Lt.cwin('t1', 'there it is', 0.5, null, 0.7));
+    const o = { size: 80, rot: -0.04 };
+    stk(ctx, 'TEST!', 960, 120, Lt.cwin('test', 'scientists test', 0.5), Lt.cwin('test', 'in front of me', 0.25), Object.assign({ bg: P.blue, color: P.white, size: 100 }, o));
+    stk(ctx, 'no rainbow', 900, 130, Lt.cwin('t1', 'no rainbow', 0.5, null, 0.2), Lt.cwin('t1', 'sun behind me', 0.25), Object.assign({ bg: P.grey }, o));
+    stk(ctx, 'sun behind, rain in front', 900, 130, Lt.cwin('t1', 'sun behind me', 0.5, null, 0.4), Lt.cwin('t1', 'there it is', 0.25), Object.assign({ bg: P.sun, size: 64 }, o));
+    stk(ctx, 'There it is!', 1100, 130, Lt.cwin('t1', 'there it is', 0.5, null, 0.5), 0, Object.assign({ bg: P.green, color: P.white, size: 92 }, o));
+  }
+
+  // ======================= WOW FACT: A CIRCLE (fact) =======================
+  const FC = { cx: 1180, cy: 560, R: 270, band: 18, gy: 560 };
+  function factScene(ctx, t, Lt) {
+    L.sky(ctx);
+    L.sun(ctx, 150, 420, 80, t);
+    greyCloud(ctx, 1180, 110, 1.4, 1); greyCloud(ctx, 1450, 140, 1.1, 1); greyCloud(ctx, 920, 150, 0.9, 1);
+    rainStreaks(ctx, 860, 1520, 170, 560, t, 0.45, 8, 40, 600);
+    const arc = Lt.win('fact', 0.2, 0.8), full = Lt.cwin('fact', 'a rainbow is really', 1.4, E.inOut, 0.9), hide = Lt.cwin('fact', 'the ground hides', 0.8, E.inOut);
+    rainbow(ctx, FC.cx, FC.cy, FC.R, FC.band, { reveal: arc, alpha: 0.9 });
+    // the ground (a hill landscape), drawn see-through for a moment so the hidden part shows
+    ctx.save(); ctx.fillStyle = P.ground; ctx.beginPath(); ctx.moveTo(0, FC.gy + 20); ctx.quadraticCurveTo(500, FC.gy - 40, 960, FC.gy); ctx.quadraticCurveTo(1450, FC.gy + 30, W, FC.gy - 10); ctx.lineTo(W, H); ctx.lineTo(0, H); ctx.closePath(); ctx.fill(); ctx.strokeStyle = P.groundDark; ctx.lineWidth = 8; ctx.stroke(); ctx.restore();
+    ctx.fillStyle = P.groundDark; ctx.fillRect(0, H - 90, W, 90);
+    if (full > 0) {
+      // the lower half: bright while it is shown, then dimmed under the ground (dashed outline shows it is still there)
+      const a = 1 - 0.65 * hide;
+      ctx.save(); ctx.beginPath(); ctx.rect(0, FC.cy - 2, W, H); ctx.clip(); rainbow(ctx, FC.cx, FC.cy, FC.R, FC.band, { a0: TAU, a1: TAU + PI, reveal: full, alpha: 0.9 * a, shine: false }); ctx.restore();
+      if (hide > 0) { ctx.save(); ctx.globalAlpha = hide; ctx.strokeStyle = P.white; ctx.lineWidth = 6; ctx.setLineDash([18, 14]); ctx.beginPath(); ctx.arc(FC.cx, FC.cy, FC.R + 4, 0, PI); ctx.stroke(); ctx.beginPath(); ctx.arc(FC.cx, FC.cy, FC.R - 6 * FC.band - 4, 0, PI); ctx.stroke(); ctx.restore(); }
+    }
+    curie(ctx, { x: 420, y: FC.gy - 112 * 1.05 - 6, s: 1.05, t, mood: full > 0.6 && !Lt.cafter('fact', 'the ground hides') ? 'wow' : 'talk', armR: -0.6, armL: 0.6, lookX: 0.9, lookY: -0.2 });
+    const o = { size: 84, rot: -0.04 };
+    stk(ctx, 'WOW FACT!', 760, 150, Lt.win('fact', 0.1, 0.5), Lt.cwin('fact', 'a rainbow is really', 0.25, null, 1.0), Object.assign({ bg: P.pink }, o));
+    stk(ctx, 'A CIRCLE!', 760, 150, Lt.cwin('fact', 'a rainbow is really', 0.5, null, 1.1), Lt.cwin('fact', 'the ground hides', 0.25), Object.assign({ bg: P.sun, size: 96 }, o));
+    stk(ctx, 'hidden by the ground', 840, 130, Lt.cwin('fact', 'the ground hides', 0.5, null, 0.5), 0, Object.assign({ bg: P.green, color: P.white, size: 66 }, o));
+    if (hide > 0) { ctx.save(); ctx.globalAlpha = hide; L.arrow(ctx, 760, 700, FC.cx - FC.R + 40, 690, P.white, 12); ctx.restore(); }
+  }
+
+  // ======================= SAY IT, TRY AT HOME =======================
+  function sayScene(ctx, t, Lt) {
+    L.sky(ctx); L.sun(ctx, 140, 610, 80, t);
+    greyCloud(ctx, 1500, 120, 1.4, 1); greyCloud(ctx, 1760, 160, 1.1, 1);
+    rainStreaks(ctx, 1100, 1920, 170, 800, t, 0.4, 14, 40, 600);
+    rainbow(ctx, 1200, 1060, 700, 36, { alpha: 0.85 });
+    L.ground(ctx, 820);
+    curie(ctx, { x: 480, y: 690, s: 1.25, t, mood: 'talk', armR: -1.2 + 0.2 * Math.sin(t * 8), armL: -1.2 - 0.2 * Math.sin(t * 8), lookX: 0.4, lookY: -0.3 });
+    L.sayItSticker(ctx, 'Raindrops split the sunlight!', Lt.cwin('sayit', 'raindrops', 0.8), t);
+  }
+  const TR = { kx: 760, ky: 800, sunX: 260, sunY: 560 };
+  function tryScene(ctx, t, Lt) {
+    L.sky(ctx, { top: '#8FD0FF', bottom: '#FFF1D6' });
+    const sunP = Lt.cwin('try1', 'on a sunny', 1.0, E.inOut);
+    L.sun(ctx, TR.sunX, lerp(300, TR.sunY, sunP), 85, t);
+    L.ground(ctx, 820);
+    L.tryBanner(ctx, Lt.win('try1', 0, 0.6)); L.grownUpBadge(ctx, 1760, 330, Lt.win('try1', 1.5, 0.6));
+    if (sunP > 0) { ctx.save(); ctx.globalAlpha = sunP; text(ctx, 'low sun: morning or', TR.sunX, TR.sunY + 140, { size: 34, weight: 700, color: P.ink, stroke: P.white, strokeWidth: 8 }); text(ctx, 'late afternoon', TR.sunX, TR.sunY + 182, { size: 34, weight: 700, color: P.ink, stroke: P.white, strokeWidth: 8 }); ctx.restore(); }
+    const bp = Lt.cwin('try1', 'ask a grown-up', 0.5, E.outBack, 1.2) * (1 - Lt.win('try2', -0.3, 0.3));
+    if (bp > 0) popAt(ctx, 1000, 420, bp, () => sprayBottle(ctx, 1080, 330, 1.3));
+    const kid = Lt.cwin('try2', 'stand with', 0.5, E.outBack);
+    if (kid > 0) {
+      // the child's shadow points away from the sun: the rainbow is on that side
+      ctx.save(); ctx.globalAlpha = 0.25 * kid; ellipse(ctx, TR.kx + 170, TR.ky + 6, 190, 18, '#2B2D42'); ctx.restore();
+      const mist = Lt.cwin('try2', 'and spray', 1.0, null, 0.3), rb = Lt.cwin('try2', 'can you make', 1.0, E.inOut, 0.2);
+      if (mist > 0) { const r = L.rng(21); ctx.save(); for (let i = 0; i < 120; i++) { const a = -0.45 + r() * 0.9, d0 = r(), ph = (t * 0.6 + d0) % 1, dist = 40 + ph * 480 * mist, x = TR.kx + 175 + Math.cos(a) * dist, y = TR.ky - 250 + Math.sin(a) * dist * 0.8 + ph * 60; ctx.globalAlpha = 0.85 * (1 - ph * 0.7); circle(ctx, x, y, 5 + 4 * r(), '#6FB7EA', '#FFFFFF', 2); } ctx.restore(); }
+      if (rb > 0) { ctx.save(); ctx.beginPath(); ctx.ellipse(TR.kx + 420, TR.ky - 230, 300, 190, 0, 0, TAU); ctx.clip(); rainbow(ctx, TR.kx + 450, TR.ky - 30, 260, 14, { alpha: 0.85 * rb }); ctx.restore(); L.sparkles(ctx, TR.kx + 450, TR.ky - 230, t, 6, 5, 140, P.white); }
+      popAt(ctx, TR.kx, TR.ky - 200, kid, () => { child(ctx, TR.kx, TR.ky, 1.0, 0.2); sprayBottle(ctx, TR.kx + 175, TR.ky - 262, 0.55); });
+      if (Lt.cafter('try2', 'stand with')) { const a = Lt.cwin('try2', 'stand with', 0.5, null, 0.5) * (1 - Lt.cwin('try2', 'and spray', 0.3)); if (a > 0) { ctx.save(); ctx.globalAlpha = a; L.arrow(ctx, TR.sunX + 110, TR.sunY + 30, TR.kx - 80, TR.ky - 330, P.sunDeep, 14); text(ctx, 'sun behind you', 470, 330, { size: 44, weight: 700, color: P.ink, stroke: P.white, strokeWidth: 9 }); ctx.restore(); } }
+    }
+    curie(ctx, { x: 1560, y: 690, s: 0.85, t, mood: Lt.cafter('try2', 'can you make', 0.5) ? 'wow' : 'talk', armR: -0.4, armL: 0.6, lookX: -0.9, lookY: -0.2 });
+    stk(ctx, 'Your own rainbow?', 1250, 290, Lt.cwin('try2', 'can you make', 0.5, null, 0.6), 0, { bg: P.sun, size: 64, rot: -0.03 });
+  }
+
+  // ======================= TRY IT 1: MAKE A RAINBOW (drag the sun) =======================
+  const T1 = { cx: 900, cy: 650, s: 1.0, gy: 760, pcx: 900, pcy: 800, prx: 820, pry: 640, hit: 130, rbOff: 560, rbR: 470, band: 26, rainX0: 1250, rainX1: 1860 };
+  const t1Sun = th => [T1.pcx + T1.prx * Math.cos(th), T1.pcy - T1.pry * Math.sin(th)];
+  const t1Elev = th => Math.min(th, PI - th) * 180 / PI;   // degrees above the horizon along the path
+  function t1Zone(th) { if (th < PI / 2 - 0.14) return 'front'; if (th > PI / 2 + 0.14 && t1Elev(th) < 42) return 'behind'; return 'high'; }
+  function t1Draw(ctx, s, t) {
+    const [sx, sy] = t1Sun(s.th), el = t1Elev(s.th), dayK = clamp(el / 30, 0, 1);
+    L.sky(ctx, { top: dayK > 0.5 ? P.skyDeep : '#FFB98A', bottom: P.sky });
+    // the sun's path (dotted)
+    ctx.save(); ctx.strokeStyle = 'rgba(255,255,255,0.6)'; ctx.lineWidth = 6; ctx.setLineDash([4, 18]); ctx.lineCap = 'round'; ctx.beginPath(); ctx.ellipse(T1.pcx, T1.pcy, T1.prx, T1.pry, 0, PI + 0.1, TAU - 0.1); ctx.stroke(); ctx.restore();
+    greyCloud(ctx, 1520, 150, 1.5, 1); greyCloud(ctx, 1780, 190, 1.1, 1); greyCloud(ctx, 1290, 190, 1.0, 1);
+    rainStreaks(ctx, T1.rainX0, T1.rainX1 + 60, 220, T1.gy, t, 0.6, 5, 40, 650);
+    // the rainbow: centred on the point opposite the sun; the higher the sun, the lower the bow (above 42 degrees it is all below the ground)
+    if (s.rb > 0.01) { const cy = T1.gy + T1.rbR * clamp(el / 42, 0, 1.2); rainbow(ctx, T1.cx + T1.rbOff, cy, T1.rbR, T1.band, { alpha: 0.85 * s.rb }); }
+    L.sun(ctx, sx, sy, 80, t);
+    ctx.fillStyle = P.ground; ctx.fillRect(0, T1.gy, W, H - T1.gy); ctx.strokeStyle = P.groundDark; ctx.lineWidth = 8; ctx.beginPath(); ctx.moveTo(0, T1.gy); ctx.lineTo(W, T1.gy); ctx.stroke();
+    ctx.fillStyle = P.groundDark; ctx.fillRect(0, H - 120, W, 120);
+    // Curie looks at the rain (to the right). Sun in front: too bright, she shades her eyes with her hand
+    const z = s.zone, front = z === 'front';
+    curie(ctx, { x: T1.cx, y: T1.cy, s: T1.s, t, mood: front ? 'think' : s.rb > 0.5 ? 'wow' : 'happy', shade: front ? 1 : 0, armR: s.rb > 0.5 ? -1.0 : -0.3, armL: s.rb > 0.5 ? -1.0 : 0.6, lookX: 0.9, lookY: -0.4 });
+    // her shadow: away from the sun
+    if (el < 80) { const dir = sx < T1.cx ? 1 : -1, len = clamp(60 / Math.tan(Math.max(0.12, el * PI / 180)), 40, 420); ctx.save(); ctx.globalAlpha = 0.22; ellipse(ctx, T1.cx + dir * (len / 2 + 30), T1.gy + 8, len / 2 + 40, 16, P.ink); ctx.restore(); }
+    // labels
+    text(ctx, 'rain', 1810, 300, { size: 46, weight: 700, color: P.white, stroke: P.ink, strokeWidth: 9 });
+    if (front) { ctx.save(); ctx.globalAlpha = 0.6 + 0.3 * Math.sin(t * 8); ctx.strokeStyle = '#FFE680'; ctx.lineWidth = 10; ctx.lineCap = 'round'; for (let i = 0; i < 8; i++) { const a = i * TAU / 8 + t * 0.5; ctx.beginPath(); ctx.moveTo(sx + Math.cos(a) * 120, sy + Math.sin(a) * 120); ctx.lineTo(sx + Math.cos(a) * 190, sy + Math.sin(a) * 190); ctx.stroke(); } ctx.restore(); }
+    if (!s.touched) { const bob = Math.sin(t * 4) * 8; text(ctx, 'drag the sun', sx + 80, sy - 170 + bob, { size: 58, weight: 700, color: P.ink, stroke: P.white, strokeWidth: 12 }); L.arrow(ctx, sx + 150, sy - 110 + bob, sx + 330, sy - 250 + bob, P.red, 14); }
+    // big labels: behind / in front of Curie
+    text(ctx, 'behind Curie', 330, 860, { size: 44, weight: 700, color: P.white, stroke: P.ink, strokeWidth: 9 });
+    text(ctx, 'in front of Curie', 1440, 860, { size: 44, weight: 700, color: P.white, stroke: P.ink, strokeWidth: 9 });
+    L.arrow(ctx, 640, 960, 380, 960, P.white, 12); L.arrow(ctx, 1160, 960, 1420, 960, P.white, 12);
+  }
+
+  // ======================= TRY IT 2: SPLIT THE LIGHT (prism or raindrop) =======================
+  const T2 = { tx: 210, yMin: 360, yMax: 880, hit: 120, btn: [{ x: 1500, y: 960, k: 'prism' }, { x: 1780, y: 960, k: 'drop' }], bw: 240, bh: 150, drop: { cx: 1060, cy: 470, R: 230 } };
+  T2.V = prismVerts(PR.cx, PR.cy, PR.s, PR.rot);
+  function t2Rays(s) {
+    const o = [T2.tx + 40 * Math.cos(PR.ang), s.ty + 40 * Math.sin(PR.ang)], d = PR.d;
+    if (s.mode === 'prism') {
+      const tr = N_PRISM.map(n => prismTrace(T2.V, o, d, n));
+      if (!tr[0] || !tr.every(r => r && r.face != null)) return { o, d, hit: false, kind: 'prism' };
+      return { o, d, hit: true, kind: 'prism', tr };
+    }
+    const D = T2.drop, tr = N_DROP.map(n => dropTrace([D.cx, D.cy], D.R, o, d, n));
+    if (!tr[0]) return { o, d, hit: false, kind: 'drop' };
+    return { o, d, hit: true, kind: 'drop', tr, b: tr[0].b };
+  }
+  function rayToEdge(p, d) { let k = 4000; if (d[0] > 1e-6) k = Math.min(k, (W + 40 - p[0]) / d[0]); if (d[0] < -1e-6) k = Math.min(k, (-40 - p[0]) / d[0]); if (d[1] > 1e-6) k = Math.min(k, (H + 40 - p[1]) / d[1]); if (d[1] < -1e-6) k = Math.min(k, (-40 - p[1]) / d[1]); return add(p, mul(d, k)); }
+  function t2Draw(ctx, s, t) {
+    labBg(ctx);
+    const R = t2Rays(s);
+    if (!R.hit) beam(ctx, [R.o, rayToEdge(R.o, R.d)], 5000, '#FFFFFF', 22, 1);
+    else if (R.kind === 'prism') {
+      beam(ctx, [R.o, R.tr[0].pts[0]], 5000, '#FFFFFF', 22, 1);
+      R.tr.forEach((r, i) => { const ex = r.pts[r.pts.length - 1]; beam(ctx, r.pts, 5000, SPEC[i], 8, 0.9); beam(ctx, [ex, rayToEdge(ex, r.out)], 5000, SPEC[i], 14, 1); });
+    } else {
+      beam(ctx, [R.o, R.tr[0].pts[0]], 5000, '#FFFFFF', 22, 1);
+      R.tr.forEach((r, i) => { beam(ctx, r.pts, 5000, SPEC[i], 6, 0.8); beam(ctx, [r.pts[2], rayToEdge(r.pts[2], r.out)], 5000, SPEC[i], 12, 1); });
+    }
+    if (s.mode === 'prism') prism(ctx, T2.V, 1);
+    else drop(ctx, T2.drop.cx, T2.drop.cy, T2.drop.R, { t, mood: 'happy', fx: 0.05, fy: 0.05, fs: 0.4 });
+    // the torch (drag it up and down)
+    L.torch(ctx, T2.tx, s.ty, PR.ang, true, 0.9);
+    if (!s.touched) { const bob = Math.sin(t * 4) * 8; text(ctx, 'drag me', T2.tx + 40, s.ty - 120 + bob, { size: 56, weight: 700, color: P.white, stroke: P.ink, strokeWidth: 12 }); L.arrow(ctx, T2.tx - 60, s.ty - 80 + bob, T2.tx - 60, s.ty - 200 + bob, P.sun, 12); L.arrow(ctx, T2.tx - 60, s.ty + 80 - bob, T2.tx - 60, s.ty + 200 - bob, P.sun, 12); }
+    // the two buttons: prism or raindrop
+    T2.btn.forEach(b => {
+      const sel = s.mode === b.k; ctx.save(); ctx.translate(b.x, b.y); const k = sel ? 1.05 : 1; ctx.scale(k, k);
+      ctx.fillStyle = sel ? '#3A4E7A' : '#2A3A5E'; ctx.strokeStyle = sel ? P.sun : '#8FA3C8'; ctx.lineWidth = sel ? 10 : 6; roundRect(ctx, -T2.bw / 2, -T2.bh / 2, T2.bw, T2.bh, 28); ctx.fill(); ctx.stroke();
+      if (b.k === 'prism') prism(ctx, prismVerts(-62, 4, 100, 0), 1); else drop(ctx, -62, 0, 42, { t, fs: 0.6 });
+      text(ctx, b.k === 'prism' ? 'prism' : 'drop', -8, 4, { size: 38, weight: 700, color: P.white, align: 'left' });
+      ctx.restore();
+    });
+    if (s.lastCue === 'split' && s.mode === 'prism') { const bob = Math.sin(t * 4) * 6; text(ctx, 'tap me', T2.btn[1].x, T2.btn[1].y - 120 + bob, { size: 46, weight: 700, color: P.white, stroke: P.ink, strokeWidth: 10 }); }
+    const lit = R.hit && (R.kind === 'prism' || Math.abs(R.b) > 0.45);
+    curie(ctx, { x: 1700, y: 230, s: 0.75, t, mood: lit ? 'wow' : 'happy', armR: -0.5, armL: 0.6, lookX: -0.9, lookY: 0.4 });
+  }
+
+  L.episodes.ep17 = {
+    id: 'ep17', num: 17, title: 'Where do rainbows come from?', short: 'Rainbows', phrase: 'Raindrops split the sunlight!',
+    thumb: {
+      big: 'RAINBOWS', small1: 'Where do', small2: 'come from?',
+      bg: (ctx, t) => {
+        L.sky(ctx); L.sun(ctx, 150, 680, 80, t);
+        greyCloud(ctx, 1500, 170, 1.6, 1); greyCloud(ctx, 1790, 210, 1.2, 1);
+        rainStreaks(ctx, 1150, 1920, 240, 820, 0.7, 0.55, 5, 46, 650);
+        rainbow(ctx, 1420, 1080, 760, 46, { alpha: 0.95 });
+        L.ground(ctx, 860); puddle(ctx, 1200, 930, 130, 0.4);
+      }
+    },
+    lines: [
+      { id: 'hello', text: "Hello, little scientists! I'm Curie. Welcome to the Little Scientists Club!", say: "Hello, little scientists! I'm *Curie*! Welcome... to the Little Scientists Club!", hold: 0.3 },
+      { id: 'q', text: "Today's big question: where do rainbows come from?", say: "Today's big question... Where do rainbows come *from*?", hold: 0.6 },
+      { id: 's1', text: 'The rain has stopped. The sun is peeking out. And look... a rainbow!', say: 'The rain has *stopped*. The sun is *peeking* out. And look... a *rainbow*!', hold: 0.8 },
+      { id: 'look', text: "Let's look closer.", say: "Let's look *closer*.", hold: 0.8 },
+      { id: 'e1', text: 'Sunlight looks white... but it has a secret. It is all the colours, mixed together!', say: 'Sunlight looks *white*... but it has a *secret*. It is *all* the colours... mixed together!', hold: 0.5 },
+      { id: 'e2', text: 'A prism is a glass triangle. When light goes through it, the colours spread out: red, orange, yellow, green, blue and violet!', say: 'A *prism* is a glass *triangle*. When light goes through it... the colours *spread* out! Red, orange, yellow, green... blue, and *violet*!', hold: 0.6 },
+      { id: 'e3', text: 'Raindrops can do it too. Every drop is like a tiny prism.', say: '*Raindrops* can do it too! Every drop is like a *tiny* prism.', hold: 0.4 },
+      { id: 'e4', text: 'Light goes into the drop and bends. It bounces off the back... and bends again on the way out!', say: 'Light goes *into* the drop... and bends. It *bounces* off the back... and bends *again*, on the way out!', hold: 0.6 },
+      { id: 'e5', text: 'Scientists call this bending refraction. Each colour bends a tiny bit differently, so they fan out!', say: 'Scientists call this bending... *refraction*. Each colour bends a *tiny* bit differently... so they *fan* out!', hold: 0.6 },
+      { id: 'e6', text: 'Millions of raindrops send their colours to your eyes... and you see a rainbow!', say: '*Millions* of raindrops send their colours to your *eyes*... and you see a rainbow!', hold: 1.0 },
+      { id: 'test', text: 'Scientists test it! Is the sun in front of me, or behind me?', say: '{sfx:ding}Scientists *test* it! Is the sun in *front* of me... or *behind* me?', hold: 0.4 },
+      { id: 't1', text: 'Facing the sun... no rainbow. Sun behind me, rain in front... there it is!', say: 'Facing the sun... *no* rainbow. Sun *behind* me, rain in *front*... there it *is*!', hold: 1.0 },
+      { id: 'fact', text: 'Wow fact! A rainbow is really a whole circle. The ground hides the bottom part.', say: '{sfx:ding}*Wow* fact! A rainbow is really a whole *circle*. The *ground* hides the bottom part.', hold: 1.0 },
+      { id: 'sayit', text: 'Say it with me: Raindrops split the sunlight!', say: 'Say it with me... {sfx:ding}*Raindrops* split the *sunlight*! {pause 0.9} {slow}Raindrops... split the sunlight!{/slow}', hold: 1.4 },
+      { id: 'try1', text: "Let's try it at home! Ask a grown-up for a spray bottle of water, on a sunny morning or late afternoon.", say: "{sfx:tada}Let's try it at home! Ask a grown-up for a *spray bottle* of water... on a *sunny* morning, or late *afternoon*.", hold: 0.4 },
+      { id: 'try2', text: 'Stand with the sun behind you, and spray a fine mist in front of you. Can you make your own rainbow?', say: 'Stand with the sun *behind* you... and spray a fine *mist* in front of you. {sfx:ding}Can you make your *own* rainbow?', hold: 1.6 },
+      { id: 'bye', text: 'Great job, little scientist! Remember: raindrops split the sunlight into colours! See you next time at the Little Scientists Club! Bye-bye!', say: '{sfx:tada}Great job, little scientist! Remember... raindrops split the *sunlight* into *colours*! See you next time, at the Little Scientists Club! {hi}Bye-bye!{/hi}', hold: 1.2 }
+    ],
+    sfx: [
+      { line: 's1', chunk: 'a rainbow', offset: 0.75, name: 'sparkle', vol: 0.7 },
+      { line: 'look', chunk: "let's look", offset: 0.6, name: 'zoom' },
+      { line: 'e2', chunk: 'a prism', offset: 1.3, name: 'pop', vol: 0.6 },
+      { line: 'e2', chunk: 'violet', offset: 1.0, name: 'sparkle', vol: 0.6 },
+      { line: 'e6', chunk: 'and you see', offset: 1.2, name: 'sparkle', vol: 0.6 },
+      { line: 't1', chunk: 'there it is', offset: 0.9, name: 'sparkle', vol: 0.7 },
+      { line: 'try2', chunk: 'and spray', offset: 1.2, name: 'whoosh', vol: 0.35 }
+    ],
+    scenes: [
+      { from: 'hello', draw: (ctx, t, Lt) => L.scenes.intro(ctx, t, Lt) },
+      { from: 'q', draw: (ctx, t, Lt) => L.scenes.question(ctx, t, Lt, (c, tt) => { rainbow(c, 0, 120, 190, 20, { alpha: 1 }); L.cloud(c, -150, 110, 0.55); L.cloud(c, 150, 110, 0.55); }, { word: 'Where?' }) },
+      { from: 's1', draw: (ctx, t, Lt) => parkScene(ctx, t, Lt) },
+      { from: 'look', transition: 'cut', draw: (ctx, t, Lt) => lookScene(ctx, t, Lt) },
+      { from: 'e1', transition: 'cut', draw: (ctx, t, Lt) => labScene(ctx, t, Lt) },
+      { from: 'e6', draw: (ctx, t, Lt) => manyScene(ctx, t, Lt) },
+      { from: 'test', draw: (ctx, t, Lt) => testScene(ctx, t, Lt) },
+      { from: 'fact', draw: (ctx, t, Lt) => factScene(ctx, t, Lt) },
+      { from: 'sayit', draw: (ctx, t, Lt) => sayScene(ctx, t, Lt) },
+      { from: 'try1', draw: (ctx, t, Lt) => tryScene(ctx, t, Lt) },
+      { from: 'bye', draw: (ctx, t, Lt) => L.scenes.outro(ctx, t, Lt, 'Raindrops split the sunlight!') }
+    ],
+    interactives: [
+      {
+        title: 'Make a rainbow',
+        hint: 'Drag the sun across the sky. When is there a rainbow over the rain?',
+        init: s => { s.th = PI - 0.38; s.drag = false; s.touched = false; s.moved = false; s.th0 = s.th; s.zone = 'behind'; s.zt = 0; s.rb = 1; s.lastCue = ''; },   // starts with a low morning sun behind Curie: a rainbow
+        update: (s, dt, cue) => {
+          const z = t1Zone(s.th); if (z !== s.zone) { s.zone = z; s.zt = 0; } else s.zt += dt;
+          s.rb += ((z === 'behind' ? 1 : 0) - s.rb) * Math.min(1, dt * 5);
+          if (s.moved && s.zt > (s.drag ? 1.0 : 0.3) && s.lastCue !== z) { s.lastCue = z; cue(z); if (z === 'behind' && L.sound) { try { L.sound.tone(880, 0.25, { type: 'triangle', vol: 0.2 }); } catch (e) { /* no sound */ } } }
+        },
+        draw: (ctx, s, t) => t1Draw(ctx, s, t),
+        pointer: (s, type, x, y) => {
+          if (type === 'down') { const [sx, sy] = t1Sun(s.th); if (Math.hypot(x - sx, y - sy) < T1.hit) { s.drag = true; s.touched = true; s.th0 = s.th; s.zt = 0; } }
+          if (type === 'move' && s.drag) { const th = Math.atan2((T1.pcy - y) / T1.pry, (x - T1.pcx) / T1.prx); s.th = clamp(th < -PI / 2 ? PI : th, 0.1, PI - 0.1); if (Math.abs(s.th - s.th0) > 0.04 && !s.moved) { s.moved = true; s.zt = 0; } }
+          if (type === 'up') s.drag = false;
+        },
+        cues: {
+          behind: 'The sun is behind me... a rainbow!',
+          front: 'Ouch, too bright! Facing the sun, no rainbow.',
+          high: 'The sun is too high! The rainbow hides below the ground.'
+        }
+      },
+      {
+        title: 'Split the light',
+        hint: 'Drag the torch up and down to shine on the prism. Then tap the drop!',
+        init: s => { s.ty = 700; s.drag = false; s.touched = false; s.mode = 'prism'; s.lastCue = ''; s.hitT = 0; s.grab = 0; },
+        update: (s, dt, cue) => {
+          const R = t2Rays(s), ok = R.hit && (R.kind === 'prism' || Math.abs(R.b) > 0.45);
+          s.hitT = ok && s.touched ? s.hitT + dt : 0;
+          const id = R.kind === 'prism' ? 'split' : 'drop';
+          if (s.touched && s.hitT > 0.3 && s.lastCue !== id) { s.lastCue = id; cue(id); if (L.sound) { try { L.sound.tone(R.kind === 'prism' ? 660 : 990, 0.3, { type: 'triangle', vol: 0.2 }); } catch (e) { /* no sound */ } } }
+        },
+        draw: (ctx, s, t) => t2Draw(ctx, s, t),
+        pointer: (s, type, x, y) => {
+          if (type === 'down') {
+            for (const b of T2.btn) if (Math.abs(x - b.x) < T2.bw / 2 + 15 && Math.abs(y - b.y) < T2.bh / 2 + 15) { if (s.mode !== b.k) { s.mode = b.k; s.touched = true; s.hitT = 0; if (L.sound) { try { L.sound.tone(520, 0.12, { type: 'triangle', vol: 0.2 }); } catch (e) { /* no sound */ } } } return; }
+            if (Math.hypot(x - T2.tx, y - s.ty) < T2.hit + 30) { s.drag = true; s.touched = true; s.grab = s.ty - y; s.hitT = 0; }
+          }
+          if (type === 'move' && s.drag) s.ty = clamp(y + s.grab, T2.yMin, T2.yMax);
+          if (type === 'up') s.drag = false;
+        },
+        cues: {
+          split: 'All the colours were hiding in the white light!',
+          drop: 'A raindrop does it too!'
+        }
+      }
+    ]
+  };
+})(typeof window !== 'undefined' ? window : globalThis);
