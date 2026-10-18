@@ -8212,6 +8212,514 @@
   };
 })(typeof window !== 'undefined' ? window : globalThis);
 
+/* Episode 18 — Why does the Moon change shape?
+   Story: Curie watches the Moon from her window: some nights a thin curve, some nights half, some nights a round circle.
+   -> look closer: the Moon makes no light of its own; sunlight shines on it and bounces off into our eyes; the sun always lights
+   half of the Moon (its day), the other half is dark (its night); the Moon travels around the Earth (its orbit); as it goes round
+   we see different amounts of the bright half: new Moon, crescent, half, full, and back again: the phases, about every 29.5 days.
+   -> test: a model (lamp = sun, ball = Moon, Curie's head = Earth): turn around, the bright part grows and shrinks.
+   -> wow fact: you can often see the Moon in the daytime. -> say it -> try at home (lamp and ball in a dark room).
+   Try it 1 "Moon trip" (drag the Moon round its orbit, see its phase from Earth); Try it 2 "Night by night" (a 29.5-day slider).
+   Geometry (checked against NASA Space Place "What Are the Moon's Phases?" and NASA Science "Moon Phases"): top views are from
+   above the North Pole with the sun on the left; the Moon goes round counter-clockwise; theta = the Moon's angle from the
+   sun's direction as seen from the Earth (0 new, PI/2 first quarter, PI full, 3PI/2 last quarter). Seen from the northern
+   half of the Earth (India), the bright part is on the right while it grows and on the left while it shrinks. */
+(function (global) {
+  const L = global.LSC; const LSC = L; const { W, H, P, E, seg, clamp, lerp, circle, ellipse, text, roundRect } = L;
+  L.episodes = L.episodes || {};
+  const PI = Math.PI, TAU = PI * 2;
+  const sstep = (a, b, x) => { const p = clamp((x - a) / (b - a), 0, 1); return p * p * (3 - 2 * p); };
+  const wrap = a => ((a % TAU) + TAU) % TAU;
+  const NAVY = '#141B3C', MOONLIT = '#FFF4C8', MOONDARK = '#353C63', CRATER = 'rgba(214,196,140,0.55)';
+  // smooth keyframes: k = [[time, value], ...] sorted by time; eased between neighbours, held outside
+  function keys(t, k) {
+    if (t <= k[0][0]) return k[0][1];
+    for (let i = 1; i < k.length; i++) if (t < k[i][0]) { const a = k[i - 1], b = k[i], p = sstep(a[0], b[0], t); return lerp(a[1], b[1], p); }
+    return k[k.length - 1][1];
+  }
+
+  // ---------- the Moon as we see it from the Earth ----------
+  // phi = the Moon's angle from the sun (0 new, PI/2 half (growing), PI full, 3PI/2 half (shrinking)). Growing: bright on the right.
+  const CRATERS = [[-0.35, -0.3, 0.17], [0.28, -0.42, 0.11], [0.12, 0.18, 0.2], [-0.42, 0.32, 0.12], [0.5, 0.25, 0.09], [-0.05, -0.62, 0.08], [-0.12, 0.6, 0.1]];
+  function litPath(ctx, x, y, r, phi) {
+    const p = wrap(phi), sg = p < PI ? 1 : -1, c = Math.cos(p), N = 40;
+    ctx.beginPath();
+    for (let i = 0; i <= N; i++) { const a = -PI / 2 + PI * i / N; const px = x + sg * r * Math.cos(a), py = y + r * Math.sin(a); i === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py); }
+    for (let i = N; i >= 0; i--) { const a = -PI / 2 + PI * i / N; ctx.lineTo(x + sg * c * r * Math.cos(a), y + r * Math.sin(a)); }
+    ctx.closePath();
+  }
+  // o: {dark: alpha of the dark part (0 = invisible, e.g. in a day sky), glow, outline, alpha, lit (colour)}
+  function moonView(ctx, x, y, r, phi, o) {
+    o = o || {}; const al = o.alpha == null ? 1 : o.alpha; if (al <= 0 || r <= 0) return;
+    const frac = (1 - Math.cos(wrap(phi))) / 2;
+    ctx.save(); ctx.globalAlpha = al;
+    const glow = o.glow == null ? 1 : o.glow;
+    if (glow > 0 && frac > 0.02) { const g = ctx.createRadialGradient(x, y, r * 0.9, x, y, r * 1.9); g.addColorStop(0, 'rgba(255,244,200,' + (0.32 * glow * frac) + ')'); g.addColorStop(1, 'rgba(255,244,200,0)'); ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, r * 1.9, 0, TAU); ctx.fill(); }
+    const dk = o.dark == null ? 0.4 : o.dark;
+    if (dk > 0) { ctx.save(); ctx.globalAlpha = al * dk; circle(ctx, x, y, r, MOONDARK); ctx.restore(); }
+    if (frac > 0.001) {
+      ctx.save(); litPath(ctx, x, y, r, phi); ctx.fillStyle = o.lit || MOONLIT; ctx.fill(); ctx.clip();
+      for (const [cx, cy, cr] of CRATERS) circle(ctx, x + cx * r, y + cy * r, cr * r, CRATER);
+      ctx.restore();
+    }
+    if (o.outline !== false && dk > 0) { ctx.save(); ctx.globalAlpha = al * (o.outline == null ? 0.5 : o.outline); circle(ctx, x, y, r, null, 'rgba(255,255,255,0.35)', Math.max(2, r * 0.025)); ctx.restore(); }
+    ctx.restore();
+  }
+  // ---------- the Moon seen from far above (top view): the half facing the sun (left) is lit ----------
+  // o.near: show the half that faces the Earth at (ex, ey) with a dashed white line (0..1)
+  function moonTop(ctx, x, y, r, o) {
+    o = o || {}; const al = o.alpha == null ? 1 : o.alpha; if (al <= 0) return;
+    ctx.save(); ctx.globalAlpha = al;
+    circle(ctx, x, y, r, MOONDARK);
+    ctx.fillStyle = MOONLIT; ctx.beginPath(); ctx.arc(x, y, r, PI / 2, PI * 1.5); ctx.closePath(); ctx.fill();
+    ctx.save(); ctx.beginPath(); ctx.arc(x, y, r, PI / 2, PI * 1.5); ctx.closePath(); ctx.clip(); for (const [cx, cy, cr] of CRATERS) circle(ctx, x + cx * r, y + cy * r, cr * r, CRATER); ctx.restore();
+    circle(ctx, x, y, r, null, P.ink, Math.max(3, r * 0.06));
+    if (o.near > 0) {
+      const b = Math.atan2(o.ey - y, o.ex - x); ctx.globalAlpha = al * clamp(o.near, 0, 1); ctx.strokeStyle = P.white; ctx.lineWidth = Math.max(4, r * 0.1); ctx.setLineDash([r * 0.22, r * 0.16]); ctx.lineCap = 'round';
+      ctx.beginPath(); ctx.arc(x, y, r * 1.28, b - PI / 2, b + PI / 2); ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  // ---------- space, the sun and the Earth (after Episode 9) ----------
+  const SPACE_STARS = (() => { const r = L.rng(18), a = []; for (let i = 0; i < 70; i++) a.push([r() * W, r() * H, 0.5 + r() * 0.8, r() * 6]); return a; })();
+  function space(ctx, t) {
+    const g = ctx.createLinearGradient(0, 0, 0, H); g.addColorStop(0, '#0B1030'); g.addColorStop(1, '#1E2A5E'); ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+    for (const [x, y, k, ph] of SPACE_STARS) L.star(ctx, x, y, 7 * k * (0.75 + 0.25 * Math.sin(t * 2 + ph)), 'rgba(255,255,255,0.75)', t * 0.2 + ph);
+  }
+  // the sun is far bigger than the Moon and the Earth: a huge disc cut off by the left edge
+  function bigSun(ctx, S, a) {
+    if (a <= 0) return; ctx.save(); ctx.globalAlpha = clamp(a, 0, 1);
+    const g = ctx.createRadialGradient(S.x, S.y, S.r, S.x, S.y, S.r + 230); g.addColorStop(0, 'rgba(255,200,60,0.5)'); g.addColorStop(0.4, 'rgba(255,190,60,0.2)'); g.addColorStop(1, 'rgba(255,190,60,0)'); ctx.fillStyle = g; ctx.beginPath(); ctx.arc(S.x, S.y, S.r + 230, 0, TAU); ctx.fill();
+    circle(ctx, S.x, S.y, S.r, P.sun, P.sunDeep, 16);
+    ctx.restore();
+  }
+  // light from the left: rays at heights ys, from x0 to x1(y); arrows travel along them
+  function rays(ctx, t, ys, x0, x1, a, lw) {
+    if (a <= 0) return; lw = lw || 10; ctx.save(); ctx.globalAlpha = clamp(a, 0, 1); ctx.lineCap = 'round';
+    ys.forEach((y, n) => {
+      const xa = typeof x0 === 'function' ? x0(y) : x0, xb = typeof x1 === 'function' ? x1(y) : x1; if (xb <= xa + 40) return;
+      ctx.strokeStyle = 'rgba(255,214,70,0.8)'; ctx.lineWidth = lw; ctx.beginPath(); ctx.moveTo(xa, y); ctx.lineTo(xb, y); ctx.stroke();
+      const f = (t * 0.5 + n * 0.23 + 5) % 1, ax = lerp(xa + 50, xb, f); L.arrow(ctx, ax - 40, y, ax, y, '#FFB020', lw);
+    });
+    ctx.restore();
+  }
+  const LAND = [[-0.36, -0.36, 0.30, 0.19, 0.5], [-0.05, -0.64, 0.17, 0.11, -0.3], [0.38, -0.30, 0.24, 0.15, 0.9], [0.46, 0.18, 0.2, 0.28, 0.2], [-0.05, 0.1, 0.2, 0.15, -0.5], [-0.42, 0.42, 0.26, 0.15, -0.3], [0.1, 0.64, 0.16, 0.1, 0.4]];
+  // the Earth from above; the half away from the sun (right) is in the dark
+  function earthTop(ctx, cx, cy, R, rot) {
+    ctx.save(); ctx.translate(cx, cy); ctx.beginPath(); ctx.arc(0, 0, R, 0, TAU); ctx.save(); ctx.clip();
+    ctx.fillStyle = P.blue; ctx.fillRect(-R, -R, 2 * R, 2 * R);
+    ctx.save(); ctx.rotate(-(rot || 0)); ctx.fillStyle = '#6FCB7F'; ctx.strokeStyle = '#3F9F59'; ctx.lineWidth = Math.max(2, R * 0.02);
+    for (const [x, y, rx, ry, r] of LAND) { ctx.beginPath(); ctx.ellipse(x * R, y * R, rx * R, ry * R, r, 0, TAU); ctx.fill(); ctx.stroke(); }
+    ctx.restore();
+    ctx.fillStyle = 'rgba(16,24,58,0.62)'; ctx.fillRect(0, -R, R, 2 * R);
+    ctx.restore(); circle(ctx, 0, 0, R, null, P.ink, Math.max(4, R * 0.04));
+    ctx.restore();
+  }
+  // an eye (who is looking), facing left
+  function eye(ctx, x, y, s, look) { ctx.save(); ctx.translate(x, y); ctx.scale(s, s); ctx.rotate((look || PI) - PI); ctx.beginPath(); ctx.moveTo(-60, 0); ctx.quadraticCurveTo(0, -44, 60, 0); ctx.quadraticCurveTo(0, 44, -60, 0); ctx.closePath(); ctx.fillStyle = P.white; ctx.fill(); ctx.strokeStyle = P.ink; ctx.lineWidth = 7; ctx.stroke(); circle(ctx, -10, 0, 22, '#5B8DEF', P.ink, 5); circle(ctx, -10, 0, 10, P.ink); circle(ctx, -16, -6, 5, P.white); ctx.restore(); }
+  const stk = (ctx, s, x, y, pIn, pOut, o) => L.sticker(ctx, s, x, y, pIn * (1 - (pOut || 0)), o);
+
+  // ======================= CURIE'S WINDOW AT NIGHT (s1, s2, look) =======================
+  const WN = { x0: 720, y0: 110, x1: 1760, y1: 690, mx: 1330, my: 340, mr: 110 };
+  const NIGHT_STARS = (() => { const r = L.rng(7), a = []; for (let i = 0; i < 26; i++) a.push([WN.x0 + 40 + r() * (WN.x1 - WN.x0 - 80), WN.y0 + 30 + r() * 420, 0.6 + r() * 0.7, r() * 6]); return a; })();
+  function windowPhi(t, Lt) {
+    return keys(t, [[Lt.start('s1'), 0.85], [Lt.chunk('s2', 'some nights it is half') - 0.1, 0.85], [Lt.chunk('s2', 'some nights it is half') + 0.5, PI / 2], [Lt.chunk('s2', 'it is a big') - 0.1, PI / 2], [Lt.chunk('s2', 'it is a big') + 0.6, PI]]);
+  }
+  function windowScene(ctx, t, Lt, o) {
+    o = o || {};
+    // the room: a warm wall, the window, curtains, a sill
+    ctx.fillStyle = '#F3D9B1'; ctx.fillRect(0, 0, W, H); ctx.fillStyle = '#E8C793'; ctx.fillRect(0, 800, W, H - 800);
+    ctx.save(); ctx.beginPath(); ctx.rect(WN.x0, WN.y0, WN.x1 - WN.x0, WN.y1 - WN.y0); ctx.clip();
+    const g = ctx.createLinearGradient(0, WN.y0, 0, WN.y1); g.addColorStop(0, '#0E1534'); g.addColorStop(1, '#2A3A72'); ctx.fillStyle = g; ctx.fillRect(WN.x0, WN.y0, WN.x1 - WN.x0, WN.y1 - WN.y0);
+    for (const [x, y, k, ph] of NIGHT_STARS) L.star(ctx, x, y, 12 * k * (0.75 + 0.25 * Math.sin(t * 2 + ph)), '#FFF7C2', t * 0.3 + ph);
+    // a night: a soft dimming between nights
+    const blink = o.blink || 0; moonView(ctx, WN.mx, WN.my, WN.mr, o.phi, {});
+    ctx.fillStyle = '#1D2A55'; ctx.beginPath(); ctx.moveTo(WN.x0, WN.y1); ctx.quadraticCurveTo(1100, 560, 1400, 620); ctx.quadraticCurveTo(1600, 650, WN.x1, 590); ctx.lineTo(WN.x1, WN.y1); ctx.closePath(); ctx.fill();
+    if (blink > 0) L.fade(ctx, blink * 0.55, NAVY);
+    ctx.restore();
+    ctx.strokeStyle = '#B98552'; ctx.lineWidth = 26; ctx.strokeRect(WN.x0, WN.y0, WN.x1 - WN.x0, WN.y1 - WN.y0);
+    ctx.lineWidth = 14; ctx.beginPath(); ctx.moveTo((WN.x0 + WN.x1) / 2, WN.y0); ctx.lineTo((WN.x0 + WN.x1) / 2, WN.y1); ctx.stroke();
+    ctx.strokeStyle = P.ink; ctx.lineWidth = 5; ctx.strokeRect(WN.x0 - 14, WN.y0 - 14, WN.x1 - WN.x0 + 28, WN.y1 - WN.y0 + 28);
+    ctx.fillStyle = '#C99560'; roundRect(ctx, WN.x0 - 60, WN.y1 + 10, WN.x1 - WN.x0 + 120, 40, 12); ctx.fill(); ctx.strokeStyle = P.ink; ctx.lineWidth = 5; ctx.stroke();
+    for (const [cx, dir] of [[WN.x0 - 40, 1], [WN.x1 + 40, -1]]) { ctx.fillStyle = '#7E8BE0'; ctx.beginPath(); ctx.moveTo(cx - 70 * dir, 60); ctx.lineTo(cx + 70 * dir, 60); ctx.quadraticCurveTo(cx + 10 * dir, 400, cx + 60 * dir, 760); ctx.lineTo(cx - 70 * dir, 760); ctx.closePath(); ctx.fill(); ctx.strokeStyle = P.ink; ctx.lineWidth = 5; ctx.stroke(); }
+    ctx.fillStyle = '#8A5A33'; ctx.fillRect(0, 40, W, 26);
+  }
+  function nightsScene(ctx, t, Lt) {
+    const phi = windowPhi(t, Lt);
+    const b1 = Lt.chunk('s2', 'some nights it is half'), b2 = Lt.chunk('s2', 'it is a big');
+    const blink = Math.max(Math.exp(-Math.pow((t - b1 - 0.2) / 0.25, 2)), Math.exp(-Math.pow((t - b2 - 0.25) / 0.25, 2)));
+    windowScene(ctx, t, Lt, { phi, blink });
+    let mood = 'talk', armR = -0.5, lookY = -0.5;
+    if (Lt.cafter('s2', 'it is a big', 0.5)) { mood = 'wow'; armR = -1.0; }
+    if (Lt.after('look')) { mood = 'think'; armR = -0.6; }
+    L.pip(ctx, { x: 470, y: 700, s: 1.3, t, mood, armR, armL: 0.6, lookX: 0.8, lookY, bulb: 0.4 });
+    const o = { size: 76, rot: -0.04 };
+    stk(ctx, 'thin curve', 1330, 520, Lt.cwin('s2', 'a thin curve', 0.5, null, 0.4), Lt.cwin('s2', 'some nights it is half', 0.25), Object.assign({ bg: P.sun }, o));
+    stk(ctx, 'half', 1330, 520, Lt.cwin('s2', 'some nights it is half', 0.5, null, 0.6), Lt.cwin('s2', 'and some nights', 0.25), Object.assign({ bg: P.sun }, o));
+    stk(ctx, 'round!', 1330, 520, Lt.cwin('s2', 'it is a big', 0.5, null, 0.8), Lt.win('look', 0, 0.25), Object.assign({ bg: P.sun, size: 90 }, o));
+    if (Lt.after('look')) { const q = Lt.cwin('look', 'is the moon', 0.5, E.outBack) * (1 - Lt.cwin('look', "let's look", 0.3)); if (q > 0) L.questionMark(ctx, 1560, 260, 0.9 * q, t, P.sun); }
+  }
+  // the zoom: a magnifier on the Moon grows into space
+  function lookScene(ctx, t, Lt) {
+    nightsScene(ctx, t, Lt);
+    const p = seg(t, Lt.chunk('look', "let's look") + 0.3, Lt.end('look') + 0.7, E.in);
+    if (p > 0) {
+      const r = lerp(160, 2300, p);
+      ctx.save(); ctx.beginPath(); ctx.arc(WN.mx, WN.my, r, 0, TAU); ctx.clip();
+      ctx.translate(lerp(WN.mx, 960, p), lerp(WN.my, 420, p)); ctx.scale(lerp(0.5, 1, p), lerp(0.5, 1, p)); ctx.translate(-960, -420);
+      space(ctx, t); moonView(ctx, 960, 420, 230, PI, {}); ctx.restore();
+      if (p < 1) L.magnifier(ctx, WN.mx, WN.my, r, p);
+    }
+  }
+
+  // ======================= SUNLIGHT ON THE MOON (e1, e2) =======================
+  const SL = { sun: { x: -260, y: 430, r: 560 }, mx: 1010, my: 400, mr: 230, ex: 600, ey: 700 };
+  const sunEdge = y => SL.sun.x + Math.sqrt(Math.max(0, SL.sun.r * SL.sun.r - (y - SL.sun.y) * (y - SL.sun.y))) + 24;
+  function sunlightScene(ctx, t, Lt) {
+    space(ctx, t);
+    const sunA = Lt.cwin('e1', 'sunlight shines', 0.7, E.inOut, -0.1), shine = Lt.cwin('e1', 'sunlight shines', 1.0, E.inOut, 0.3), bounce = Lt.cwin('e1', 'and bounces', 1.0, E.inOut, 0.3);
+    // the Earth (small, on the right) appears for "into our eyes"
+    const ea = Lt.cwin('e1', 'and bounces', 0.5, E.outBack, 0.6) * (1 - Lt.cwin('e2', 'always lights', 0.6, null, 1.2));
+    bigSun(ctx, SL.sun, sunA);
+    rays(ctx, t, [250, 330, 410, 490, 570], sunEdge, y => SL.mx - Math.sqrt(Math.max(0, SL.mr * SL.mr - (y - SL.my) * (y - SL.my))) - 18, shine);
+    // the Moon: dark at first (no light of its own); the sunny half lights up when the sunlight arrives
+    const litK = shine;
+    ctx.save(); circle(ctx, SL.mx, SL.my, SL.mr, MOONDARK);
+    if (litK > 0) { ctx.globalAlpha = litK; ctx.fillStyle = MOONLIT; ctx.beginPath(); ctx.arc(SL.mx, SL.my, SL.mr, PI / 2, PI * 1.5); ctx.closePath(); ctx.fill(); ctx.beginPath(); ctx.arc(SL.mx, SL.my, SL.mr, PI / 2, PI * 1.5); ctx.closePath(); ctx.clip(); for (const [cx, cy, cr] of CRATERS) circle(ctx, SL.mx + cx * SL.mr, SL.my + cy * SL.mr, cr * SL.mr, CRATER); }
+    ctx.restore(); circle(ctx, SL.mx, SL.my, SL.mr, null, P.ink, 10);
+    // bounced light to our eyes (an eye at the lower left, looking at the Moon)
+    if (bounce > 0 && ea > 0) {
+      ctx.save(); ctx.globalAlpha = clamp(ea, 0, 1); ctx.setLineDash([22, 16]); ctx.lineCap = 'round'; ctx.strokeStyle = 'rgba(255,244,200,0.95)'; ctx.lineWidth = 9;
+      for (const ang of [0.66 * PI, 0.8 * PI]) {
+        const a0 = [SL.mx + SL.mr * Math.cos(ang), SL.my + SL.mr * Math.sin(ang)], b0 = [SL.ex + 40, SL.ey - 30];
+        ctx.beginPath(); ctx.moveTo(a0[0], a0[1]); ctx.lineTo(lerp(a0[0], b0[0], bounce), lerp(a0[1], b0[1], bounce)); ctx.stroke();
+      }
+      ctx.restore();
+    }
+    if (ea > 0) { ctx.save(); ctx.globalAlpha = clamp(ea, 0, 1); const k = E.outBack(clamp(ea, 0, 1)); eye(ctx, SL.ex, SL.ey, 1.3 * k, Math.atan2(SL.my - SL.ey, SL.mx - SL.ex)); ctx.restore(); }
+    // e2: the bright half is the Moon's day, the dark half its night
+    const half = Lt.cwin('e2', 'always lights up', 0.7, null, 0.6);
+    if (half > 0) { ctx.save(); ctx.globalAlpha = half; ctx.strokeStyle = P.white; ctx.lineWidth = 8; ctx.setLineDash([20, 16]); ctx.beginPath(); ctx.moveTo(SL.mx, SL.my - SL.mr - 40); ctx.lineTo(SL.mx, SL.my + SL.mr + 40); ctx.stroke(); ctx.restore(); }
+    const o = { size: 80, rot: -0.04 };
+    stk(ctx, 'no light of its own', 960, 110, Lt.cwin('e1', 'does not make', 0.5, null, 0.5), Lt.cwin('e1', 'sunlight shines', 0.25), Object.assign({ bg: P.grey, size: 64 }, o));
+    stk(ctx, 'sunlight!', 560, 130, Lt.cwin('e1', 'sunlight shines', 0.5, null, 0.4), Lt.cwin('e1', 'and bounces', 0.25, null, 0.6), Object.assign({ bg: P.sun }, o));
+    stk(ctx, 'into our eyes!', 960, 720, Lt.cwin('e1', 'and bounces', 0.5, null, 1.2), Lt.cwin('e2', 'always lights', 0.25, null, 1.0), Object.assign({ bg: P.pink, size: 68 }, o));
+    stk(ctx, 'half lit', 960, 110, Lt.cwin('e2', 'always lights up', 0.5, null, 1.0), Lt.cwin('e2', 'that half is', 0.25), Object.assign({ bg: P.sun }, o));
+    stk(ctx, 'DAY', 830, 420, Lt.cwin('e2', 'that half is', 0.5, null, 0.9), 0, Object.assign({ bg: P.sun, size: 84 }, o));
+    stk(ctx, 'NIGHT', 1095, 420, Lt.cwin('e2', "the moon's night", 0.5, null, 0.1), 0, Object.assign({ bg: '#3B4BA8', color: P.white, size: 84 }, o));
+    const cm = Lt.cafter('e1', 'sunlight shines', 0.8) && !Lt.after('e2') ? 'wow' : 'talk';
+    L.pip(ctx, { x: 1640, y: 790, s: 0.55, t, mood: cm, armR: -0.6, armL: 0.6, lookX: -0.9, lookY: -0.4, bulb: 0.5 });
+  }
+
+  // ======================= THE ORBIT (e3 .. e7): top view + "what we see from the Earth" =======================
+  const OR = { ex: 820, ey: 440, er: 92, R: 290, mr: 50, sun: { x: -520, y: 440, r: 600 }, ix: 1545, iy: 320, ir: 170 };
+  const orSunEdge = y => OR.sun.x + Math.sqrt(Math.max(0, OR.sun.r * OR.sun.r - (y - OR.sun.y) * (y - OR.sun.y))) + 24;
+  const moonAt = th => ({ x: OR.ex + OR.R * Math.cos(PI - th), y: OR.ey + OR.R * Math.sin(PI - th) });   // th 0: towards the sun (left), then down, right, up (counter-clockwise)
+  function orbitTheta(t, Lt) {
+    const c = (id, n) => Lt.chunk(id, n);
+    return keys(t, [
+      [Lt.start('e3'), 0.75 * PI], [c('e3', 'the moon travels') + 0.3, 0.75 * PI], [c('e3', 'its path') + 0.9, 2.75 * PI],
+      [Lt.start('e4'), 2.8 * PI], [Lt.end('e4') + 0.3, 3.55 * PI],
+      [c('e5', 'when the dark') + 0.1, 3.6 * PI], [c('e5', 'when the dark') + 1.2, 4 * PI],
+      [c('e6', 'a thin crescent'), 4 * PI], [c('e6', 'a thin crescent') + 0.8, 4.28 * PI],
+      [c('e6', 'then half') - 0.1, 4.28 * PI], [c('e6', 'then half') + 0.6, 4.5 * PI],
+      [c('e6', 'then a full') - 0.1, 4.5 * PI], [c('e6', 'then a full') + 0.9, 5 * PI],
+      [c('e7', 'then it shrinks'), 5 * PI], [c('e7', 'then it shrinks') + 2.2, 6 * PI]
+    ]);
+  }
+  function phaseName(th) { const p = wrap(th); if (p < 0.3 || p > TAU - 0.3) return 'new Moon'; if (Math.abs(p - PI) < 0.3) return 'full Moon'; if (Math.abs(p - PI / 2) < 0.22 || Math.abs(p - 1.5 * PI) < 0.22) return 'half'; if (p < PI / 2 || p > 1.5 * PI) return 'crescent'; return 'almost full'; }
+  function orbitBase(ctx, t, th, o) {
+    o = o || {}; space(ctx, t);
+    bigSun(ctx, OR.sun, 1);
+    rays(ctx, t, [170, 300, 440, 580, 710], orSunEdge, () => 360, 0.9, 9);
+    // the orbit path (dashed); o.path 0..1 draws it in
+    const pa = o.path == null ? 1 : o.path;
+    if (pa > 0) { ctx.save(); ctx.strokeStyle = 'rgba(255,255,255,0.55)'; ctx.lineWidth = 6; ctx.setLineDash([6, 18]); ctx.lineCap = 'round'; ctx.beginPath(); ctx.arc(OR.ex, OR.ey, OR.R, PI, PI - TAU * pa, true); ctx.stroke(); ctx.restore(); }
+    if (o.arrow > 0) { ctx.save(); ctx.globalAlpha = o.arrow; const a = PI * 0.62; const ax = OR.ex + (OR.R + 46) * Math.cos(a), ay = OR.ey + (OR.R + 46) * Math.sin(a); ctx.strokeStyle = P.sunDeep; ctx.lineWidth = 12; ctx.lineCap = 'round'; ctx.beginPath(); ctx.arc(OR.ex, OR.ey, OR.R + 46, PI * 0.82, a, true); ctx.stroke(); const d = a - PI / 2; ctx.fillStyle = P.sunDeep; ctx.beginPath(); ctx.moveTo(ax + Math.cos(d) * 30, ay + Math.sin(d) * 30); ctx.lineTo(ax + Math.cos(d + 2.4) * 30, ay + Math.sin(d + 2.4) * 30); ctx.lineTo(ax + Math.cos(d - 2.4) * 30, ay + Math.sin(d - 2.4) * 30); ctx.closePath(); ctx.fill(); ctx.restore(); }
+    earthTop(ctx, OR.ex, OR.ey, OR.er, t * 0.4);
+    const m = moonAt(th);
+    if (o.sight > 0) { ctx.save(); ctx.globalAlpha = o.sight; ctx.strokeStyle = 'rgba(255,255,255,0.8)'; ctx.lineWidth = 5; ctx.setLineDash([14, 12]); ctx.beginPath(); const dx = m.x - OR.ex, dy = m.y - OR.ey, l = Math.hypot(dx, dy); ctx.moveTo(OR.ex + dx / l * (OR.er + 8), OR.ey + dy / l * (OR.er + 8)); ctx.lineTo(m.x - dx / l * (OR.mr * 1.4), m.y - dy / l * (OR.mr * 1.4)); ctx.stroke(); ctx.restore(); }
+    moonTop(ctx, m.x, m.y, OR.mr, { near: o.near || 0, ex: OR.ex, ey: OR.ey });
+    return m;
+  }
+  // the round window: the Moon as we see it from the Earth
+  function inset(ctx, t, th, a, x, y, r) {
+    if (a <= 0) return; x = x || OR.ix; y = y || OR.iy; r = r || OR.ir; const k = E.outBack(clamp(a, 0, 1));
+    ctx.save(); ctx.translate(x, y); ctx.scale(k, k); ctx.translate(-x, -y);
+    circle(ctx, x, y, r, '#0E1534'); ctx.save(); ctx.beginPath(); ctx.arc(x, y, r, 0, TAU); ctx.clip(); L.star(ctx, x - r * 0.6, y - r * 0.5, 10, '#FFF7C2', t); L.star(ctx, x + r * 0.62, y + r * 0.45, 8, '#FFF7C2', -t); ctx.restore();
+    moonView(ctx, x, y, r * 0.66, th, { glow: 0.6 });
+    circle(ctx, x, y, r, null, P.ink, 8); circle(ctx, x, y, r - 9, null, '#8FD3FF', 5);
+    ctx.restore();
+  }
+  function orbitScene(ctx, t, Lt) {
+    const th = orbitTheta(t, Lt);
+    const path = Lt.cwin('e3', 'the moon travels', 2.2, E.inOut, 0.3);
+    const ia = Lt.cwin('e4', 'we see different', 0.6, null, -0.2);
+    const near = Lt.cwin('e4', 'we see different', 0.6, null, 0.6) * (1 - Lt.cwin('e7', 'these shapes', 0.4));
+    orbitBase(ctx, t, th, { path, arrow: Lt.cwin('e3', 'the moon travels', 0.5, null, 0.6) * (1 - Lt.win('e4', 0, 0.4)), sight: ia, near });
+    inset(ctx, t, th, ia);
+    if (ia > 0.5) { ctx.save(); ctx.globalAlpha = seg(ia, 0.5, 1); text(ctx, 'from the Earth we see:', OR.ix, OR.iy - OR.ir - 34, { size: 38, weight: 700, color: P.white, stroke: P.ink, strokeWidth: 8 }); ctx.restore(); }
+    // the phase names under the round window (one at a time), then the row of all the phases
+    const o = { size: 70, rot: -0.03 }, LX = OR.ix, LY = OR.iy + OR.ir + 70;
+    stk(ctx, 'ORBIT!', 820, 70, Lt.cwin('e3', 'an orbit', 0.5), Lt.win('e4', 0, 0.25), Object.assign({ bg: P.sun, size: 84 }, o));
+    stk(ctx, 'new Moon', LX, LY, Lt.cwin('e5', 'that is a new', 0.5, null, 0.4), Lt.cwin('e6', 'a thin crescent', 0.25), Object.assign({ bg: P.grey }, o));
+    stk(ctx, 'crescent', LX, LY, Lt.cwin('e6', 'a thin crescent', 0.5, null, 0.9), Lt.cwin('e6', 'then half', 0.25), Object.assign({ bg: P.sun }, o));
+    stk(ctx, 'half', LX, LY, Lt.cwin('e6', 'then half', 0.5, null, 0.2), Lt.cwin('e6', 'then a full', 0.25), Object.assign({ bg: P.sun }, o));
+    stk(ctx, 'full Moon!', LX, LY, Lt.cwin('e6', 'then a full', 0.5, null, 0.4), Lt.cwin('e7', 'then it shrinks', 0.25), Object.assign({ bg: P.sun }, o));
+    stk(ctx, 'shrinking', LX, LY, Lt.cwin('e7', 'then it shrinks', 0.5, null, 0.3), Lt.cwin('e7', 'these shapes', 0.25), Object.assign({ bg: P.pink }, o));
+    stk(ctx, 'PHASES', LX, LY, Lt.cwin('e7', 'these shapes', 0.5, null, 1.2), Lt.cwin('e7', 'and they repeat', 0.25, null, 0.8), Object.assign({ bg: P.blue, color: P.white, size: 84 }, o));
+    stk(ctx, 'about 29½ days', LX, LY, Lt.cwin('e7', 'and they repeat', 0.5, null, 1.2), 0, Object.assign({ bg: P.sun, size: 64 }, o));
+    // the row of phases (in order), on "phases"
+    const row = Lt.cwin('e7', 'these shapes', 0.9, null, 1.2);
+    if (row > 0) for (let i = 0; i < 8; i++) { const a = clamp(row * 1.6 - i * 0.08, 0, 1); if (a > 0) moonView(ctx, 1290 + i * 73, 710, 30 * E.outBack(a), i * PI / 4, { glow: 0, outline: 1 }); }
+    L.pip(ctx, { x: 250, y: 790, s: 0.55, t, mood: Lt.cafter('e6', 'then a full', 0.7) && !Lt.after('e7') ? 'wow' : 'talk', armR: -0.7, armL: 0.6, lookX: 0.9, lookY: -0.5, bulb: 0.6 });
+  }
+
+  // ======================= THE MODEL (test, t1): lamp = sun, ball = Moon, Curie's head = Earth =======================
+  const MO = { lx: 250, ly: 400, cx: 980, cy: 700, s: 1.2, R: 360, rz: 70, by: 420, br: 46, ix: 1610, iy: 290, ir: 150 };
+  function lamp(ctx, x, y, s, on, t) {
+    ctx.save(); ctx.translate(x, y); ctx.scale(s, s);
+    if (on > 0) { const g = ctx.createRadialGradient(0, 0, 20, 0, 0, 420); g.addColorStop(0, 'rgba(255,236,150,' + (0.55 * on) + ')'); g.addColorStop(1, 'rgba(255,236,150,0)'); ctx.fillStyle = g; ctx.beginPath(); ctx.arc(0, 0, 420, 0, TAU); ctx.fill(); }
+    ctx.fillStyle = '#8A5A33'; ctx.strokeStyle = P.ink; ctx.lineWidth = 6; roundRect(ctx, -150, 210, 300, 30, 8); ctx.fill(); ctx.stroke();   // table top
+    ctx.fillRect(-130, 240, 22, 200); ctx.strokeRect(-130, 240, 22, 200); ctx.fillRect(108, 240, 22, 200); ctx.strokeRect(108, 240, 22, 200);
+    ctx.fillStyle = '#5B6280'; roundRect(ctx, -50, 185, 100, 26, 10); ctx.fill(); ctx.stroke(); ctx.fillRect(-9, 50, 18, 136); ctx.strokeRect(-9, 50, 18, 136);
+    circle(ctx, 0, 0, 58, on > 0.5 ? '#FFF3A0' : '#E6E3D2', P.ink, 6);
+    ctx.restore();
+  }
+  // the ball's place: phi 0 between Curie and the lamp (left), then in front, right, behind (she turns to her left)
+  const ballAt = phi => ({ x: MO.cx - MO.R * Math.cos(phi), y: MO.by + MO.rz * Math.sin(phi), front: Math.sin(phi) > 0 });
+  function ball(ctx, x, y, r) { circle(ctx, x, y, r, '#6C7499'); ctx.fillStyle = '#FFF7DA'; ctx.beginPath(); ctx.arc(x, y, r, PI / 2, PI * 1.5); ctx.closePath(); ctx.fill(); circle(ctx, x, y, r, null, P.ink, 5); }
+  function modelPhi(t, Lt) {
+    return keys(t, [[Lt.start('test'), 0.02], [Lt.chunk('t1', 'and turn around') + 0.2, 0.02], [Lt.chunk('t1', 'the bright part grows') + 1.3, PI], [Lt.chunk('t1', 'and shrinks') - 0.1, PI], [Lt.chunk('t1', 'just like') + 0.6, 1.85 * PI]]);
+  }
+  function roomBg(ctx, dark) {
+    ctx.fillStyle = '#2C2B4F'; ctx.fillRect(0, 0, W, H); ctx.fillStyle = '#3B3463'; ctx.fillRect(0, 760, W, H - 760);
+    if (dark < 1) { ctx.save(); ctx.globalAlpha = 1 - dark; ctx.fillStyle = '#F3D9B1'; ctx.fillRect(0, 0, W, 760); ctx.fillStyle = '#E8C793'; ctx.fillRect(0, 760, W, H - 760); ctx.restore(); }
+  }
+  function modelScene(ctx, t, Lt) {
+    roomBg(ctx, 1);
+    const la = Lt.cwin('test', 'a lamp is', 0.6, E.outBack), ba = Lt.cwin('test', 'a ball is', 0.6, E.outBack), ha = Lt.cwin('test', 'and my head', 0.5, E.outBack);
+    lamp(ctx, MO.lx, MO.ly, 1, la > 0 ? 1 : 0.2, t);
+    const phi = modelPhi(t, Lt), b = ballAt(phi), r = MO.br * E.outBack(clamp(ba, 0, 1));
+    // Curie turns to face the ball (she turns to her left)
+    const flip = b.x < MO.cx - 40;
+    const drawBall = () => { if (ba <= 0) return; ctx.save(); ctx.strokeStyle = '#C9A26B'; ctx.lineWidth = 9; ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(MO.cx + (b.x > MO.cx ? 60 : -60), 560); ctx.lineTo(b.x, b.y + r * 0.6); ctx.stroke(); ctx.restore(); ball(ctx, b.x, b.y, r * (b.front ? 1.08 : 0.94)); };
+    if (!b.front) drawBall();
+    L.pip(ctx, { x: MO.cx, y: MO.cy, s: MO.s, t, mood: Lt.cafter('t1', 'just like', 0.3) ? 'wow' : 'talk', armR: -0.9, armL: 0.6, lookX: flip ? -0.8 : 0.8, lookY: -0.6, bulb: 0.5 });
+    if (b.front) drawBall();
+    // what Curie sees
+    const ia = Lt.cwin('t1', 'and turn around', 0.6, null, -0.3);
+    inset(ctx, t, phi, ia, MO.ix, MO.iy, MO.ir);
+    if (ia > 0.5) { ctx.save(); ctx.globalAlpha = seg(ia, 0.5, 1); text(ctx, 'Curie sees:', MO.ix, MO.iy - MO.ir - 32, { size: 40, weight: 700, color: P.white, stroke: P.ink, strokeWidth: 8 }); ctx.restore(); }
+    const lab = (s, x, y, a, c) => { if (a <= 0) return; ctx.save(); ctx.globalAlpha = clamp(a, 0, 1); text(ctx, s, x, y, { size: 52, weight: 700, color: c, stroke: P.ink, strokeWidth: 10 }); ctx.restore(); };
+    const fadeL = 1 - Lt.cwin('t1', 'and turn around', 0.4);
+    lab('sun', MO.lx, MO.ly - 120, la * fadeL, P.sun); lab('Moon', b.x, b.y - 90, ba * fadeL, MOONLIT); lab('Earth', MO.cx + 220, 520, ha * fadeL, '#8FD3FF');
+    const o = { size: 80, rot: -0.04 };
+    stk(ctx, 'TEST!', 960, 110, Lt.cwin('test', 'scientists test', 0.5), Lt.cwin('test', 'a lamp is', 0.25), Object.assign({ bg: P.blue, color: P.white, size: 100 }, o));
+    stk(ctx, 'grows!', MO.ix, MO.iy + MO.ir + 70, Lt.cwin('t1', 'the bright part grows', 0.5, null, 0.5), Lt.cwin('t1', 'and shrinks', 0.25), Object.assign({ bg: P.sun }, o));
+    stk(ctx, 'shrinks!', MO.ix, MO.iy + MO.ir + 70, Lt.cwin('t1', 'and shrinks', 0.5, null, 0.3), Lt.cwin('t1', 'just like', 0.25), Object.assign({ bg: P.pink }, o));
+    stk(ctx, 'Just like the Moon!', 960, 110, Lt.cwin('t1', 'just like', 0.5, null, 0.2), 0, Object.assign({ bg: P.green, color: P.white, size: 76 }, o));
+  }
+
+  // ======================= WOW FACT: THE MOON IN THE DAYTIME (fact) =======================
+  function factScene(ctx, t, Lt) {
+    L.sky(ctx); L.sun(ctx, 300, 330, 95, t);
+    L.cloud(ctx, 900 + Math.sin(t * 0.3) * 12, 180, 0.8); L.cloud(ctx, 1660, 520, 0.6);
+    const ma = Lt.cwin('fact', 'you can often', 1.0, E.inOut, 0.3);
+    moonView(ctx, 1260, 290, 95, 1.5 * PI, { dark: 0, glow: 0, alpha: 0.9 * ma, lit: '#F7F7F2' });
+    const ray = Lt.cwin('fact', 'the sun lights', 1.0, E.inOut, 0.2);
+    if (ray > 0) { ctx.save(); ctx.globalAlpha = ray; ctx.setLineDash([24, 18]); ctx.strokeStyle = P.sunDeep; ctx.lineWidth = 10; ctx.lineCap = 'round'; const x1 = lerp(420, 1140, ray); ctx.beginPath(); ctx.moveTo(420, 322); ctx.lineTo(x1, lerp(322, 295, ray)); ctx.stroke(); ctx.setLineDash([]); if (ray > 0.95) L.arrow(ctx, 1090, 297, 1145, 295, P.sunDeep, 10); ctx.restore(); }
+    L.ground(ctx, 820); L.tree(ctx, 1780, 840, 0.75); L.house(ctx, 1500, 830, 0.8);
+    L.pip(ctx, { x: 640, y: 700, s: 1.25, t, mood: ma > 0.6 ? 'wow' : 'talk', armR: ma > 0.3 ? -1.1 : -0.4, armL: 0.6, lookX: 0.8, lookY: -0.6 });
+    const o = { size: 84, rot: -0.04 };
+    stk(ctx, 'WOW FACT!', 960, 120, Lt.win('fact', 0.1, 0.5), Lt.cwin('fact', 'you can often', 0.25, null, 1.0), Object.assign({ bg: P.pink }, o));
+    stk(ctx, 'the Moon in the daytime!', 960, 120, Lt.cwin('fact', 'you can often', 0.5, null, 1.1), Lt.cwin('fact', 'the sun lights', 0.25), Object.assign({ bg: P.sun, size: 68 }, o));
+    stk(ctx, 'sunlight!', 860, 450, Lt.cwin('fact', 'the sun lights', 0.5, null, 0.5), 0, Object.assign({ bg: P.sun }, o));
+  }
+
+  // ======================= SAY IT, TRY AT HOME =======================
+  function nightSky(ctx, t) { const g = ctx.createLinearGradient(0, 0, 0, H); g.addColorStop(0, '#0E1534'); g.addColorStop(1, '#2A3A72'); ctx.fillStyle = g; ctx.fillRect(0, 0, W, H); for (const [x, y, k, ph] of SPACE_STARS) if (y < 760) L.star(ctx, x, y, 9 * k * (0.75 + 0.25 * Math.sin(t * 2 + ph)), '#FFF7C2', t * 0.3 + ph); }
+  function sayScene(ctx, t, Lt) {
+    nightSky(ctx, t); moonView(ctx, 1560, 640, 120, PI, {});
+    L.ground(ctx, 820, '#2F5A4A');
+    L.pip(ctx, { x: 420, y: 700, s: 1.2, t, mood: 'talk', armR: -1.2 + 0.2 * Math.sin(t * 8), armL: -1.2 - 0.2 * Math.sin(t * 8), lookX: 0.4, lookY: -0.3, bulb: 0.6 });
+    L.sayItSticker(ctx, 'The Moon stays round, our view changes!', Lt.cwin('sayit', 'the moon stays', 0.8), t);
+  }
+  // a child (dark silhouette, facing right) holding a ball up high, a little above the head; feet at (x, y)
+  function child(ctx, x, y, s, flip) {
+    ctx.save(); ctx.translate(x, y); ctx.scale(s * (flip ? -1 : 1), s); ctx.fillStyle = '#5A6390'; ctx.strokeStyle = '#5A6390'; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    ctx.lineWidth = 30; ctx.beginPath(); ctx.moveTo(-14, -10); ctx.lineTo(-10, -150); ctx.moveTo(18, -10); ctx.lineTo(12, -150); ctx.stroke();
+    roundRect(ctx, -46, -300, 90, 170, 40); ctx.fill(); circle(ctx, 0, -360, 62, '#5A6390');
+    ctx.lineWidth = 26; ctx.beginPath(); ctx.moveTo(14, -270); ctx.lineTo(90, -340); ctx.lineTo(130, -420); ctx.stroke();
+    ctx.restore();
+  }
+  const TR = { kx: 1060, ky: 800, lx: 330, ly: 420 };
+  function tryScene(ctx, t, Lt) {
+    const dark = Lt.cwin('try1', 'in a dark room', 0.8, E.inOut, 0.2);
+    roomBg(ctx, dark);
+    L.tryBanner(ctx, Lt.win('try1', 0, 0.6));
+    { const gb = Lt.win('try1', 1.5, 0.6); if (gb > 0 && dark > 0) { ctx.save(); ctx.globalAlpha = clamp(gb, 0, 1) * dark * 0.9; ctx.fillStyle = '#FFF7E6'; roundRect(ctx, 1625, 225, 270, 270, 40); ctx.fill(); ctx.restore(); } L.grownUpBadge(ctx, 1760, 330, gb); }
+    const la = Lt.cwin('try1', 'ask a grown-up', 0.5, E.outBack, 1.0), bp = Lt.cwin('try1', 'ask a grown-up', 0.5, E.outBack, 2.0);
+    if (la > 0) { ctx.save(); ctx.translate(TR.lx, TR.ly + 200); ctx.scale(E.outBack(clamp(la, 0, 1)), E.outBack(clamp(la, 0, 1))); ctx.translate(-TR.lx, -(TR.ly + 200)); lamp(ctx, TR.lx, TR.ly, 0.9, dark > 0.3 ? 1 : 0.3, t); ctx.restore(); }
+    const kid = Lt.cwin('try2', 'hold the ball', 0.5, E.outBack);
+    // turning: the ball goes round the child (she turns to her left), as in the model
+    const turn = seg(t, Lt.chunk('try2', 'and turn around') + 0.1, Lt.end('try2') + 1.4);
+    const phi = turn * TAU * 1.0 + 0.02;
+    const bx = TR.kx - 210 * Math.cos(phi) * (kid > 0 ? 1 : 0), by = 430 + 40 * Math.sin(phi);
+    if (bp > 0 && kid <= 0) { const k = E.outBack(clamp(bp, 0, 1)); ball(ctx, 1000, 420, 60 * k); }
+    if (kid > 0) {
+      const front = Math.sin(phi) > 0, flip = bx < TR.kx - 30;
+      if (!front) ball(ctx, bx, by, 34);
+      ctx.save(); ctx.globalAlpha = clamp(kid, 0, 1); child(ctx, TR.kx, TR.ky, 1.0, flip); ctx.restore();
+      if (front) ball(ctx, bx, by, 38);
+      if (turn > 0 && turn < 1) { ctx.save(); ctx.globalAlpha = 0.8; ctx.strokeStyle = P.sun; ctx.lineWidth = 10; ctx.setLineDash([16, 14]); ctx.beginPath(); ctx.ellipse(TR.kx, 750, 230, 50, 0, 0.2, PI - 0.2); ctx.stroke(); ctx.restore(); }
+    }
+    const ia = Lt.cwin('try2', 'can you see', 0.6);
+    inset(ctx, t, phi, ia, 1640, 645, 140);
+    L.pip(ctx, { x: 640, y: 760, s: 0.7, t, mood: Lt.cafter('try2', 'can you see', 0.5) ? 'wow' : 'talk', armR: -0.4, armL: 0.6, lookX: 0.9, lookY: -0.2, bulb: dark });
+    stk(ctx, 'Phases on your ball?', 1100, 270, Lt.cwin('try2', 'can you see', 0.5, null, 0.8), 0, { bg: P.sun, size: 64, rot: -0.03 });
+    stk(ctx, 'a little above your head', 1100, 270, Lt.cwin('try2', 'hold the ball', 0.5, null, 1.0), Lt.cwin('try2', 'can you see', 0.25), { bg: P.white, size: 56, rot: -0.03 });
+  }
+
+  // the outro (as L.scenes.outro), with the phrase box sized to fit: this phrase is longer than the shared box allows
+  function outro(ctx, t, Lt, phrase) {
+    L.sky(ctx, { top: '#5FB8FF', bottom: '#CDEBFF' }); L.confetti(ctx, t, 21, 70); L.ground(ctx, 860);
+    L.pip(ctx, { x: 560, y: 720, s: 1.4, t, mood: Lt.cafter('bye', 'bye-bye') ? 'happy' : 'talk', armR: -1.1 + Math.sin(t * 8) * 0.35, armL: 0.6 });
+    const lp = Lt.win('bye', 0, 0.6, E.outBack); ctx.save(); ctx.translate(1380, 340); ctx.scale(lp, lp); L.logo(ctx, 0, 0, 1, t); ctx.restore();
+    const pp = Lt.cwin('bye', 'remember', 0.6, E.outBack, 0.3);
+    if (pp > 0) { ctx.save(); ctx.translate(1340, 640); ctx.scale(pp, pp); ctx.font = '700 60px Fredoka'; const k = Math.min(1, 980 / ctx.measureText(phrase).width), size = Math.floor(60 * k); ctx.font = '700 ' + size + 'px Fredoka'; const w = ctx.measureText(phrase).width + 90; ctx.fillStyle = P.white; roundRect(ctx, -w / 2, -60, w, 120, 40); ctx.fill(); ctx.strokeStyle = P.ink; ctx.lineWidth = 8; ctx.stroke(); text(ctx, phrase, 0, 4, { size, weight: 700, color: P.ink }); ctx.restore(); }
+    const bp = Lt.cwin('bye', 'bye-bye', 0.6, E.outBack); if (bp > 0) L.sticker(ctx, 'Bye-bye!', 1380, 790, bp, { bg: P.sun, rot: 0.05, size: 84 });
+  }
+
+  // ======================= TRY IT 1: MOON TRIP (drag the Moon round the Earth) =======================
+  const T1 = { hit: 115 };
+  function t1Zone(th) { const p = wrap(th); if (p < 0.3 || p > TAU - 0.3) return 'new'; if (Math.abs(p - PI) < 0.3) return 'full'; if (Math.abs(p - PI / 2) < 0.22 || Math.abs(p - 1.5 * PI) < 0.22) return 'half'; return ''; }
+  function t1Draw(ctx, s, t) {
+    const m = orbitBase(ctx, t, s.th, { sight: 1, near: 1 });
+    inset(ctx, t, s.th, 1);
+    text(ctx, 'from the Earth we see:', OR.ix, OR.iy - OR.ir - 34, { size: 38, weight: 700, color: P.white, stroke: P.ink, strokeWidth: 8 });
+    L.sticker(ctx, phaseName(s.th), OR.ix, OR.iy + OR.ir + 70, 1, { bg: phaseName(s.th) === 'new Moon' ? P.grey : P.sun, size: 64, rot: -0.03 });
+    if (!s.touched) { const bob = Math.sin(t * 4) * 6; text(ctx, 'drag the Moon', m.x + 190, m.y + 60 + bob, { size: 54, weight: 700, color: P.white, stroke: P.ink, strokeWidth: 12 }); const am = PI - s.th, r2 = OR.R + 80, a1 = am - 0.2, a2 = am - 0.75; ctx.save(); ctx.strokeStyle = P.sun; ctx.lineWidth = 14; ctx.lineCap = 'round'; ctx.beginPath(); ctx.arc(OR.ex, OR.ey, r2, a1, a2, true); ctx.stroke(); const hx = OR.ex + r2 * Math.cos(a2), hy = OR.ey + r2 * Math.sin(a2), d = a2 - PI / 2; ctx.fillStyle = P.sun; ctx.beginPath(); ctx.moveTo(hx + Math.cos(d) * 34, hy + Math.sin(d) * 34); ctx.lineTo(hx + Math.cos(d + 2.4) * 34, hy + Math.sin(d + 2.4) * 34); ctx.lineTo(hx + Math.cos(d - 2.4) * 34, hy + Math.sin(d - 2.4) * 34); ctx.closePath(); ctx.fill(); ctx.restore(); }
+    text(ctx, 'sunlight', 210, 120, { size: 44, weight: 700, color: '#FFF3B0', stroke: P.ink, strokeWidth: 9 });
+    L.pip(ctx, { x: 1180, y: 860, s: 0.5, t, mood: s.zone === 'full' ? 'wow' : 'happy', armR: -0.6, armL: 0.6, lookX: 0.8, lookY: -0.6, bulb: 0.6 });
+  }
+
+  // ======================= TRY IT 2: NIGHT BY NIGHT (a 29.5-day slider) =======================
+  const T2 = { x0: 260, x1: 1660, y: 930, hit: 100, days: 29.5, mx: 1060, my: 400, mr: 200 };
+  const t2X = d => lerp(T2.x0, T2.x1, d / T2.days);
+  function t2Zone(d) { if (d >= 29.1) return 'again'; if (d > 2 && d < 13.2) return 'grow'; if (d > 16.3 && d < 27.5) return 'shrink'; return ''; }
+  function t2Draw(ctx, s, t) {
+    nightSky(ctx, t);
+    moonView(ctx, T2.mx, T2.my, T2.mr, TAU * s.day / T2.days, {});
+    L.ground(ctx, 760, '#2F5A4A');
+    L.pip(ctx, { x: 330, y: 650, s: 0.85, t, mood: s.zone === 'again' || Math.abs(s.day - 14.75) < 1 ? 'wow' : 'happy', armR: -0.7, armL: 0.6, lookX: 0.9, lookY: -0.6, bulb: 0.7 });
+    text(ctx, s.day > 29.25 ? 'Day 29\u00BD' : 'Day ' + Math.max(1, Math.round(s.day)), T2.mx, T2.my + T2.mr + 70, { size: 60, weight: 700, color: P.white, stroke: P.ink, strokeWidth: 12 });
+    // the track, with little moons at every week
+    ctx.save(); ctx.lineCap = 'round'; ctx.strokeStyle = '#1B2450'; ctx.lineWidth = 34; ctx.beginPath(); ctx.moveTo(T2.x0, T2.y); ctx.lineTo(T2.x1, T2.y); ctx.stroke();
+    ctx.strokeStyle = P.sun; ctx.lineWidth = 22; ctx.beginPath(); ctx.moveTo(T2.x0, T2.y); ctx.lineTo(t2X(s.day), T2.y); ctx.stroke(); ctx.restore();
+    for (const d of [0, 7.4, 14.75, 22.1, 29.5]) { moonView(ctx, t2X(d), T2.y - 75, 26, TAU * d / T2.days, { glow: 0, outline: 1 }); }
+    circle(ctx, t2X(s.day), T2.y, 44, P.white, P.ink, 8);
+    if (!s.touched) { const bob = Math.sin(t * 4) * 8; text(ctx, 'drag me', t2X(s.day) + 40, T2.y - 160 + bob, { size: 54, weight: 700, color: P.white, stroke: P.ink, strokeWidth: 12 }); L.arrow(ctx, t2X(s.day) + 70, T2.y - 110 + bob, t2X(s.day) + 260, T2.y - 110 + bob, P.sun, 12); }
+  }
+
+  L.episodes.ep18 = {
+    id: 'ep18', num: 18, title: 'Why does the Moon change shape?', short: 'Moon phases', phrase: 'The Moon stays round, our view changes!',
+    thumb: {
+      big: 'MOON', small1: 'Why does the', small2: 'change shape?',
+      bg: (ctx, t) => {
+        nightSky(ctx, 0.5);
+        [[1060, 520, 0.9], [1300, 400, PI / 2], [1560, 330, 2.3], [1790, 300, PI]].forEach(([x, y, ph]) => moonView(ctx, x, y, 100, ph, {}));
+        L.ground(ctx, 860, '#2F5A4A');
+      }
+    },
+    lines: [
+      { id: 'hello', text: "Hello, little scientists! I'm Curie. Welcome to the Little Scientists Club!", say: "Hello, little scientists! I'm *Curie*! Welcome... to the Little Scientists Club!", hold: 0.3 },
+      { id: 'q', text: "Today's big question: why does the Moon change shape?", say: "Today's big question... Why does the Moon change *shape*?", hold: 0.6 },
+      { id: 's1', text: 'I look at the Moon from my window every night.', say: 'I look at the *Moon* from my window... every night.', hold: 0.3 },
+      { id: 's2', text: 'Some nights it is a thin curve. Some nights it is half. And some nights it is a big, round circle!', say: 'Some nights it is a *thin* curve. Some nights it is *half*. And some nights... it is a big, *round* circle!', hold: 0.8 },
+      { id: 'look', text: "Is the Moon really changing? Let's look closer.", say: "Is the Moon *really* changing? Let's look *closer*.", hold: 0.8 },
+      { id: 'e1', text: 'The Moon does not make its own light. Sunlight shines on it and bounces off, into our eyes.', say: 'The Moon does *not* make its own light. *Sunlight* shines on it... and bounces off, into our *eyes*.', hold: 0.5 },
+      { id: 'e2', text: "The sun always lights up half of the Moon. That half is the Moon's day. The other half is dark: the Moon's night.", say: "The sun *always* lights up *half* of the Moon. That half is the Moon's *day*. The other half is dark... the Moon's *night*.", hold: 0.6 },
+      { id: 'e3', text: 'The Moon travels around the Earth. Its path is called an orbit.', say: 'The Moon *travels* around the Earth. Its path is called... an *orbit*.', hold: 0.5 },
+      { id: 'e4', text: 'As the Moon goes around, we see different amounts of its bright half.', say: 'As the Moon goes around... we see *different* amounts of its bright half.', hold: 0.4 },
+      { id: 'e5', text: 'When the dark half faces us, we cannot see the Moon. That is a new Moon.', say: 'When the *dark* half faces us... we cannot see the Moon. That is a *new* Moon.', hold: 0.5 },
+      { id: 'e6', text: 'Then we see a thin crescent... then half... then a full Moon, when all of its bright half faces us!', say: 'Then we see a thin *crescent*... then *half*... then a *full* Moon, when *all* of its bright half faces us!', hold: 0.6 },
+      { id: 'e7', text: "Then it shrinks back again. These shapes are the Moon's phases, and they repeat about every 29 and a half days!", say: "Then it *shrinks* back again. These shapes are the Moon's *phases*... and they repeat about every twenty-nine and a half *days*!", hold: 1.0 },
+      { id: 'test', text: 'Scientists test it with a model! A lamp is the sun, a ball is the Moon, and my head is the Earth.', say: '{sfx:ding}Scientists *test* it, with a *model*! A lamp is the sun... a ball is the Moon... and my head is the Earth.', hold: 0.4 },
+      { id: 't1', text: 'I hold up the ball and turn around slowly. The bright part grows... and shrinks. Just like the Moon!', say: 'I hold up the ball... and turn around *slowly*. The bright part *grows*... and *shrinks*. Just like the Moon!', hold: 1.0 },
+      { id: 'fact', text: 'Wow fact! You can often see the Moon in the daytime too. The sun lights it up, even then!', say: '{sfx:ding}*Wow* fact! You can often see the Moon in the *daytime*, too. The sun lights it up... even then!', hold: 1.0 },
+      { id: 'sayit', text: 'Say it with me: The Moon stays round, our view changes!', say: 'Say it with me... {sfx:ding}The Moon stays *round*... our *view* changes! {pause 0.9} {slow}The Moon stays round... our view changes!{/slow}', hold: 1.4 },
+      { id: 'try1', text: "Let's try it at home! Ask a grown-up for a lamp and a ball, in a dark room.", say: "{sfx:tada}Let's try it at home! Ask a grown-up for a *lamp* and a *ball*... in a dark room.", hold: 0.4 },
+      { id: 'try2', text: "Hold the ball up high, a little above your head, and turn around slowly. Can you see the Moon's phases on your ball?", say: "Hold the ball up high, a little above your head... and turn around *slowly*. {sfx:ding}Can you see the Moon's *phases* on your ball?", hold: 1.6 },
+      { id: 'bye', text: 'Great job, little scientist! Remember: the Moon stays round, our view changes! See you next time at the Little Scientists Club! Bye-bye!', say: '{sfx:tada}Great job, little scientist! Remember... the Moon stays *round*, our *view* changes! See you next time, at the Little Scientists Club! {hi}Bye-bye!{/hi}', hold: 1.2 }
+    ],
+    sfx: [
+      { line: 's2', chunk: 'it is a big', offset: 0.5, name: 'sparkle', vol: 0.6 },
+      { line: 'look', chunk: "let's look", offset: 0.5, name: 'zoom' },
+      { line: 'e1', chunk: 'sunlight shines', offset: 0.5, name: 'sparkle', vol: 0.5 },
+      { line: 'e3', chunk: 'the moon travels', offset: 0.4, name: 'whoosh', vol: 0.35 },
+      { line: 'e6', chunk: 'then a full', offset: 0.9, name: 'sparkle', vol: 0.6 },
+      { line: 't1', chunk: 'just like', offset: 0.9, name: 'sparkle', vol: 0.6 }
+    ],
+    scenes: [
+      { from: 'hello', draw: (ctx, t, Lt) => L.scenes.intro(ctx, t, Lt) },
+      { from: 'q', draw: (ctx, t, Lt) => L.scenes.question(ctx, t, Lt, (c, tt) => { c.save(); roundRect(c, -270, -150, 540, 300, 40); c.fillStyle = '#0E1534'; c.fill(); c.strokeStyle = P.ink; c.lineWidth = 7; c.stroke(); c.restore(); [[-160, 0.9], [0, PI / 2], [160, PI]].forEach(([x, ph]) => moonView(c, x, 0, 62, ph, { glow: 0 })); }, { word: 'Why?' }) },
+      { from: 's1', draw: (ctx, t, Lt) => nightsScene(ctx, t, Lt) },
+      { from: 'look', transition: 'cut', draw: (ctx, t, Lt) => lookScene(ctx, t, Lt) },
+      { from: 'e1', transition: 'cut', draw: (ctx, t, Lt) => sunlightScene(ctx, t, Lt) },
+      { from: 'e3', draw: (ctx, t, Lt) => orbitScene(ctx, t, Lt) },
+      { from: 'test', draw: (ctx, t, Lt) => modelScene(ctx, t, Lt) },
+      { from: 'fact', draw: (ctx, t, Lt) => factScene(ctx, t, Lt) },
+      { from: 'sayit', draw: (ctx, t, Lt) => sayScene(ctx, t, Lt) },
+      { from: 'try1', draw: (ctx, t, Lt) => tryScene(ctx, t, Lt) },
+      { from: 'bye', draw: (ctx, t, Lt) => outro(ctx, t, Lt, 'The Moon stays round, our view changes!') }
+    ],
+    interactives: [
+      {
+        title: 'Moon trip',
+        hint: 'Drag the Moon around the Earth. How does it look from the Earth?',
+        init: s => { s.th = 2.3; s.drag = false; s.touched = false; s.moved = false; s.th0 = s.th; s.zone = ''; s.zt = 0; s.lastCue = ''; },
+        update: (s, dt, cue) => {
+          const z = t1Zone(s.th); if (z !== s.zone) { s.zone = z; s.zt = 0; } else s.zt += dt;
+          if (s.moved && z && s.zt > 0.35 && s.lastCue !== z) { s.lastCue = z; cue(z); if (L.sound) { try { L.sound.tone(z === 'full' ? 880 : z === 'half' ? 660 : 440, 0.25, { type: 'triangle', vol: 0.2 }); } catch (e) { /* no sound */ } } }
+        },
+        draw: (ctx, s, t) => t1Draw(ctx, s, t),
+        pointer: (s, type, x, y) => {
+          if (type === 'down') { const m = moonAt(s.th); if (Math.hypot(x - m.x, y - m.y) < T1.hit) { s.drag = true; s.touched = true; s.th0 = s.th; } }
+          if (type === 'move' && s.drag) { const a = Math.atan2(y - OR.ey, x - OR.ex); s.th = wrap(PI - a); if (Math.abs(Math.atan2(Math.sin(s.th - s.th0), Math.cos(s.th - s.th0))) > 0.05) s.moved = true; }
+          if (type === 'up') s.drag = false;
+        },
+        cues: {
+          new: 'A new Moon! Its dark half faces us.',
+          half: 'Half of the Moon looks bright!',
+          full: 'A full Moon! All of its bright half faces us.'
+        }
+      },
+      {
+        title: 'Night by night',
+        hint: 'Drag the dot along, one night at a time. Watch the Moon grow and shrink!',
+        init: s => { s.day = 1; s.drag = false; s.touched = false; s.moved = false; s.zone = ''; s.zt = 0; s.lastCue = ''; s.grab = 0; },
+        update: (s, dt, cue) => {
+          const z = t2Zone(s.day); if (z !== s.zone) { s.zone = z; s.zt = 0; } else s.zt += dt;
+          if (s.moved && z && s.zt > (z === 'again' ? 0.2 : 0.5) && s.lastCue !== z) { s.lastCue = z; cue(z); if (L.sound) { try { L.sound.tone(z === 'grow' ? 660 : z === 'shrink' ? 440 : 880, 0.25, { type: 'triangle', vol: 0.2 }); } catch (e) { /* no sound */ } } }
+        },
+        draw: (ctx, s, t) => t2Draw(ctx, s, t),
+        pointer: (s, type, x, y) => {
+          if (type === 'down') { const kx = t2X(s.day); if (Math.hypot(x - kx, y - T2.y) < T2.hit + 20 || (Math.abs(y - T2.y) < 70 && x > T2.x0 - 40 && x < T2.x1 + 40)) { s.drag = true; s.touched = true; s.grab = Math.hypot(x - kx, y - T2.y) < T2.hit + 20 ? kx - x : 0; } }
+          if (type === 'move' && s.drag) { const d = clamp((x + s.grab - T2.x0) / (T2.x1 - T2.x0), 0, 1) * T2.days; if (Math.abs(d - s.day) > 0.05) s.moved = true; s.day = d; }
+          if (type === 'up') s.drag = false;
+        },
+        cues: {
+          grow: 'Night by night, the bright part grows!',
+          shrink: 'Now the bright part shrinks, night by night.',
+          again: 'About twenty-nine and a half days... and it starts again!'
+        }
+      }
+    ]
+  };
+})(typeof window !== 'undefined' ? window : globalThis);
+
 /* Episode 19 — How do we know what made something happen?  (the counterfactual ideal)
    Story: race day; Curie wears new spotty socks and wins: "My lucky socks made me win!" Did they?
    -> look closer: to know if the socks helped, we need what would have happened WITHOUT them; imagine two Curies in the same race
