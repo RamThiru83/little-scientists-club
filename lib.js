@@ -8211,3 +8211,482 @@
     ]
   };
 })(typeof window !== 'undefined' ? window : globalThis);
+
+/* Episode 19 — How do we know what made something happen?  (the counterfactual ideal)
+   Story: race day; Curie wears new spotty socks and wins: "My lucky socks made me win!" Did they?
+   -> look closer: to know if the socks helped, we need what would have happened WITHOUT them; imagine two Curies in the same race
+   at the same time, one in spotty socks, one in plain socks: both win = no difference; only spotty-socks Curie wins = the socks
+   helped. That "what would have happened if things had been different" is the counterfactual; comparing the same me, same race,
+   same time, with only the socks different, is the perfect test: the counterfactual ideal. But there is only one me: we can
+   never see both. So scientists use the next best thing: another group, alike in every way except the socks.
+   -> test: names in a hat, picked at random: half spotty, half plain; random picking makes the groups alike; both groups are
+   just as fast, so the socks made no difference. -> real life: doctors test new medicines this way. -> say it -> try at home
+   (two paper planes, folded the same, a sticker on one).
+   Source: Kenneth J. Rothman, Epidemiology: An Introduction, 3rd ed. (OUP), Ch. 4, "The Counterfactual Ideal" (the ideal is a
+   comparison of people with themselves, at the same time, exposed and unexposed; impossible, so we substitute a real unexposed
+   group that should be comparable; randomisation, crossover, matching); Lash, VanderWeele, Haneuse and Rothman, Modern
+   Epidemiology, 4th ed. (2021), Ch. 3 (potential outcomes: we only observe one outcome per person) and Ch. 5 (effect vs
+   association; substitution; confounding). No real people are named in the video.
+   Try it 1 "What if?" (race Curie against a what-if Curie: change the socks or the road); Try it 2 "Pick from a hat" (unfair vs random teams). */
+(function (global) {
+  const L = global.LSC; const LSC = L; const { W, H, P, E, seg, clamp, lerp, circle, ellipse, text, roundRect } = L;
+  L.episodes = L.episodes || {};
+  const PI = Math.PI, TAU = PI * 2;
+  const sstep = (a, b, x) => { const p = clamp((x - a) / (b - a), 0, 1); return p * p * (3 - 2 * p); };
+  const stk = (ctx, s, x, y, pIn, pOut, o) => L.sticker(ctx, s, x, y, pIn * (1 - (pOut || 0)), o);
+  const SPOT = '#FF5C8A', PLAIN = '#9AA5B8', TRACK = '#E07A4F', TRACK_D = '#C8653D';
+  const BUDDY = ['#4EA8FF', '#5BC26B', '#9B6BFF', '#FF9BD2', '#FFD23F', '#2EC4B6'];
+
+  // ---------- socks, drawn over the feet of Curie (L.pip) or of a buddy. kind: 'spotty' | 'plain' ----------
+  function sockShape(ctx, cx, cy, kind, k) {
+    ctx.save(); ctx.translate(cx, cy); ctx.scale(k, k);
+    ctx.beginPath(); ctx.moveTo(-26, -34); ctx.lineTo(18, -34); ctx.lineTo(18, -4); ctx.quadraticCurveTo(46, -2, 46, 12); ctx.quadraticCurveTo(46, 26, 20, 26); ctx.lineTo(-20, 26); ctx.quadraticCurveTo(-30, 26, -30, 10); ctx.closePath();
+    ctx.fillStyle = kind === 'spotty' ? SPOT : PLAIN; ctx.fill();
+    if (kind === 'spotty') { ctx.save(); ctx.clip(); for (const [x, y] of [[-14, -22], [8, -14], [-8, 4], [16, 14], [34, 10], [-20, 16]]) circle(ctx, x, y, 6, P.white); ctx.restore(); }
+    ctx.strokeStyle = P.ink; ctx.lineWidth = 5; ctx.stroke();
+    ctx.fillStyle = P.white; roundRect(ctx, -29, -42, 50, 14, 6); ctx.fill(); ctx.stroke();
+    ctx.restore();
+  }
+  // socks on Curie: same transform as L.pip (translate, scale, bob)
+  function curieSocks(ctx, o, kind) {
+    const s = o.s || 1, bob = o.bob === false ? 0 : Math.sin((o.t || 0) * 2.2) * 4;
+    ctx.save(); ctx.translate(o.x, o.y); ctx.scale(s * (o.flip ? -1 : 1), s); ctx.translate(0, bob);
+    sockShape(ctx, -46, 104, kind, 0.9); sockShape(ctx, 40, 104, kind, 0.9);
+    ctx.restore();
+  }
+  // Curie with socks; o.ghost (0..1) draws her see-through with a dashed outline (the "what if" Curie)
+  function curie(ctx, o, kind) {
+    const g = o.ghost || 0;
+    ctx.save(); if (g > 0) ctx.globalAlpha = 1 - 0.55 * g;
+    L.pip(ctx, o); if (kind) curieSocks(ctx, o, kind);
+    ctx.restore();
+    if (g > 0) { const s = o.s || 1; ctx.save(); ctx.globalAlpha = g; ctx.strokeStyle = P.white; ctx.lineWidth = 6; ctx.setLineDash([16, 12]); ctx.beginPath(); ctx.arc(o.x, o.y + Math.sin((o.t || 0) * 2.2) * 4 * s, 118 * s, 0, TAU); ctx.stroke(); ctx.restore(); }
+  }
+  // a runner friend: round body, eyes, feet with socks; (x, y) = body centre, s = scale; o.run (phase) bobs the legs; o.fast draws a lightning badge
+  function buddy(ctx, x, y, s, color, t, o) {
+    o = o || {}; const run = o.run, bob = run != null ? Math.abs(Math.sin(run * 9)) * -10 : Math.sin(t * 2.2 + x * 0.01) * 3;
+    ctx.save(); ctx.translate(x, y + bob * s); ctx.scale(s, s);
+    if (o.socks) { sockShape(ctx, -30, 64, o.socks, 0.6); sockShape(ctx, 26, 64, o.socks, 0.6); }
+    else { ellipse(ctx, -28, 66, 22, 11, P.ink); ellipse(ctx, 28, 66, 22, 11, P.ink); }
+    circle(ctx, 0, 0, 66, color, P.ink, 6);
+    for (const sx of [-1, 1]) { ellipse(ctx, sx * 22, -12, 13, 16, P.white, P.ink, 3); circle(ctx, sx * 22 + 3, -10, 7, P.ink); }
+    ctx.strokeStyle = P.ink; ctx.lineWidth = 5; ctx.lineCap = 'round'; ctx.beginPath(); ctx.arc(0, 14, 18, 0.15 * PI, 0.85 * PI); ctx.stroke();
+    if (o.fast) { ctx.fillStyle = P.sun; ctx.strokeStyle = P.ink; ctx.lineWidth = 4; ctx.beginPath(); ctx.moveTo(40, -70); ctx.lineTo(22, -38); ctx.lineTo(38, -38); ctx.lineTo(26, -8); ctx.lineTo(58, -48); ctx.lineTo(42, -48); ctx.lineTo(54, -70); ctx.closePath(); ctx.fill(); ctx.stroke(); }
+    ctx.restore();
+  }
+  function tick(ctx, x, y, s, p) { if (p <= 0) return; const k = E.outBack(clamp(p, 0, 1)) * s; ctx.save(); ctx.translate(x, y); ctx.scale(k, k); circle(ctx, 0, 0, 50, P.green, P.ink, 6); ctx.strokeStyle = P.white; ctx.lineWidth = 13; ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.beginPath(); ctx.moveTo(-22, 2); ctx.lineTo(-5, 19); ctx.lineTo(24, -18); ctx.stroke(); ctx.restore(); }
+  function cross(ctx, x, y, s, p) { if (p <= 0) return; const k = E.outBack(clamp(p, 0, 1)) * s; ctx.save(); ctx.translate(x, y); ctx.scale(k, k); circle(ctx, 0, 0, 50, P.red, P.ink, 6); ctx.strokeStyle = P.white; ctx.lineWidth = 13; ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(-19, -19); ctx.lineTo(19, 19); ctx.moveTo(19, -19); ctx.lineTo(-19, 19); ctx.stroke(); ctx.restore(); }
+  function clockIcon(ctx, x, y, r, t) { circle(ctx, x, y, r, P.white, P.ink, 6); ctx.strokeStyle = P.ink; ctx.lineWidth = 6; ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x, y - r * 0.65); ctx.moveTo(x, y); ctx.lineTo(x + r * 0.5, y + r * 0.1); ctx.stroke(); }
+  function finishLine(ctx, x, y0, y1) { const n = Math.max(2, Math.round((y1 - y0) / 24)); for (let i = 0; i < n; i++) for (let j = 0; j < 2; j++) { ctx.fillStyle = (i + j) % 2 ? P.ink : P.white; ctx.fillRect(x + j * 14, y0 + i * (y1 - y0) / n, 14, (y1 - y0) / n); } }
+  // a running lane: (x0..x1) at ground level y, height h
+  function lane(ctx, x0, x1, y, h) { ctx.fillStyle = TRACK; ctx.fillRect(x0, y - h, x1 - x0, h); ctx.strokeStyle = P.white; ctx.lineWidth = 5; ctx.beginPath(); ctx.moveTo(x0, y - h); ctx.lineTo(x1, y - h); ctx.moveTo(x0, y); ctx.lineTo(x1, y); ctx.stroke(); }
+
+  // ======================= RACE DAY (s1, s2, look) =======================
+  const RC = { y: 800, x0: 440, x1: 1560, cs: 1.0 };
+  function raceRun(t, Lt) { const g = Lt.cafter('s2', 'go!') ? Lt.chunk('s2', 'go!') + 0.35 : 1e9; return clamp((t - g) / 2.0, 0, 1); }
+  function raceScene(ctx, t, Lt) {
+    L.sky(ctx); L.sun(ctx, 1720, 160, 90, t); L.cloud(ctx, 520, 150, 0.8); L.cloud(ctx, 1150, 110, 0.6);
+    L.ground(ctx, 560); L.tree(ctx, 120, 570, 0.8);
+    // the track: three lanes
+    ctx.fillStyle = TRACK; ctx.fillRect(0, 530, W, 300); ctx.strokeStyle = P.white; ctx.lineWidth = 6; for (const y of [530, 630, 730, 830]) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke(); }
+    finishLine(ctx, RC.x1 + 120, 530, 830);
+    const p = raceRun(t, Lt), win = p >= 1;
+    // the ribbon breaks when Curie reaches it
+    const rx = RC.x1 + 134; ctx.strokeStyle = P.ink; ctx.lineWidth = 8; ctx.beginPath(); ctx.moveTo(rx, 430); ctx.lineTo(rx, 830); ctx.stroke(); ctx.beginPath(); ctx.moveTo(rx + 60, 430); ctx.lineTo(rx + 60, 830); ctx.stroke();
+    if (!win) { ctx.strokeStyle = P.red; ctx.lineWidth = 10; ctx.beginPath(); ctx.moveTo(rx, 560); ctx.lineTo(rx + 60, 560); ctx.stroke(); }
+    // two friends (behind Curie at the finish)
+    const pf = clamp(p * 0.9, 0, 0.93);
+    buddy(ctx, lerp(RC.x0 - 200, RC.x1 + 40, pf * 0.97), 545, 0.95, BUDDY[0], t, { run: p > 0 && p < 1 ? t : null, socks: 'plain' });
+    buddy(ctx, lerp(RC.x0 - 200, RC.x1 + 40, pf * 0.92), 740, 0.95, BUDDY[1], t, { run: p > 0 && p < 1 ? t : null, socks: 'plain' });
+    // Curie in the middle lane
+    const cx = lerp(RC.x0, RC.x1 + 230, E.inOut(p)), cy = 585, run = p > 0 && p < 1;
+    let mood = 'talk', armR = 0.5, armL = 0.5, lookX = 0.3, lookY = 0.3;
+    if (Lt.cafter('s1', 'i am wearing')) { lookY = 0.9; lookX = 0; }
+    if (Lt.after('s2')) { lookY = 0; lookX = 0.8; }
+    if (run) { armR = -0.4 + 0.5 * Math.sin(t * 18); armL = -0.4 - 0.5 * Math.sin(t * 18); }
+    if (win) { mood = 'wow'; armR = -1.2; armL = -1.2; }
+    if (Lt.cafter('s2', 'my lucky socks')) mood = 'talk';
+    if (Lt.after('look')) { mood = 'think'; armR = -0.7; armL = 0.5; }
+    curie(ctx, { x: cx, y: cy + (run ? -Math.abs(Math.sin(t * 9)) * 14 : 0), s: RC.cs, t, mood, armR, armL, lookX, lookY, bob: !run }, 'spotty');
+    if (win && Lt.cafter('s2', 'i win', 0.2) && !Lt.after('look')) L.sparkles(ctx, cx, cy - 120, t, 4, 8, 220, P.sun);
+    const o = { size: 76, rot: -0.04 };
+    stk(ctx, 'RACE DAY!', 960, 150, Lt.cwin('s1', 'today is race day', 0.5, null, 0.2), Lt.cwin('s1', 'i am wearing', 0.25, null, 1.0), Object.assign({ bg: P.sun, size: 90 }, o));
+    stk(ctx, 'spotty socks!', 760, 420, Lt.cwin('s1', 'i am wearing', 0.5, null, 1.3), Lt.win('s2', 0, 0.25), Object.assign({ bg: SPOT, color: P.white }, o));
+    if (Lt.cafter('s1', 'i am wearing', 1.3) && !Lt.after('s2')) { ctx.save(); ctx.globalAlpha = Lt.cwin('s1', 'i am wearing', 0.4, null, 1.3); L.arrow(ctx, 620, 470, cx - 30, 650, SPOT, 12); ctx.restore(); }
+    stk(ctx, 'Ready...', 960, 200, Lt.cwin('s2', 'ready', 0.4), Lt.cwin('s2', 'go!', 0.2), Object.assign({ bg: P.white }, o));
+    stk(ctx, 'GO!', 960, 200, Lt.cwin('s2', 'go!', 0.4), Lt.cwin('s2', 'i win', 0.25), Object.assign({ bg: P.green, color: P.white, size: 110 }, o));
+    stk(ctx, 'I win!', 1500, 260, Lt.cwin('s2', 'i win', 0.5), Lt.cwin('s2', 'my lucky socks', 0.25), Object.assign({ bg: P.sun, size: 96 }, o));
+    stk(ctx, 'lucky socks?', 1460, 260, Lt.cwin('s2', 'my lucky socks', 0.5, null, 0.5), Lt.win('look', 0, 0.25), Object.assign({ bg: SPOT, color: P.white, size: 80 }, o));
+    if (Lt.after('look')) { const q = Lt.cwin('look', 'did they', 0.5, E.outBack) * (1 - Lt.cwin('look', "let's look", 0.3)); if (q > 0) L.questionMark(ctx, 1500, 300, q, t, SPOT); }
+  }
+  // the zoom: a magnifier on the socks grows into the thinking room
+  function lookScene(ctx, t, Lt) {
+    raceScene(ctx, t, Lt);
+    const fx = RC.x1 + 230, fy = 690;
+    const p = seg(t, Lt.chunk('look', "let's look") + 0.3, Lt.end('look') + 0.7, E.in);
+    if (p > 0) {
+      const r = lerp(120, 2300, p);
+      ctx.save(); ctx.beginPath(); ctx.arc(fx, fy, r, 0, TAU); ctx.clip(); thinkBg(ctx); sockShape(ctx, lerp(fx, 960, p), lerp(fy, 470, p), 'spotty', lerp(2, 5, p)); ctx.restore();
+      if (p < 1) L.magnifier(ctx, fx, fy, r, p);
+    }
+  }
+
+  // ======================= TWO OF ME (e1 .. e8) =======================
+  function thinkBg(ctx) { ctx.fillStyle = '#EEF4FF'; ctx.fillRect(-W, -H, 3 * W, 3 * H); ctx.strokeStyle = 'rgba(78,168,255,0.10)'; ctx.lineWidth = 3; for (let x = 0; x <= W; x += 120) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke(); } for (let y = 0; y <= H; y += 120) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke(); } }
+  // a panel with a little race: label at top; returns the inner frame
+  const PN = [{ x: 110, y: 230, w: 820, h: 500, kind: 'spotty', label: 'spotty socks' }, { x: 990, y: 230, w: 820, h: 500, kind: 'plain', label: 'plain socks' }];
+  function panel(ctx, pn, a, o) {
+    if (a <= 0) return; o = o || {}; ctx.save(); ctx.globalAlpha = clamp(a, 0, 1);
+    ctx.fillStyle = P.white; roundRect(ctx, pn.x, pn.y, pn.w, pn.h, 34); ctx.fill();
+    ctx.save(); ctx.beginPath(); roundRect(ctx, pn.x, pn.y, pn.w, pn.h, 34); ctx.clip();
+    ctx.fillStyle = '#CDEBFF'; ctx.fillRect(pn.x, pn.y, pn.w, pn.h * 0.6); ctx.fillStyle = P.ground; ctx.fillRect(pn.x, pn.y + pn.h * 0.6, pn.w, pn.h * 0.4);
+    lane(ctx, pn.x, pn.x + pn.w, pn.y + pn.h - 60, 120); finishLine(ctx, pn.x + pn.w - 110, pn.y + pn.h - 180, pn.y + pn.h - 60);
+    ctx.restore();
+    ctx.strokeStyle = o.dash ? '#6B74D8' : P.ink; ctx.lineWidth = 7; if (o.dash) ctx.setLineDash([22, 14]); roundRect(ctx, pn.x, pn.y, pn.w, pn.h, 34); ctx.stroke(); ctx.setLineDash([]);
+    L.sticker(ctx, pn.label, pn.x + pn.w / 2, pn.y, 1, { bg: pn.kind === 'spotty' ? SPOT : PLAIN, color: P.white, size: 46, rot: 0 });
+    ctx.restore();
+  }
+  // where Curie is in a panel: run progress 0..1
+  const inPanel = (pn, p) => ({ x: lerp(pn.x + 120, pn.x + pn.w - 70, p), y: pn.y + pn.h - 165 });
+  function twoScene(ctx, t, Lt) {
+    thinkBg(ctx);
+    const c = (id, n, off) => Lt.chunk(id, n) + (off || 0);
+    // ---- e1: Curie with her socks; on "without them" the what-if Curie (plain socks) appears beside her ----
+    const e1 = !Lt.after('e2');
+    if (e1) {
+      const wo = Lt.cwin('e1', 'what would have happened', 0.8, E.outBack, 1.0);
+      curie(ctx, { x: lerp(960, 640, wo), y: 520, s: 1.3, t, mood: 'talk', armR: -0.4, armL: 0.6, lookX: wo > 0 ? 0.8 : 0, lookY: 0.2 }, 'spotty');
+      if (wo > 0) { ctx.save(); ctx.globalAlpha = clamp(wo, 0, 1); curie(ctx, { x: 1280, y: 520, s: 1.3, t: t + 0.7, mood: 'happy', armR: 0.5, armL: -0.4, lookX: -0.8, lookY: 0.2, ghost: 1 }, 'plain'); ctx.restore(); }
+      stk(ctx, 'did the socks help?', 960, 150, Lt.cwin('e1', 'to know if', 0.5, null, 0.3), Lt.cwin('e1', 'what would have happened', 0.25, null, 0.8), { bg: SPOT, color: P.white, size: 70, rot: -0.03 });
+      stk(ctx, 'without them?', 1280, 150, Lt.cwin('e1', 'what would have happened', 0.5, null, 1.1), 0, { bg: PLAIN, color: P.white, size: 74, rot: 0.03 });
+      return;
+    }
+    // ---- e2 .. e8: the two panels ----
+    const pa = Lt.cwin('e2', 'imagine two', 0.6, E.outBack), pb = Lt.cwin('e2', 'imagine two', 0.6, E.outBack, 0.3);
+    const only = Lt.cwin('e6', 'but there is only', 0.6), group = Lt.cwin('e7', 'so scientists find', 0.8, E.inOut, 1.2);
+    // the races in e3: first both win together, then (replay) only spotty-socks Curie wins
+    const r1 = seg(t, c('e3', 'if we both finish') + 0.3, c('e3', 'if we both finish') + 1.6, E.inOut);
+    const replay = Lt.cafter('e3', 'if spotty-socks me');
+    const r2 = seg(t, c('e3', 'if spotty-socks me') + 0.2, c('e3', 'if spotty-socks me') + 1.7, E.inOut);
+    const pL = replay ? r2 : r1, pR = replay ? r2 * 0.72 : r1;
+    const after3 = Lt.after('e4');
+    const rl = after3 ? 0 : pL, rr = after3 ? 0 : pR;
+    panel(ctx, PN[0], pa); panel(ctx, PN[1], pb, { dash: Lt.after('e4') });
+    // left Curie
+    if (pa > 0) { const q = inPanel(PN[0], rl), run = rl > 0 && rl < 1; curie(ctx, { x: q.x, y: q.y - (run ? Math.abs(Math.sin(t * 9)) * 10 : 0), s: 0.62, t, mood: rl >= 1 ? 'wow' : 'happy', armR: run ? -0.4 + 0.5 * Math.sin(t * 18) : 0.4, armL: run ? -0.4 - 0.5 * Math.sin(t * 18) : 0.4, lookX: 0.8, bob: !run }, 'spotty'); }
+    // right: Curie (fades to a ghost when "there is only one me"), then a group of runners in plain socks
+    if (pb > 0 && group < 1) { const q = inPanel(PN[1], rr), run = rr > 0 && rr < 1; ctx.save(); ctx.globalAlpha = clamp(pb, 0, 1) * (1 - group); curie(ctx, { x: q.x, y: q.y - (run ? Math.abs(Math.sin(t * 9 + 1)) * 10 : 0), s: 0.62, t: t + 0.4, mood: rr >= 1 && !replay ? 'wow' : 'happy', armR: run ? -0.4 + 0.5 * Math.sin(t * 18 + 1) : 0.4, armL: run ? -0.4 - 0.5 * Math.sin(t * 18 + 1) : 0.4, lookX: 0.8, bob: !run, ghost: Math.max(Lt.cwin('e4', 'scientists call', 0.5), only) }, 'plain'); ctx.restore(); }
+    if (group > 0) { ctx.save(); ctx.globalAlpha = clamp(group, 0, 1); [[1130, 520, 0], [1290, 545, 1], [1450, 520, 2], [1610, 545, 3], [1370, 640, 4]].forEach(([x, y, i]) => buddy(ctx, x, y, 0.62, BUDDY[i], t, { socks: 'plain' })); ctx.restore(); }
+    // e2: same race, same time
+    const sameT = Lt.cwin('e2', 'in the same race', 0.5, E.outBack, 0.6) * (1 - Lt.win('e3', 0, 0.3));
+    if (sameT > 0) { ctx.save(); ctx.globalAlpha = clamp(sameT, 0, 1); clockIcon(ctx, 820, 320, 42, t); clockIcon(ctx, 1700, 320, 42, t); ctx.restore(); }
+    // e3 results
+    tick(ctx, 520, 360, 0.9, !replay ? seg(t, c('e3', 'if we both finish') + 1.6, c('e3', 'if we both finish') + 2.0) : 0);
+    tick(ctx, 1400, 360, 0.9, !replay ? seg(t, c('e3', 'if we both finish') + 1.6, c('e3', 'if we both finish') + 2.0) : 0);
+    const o = { size: 70, rot: -0.03 };
+    stk(ctx, 'two of me', 960, 110, Lt.cwin('e2', 'imagine two', 0.5, null, 0.6), Lt.cwin('e2', 'in the same race', 0.25, null, 0.5), Object.assign({ bg: P.sun, size: 84 }, o));
+    stk(ctx, 'same race, same time', 960, 110, Lt.cwin('e2', 'in the same race', 0.5, null, 0.6), Lt.win('e3', 0, 0.25), Object.assign({ bg: P.sun }, o));
+    stk(ctx, 'no difference', 960, 110, Lt.cwin('e3', 'if we both finish', 0.5, null, 1.9), Lt.cwin('e3', 'if spotty-socks me', 0.25), Object.assign({ bg: P.grey }, o));
+    stk(ctx, 'the socks helped!', 960, 110, Lt.cwin('e3', 'the socks helped', 0.5, null, 0.1), Lt.win('e4', 0, 0.25), Object.assign({ bg: SPOT, color: P.white }, o));
+    stk(ctx, 'COUNTERFACTUAL', 960, 110, Lt.cwin('e4', 'scientists call', 0.5, null, 1.1), Lt.win('e5', 0, 0.25), Object.assign({ bg: '#6B74D8', color: P.white, size: 84 }, o));
+    stk(ctx, 'what if...?', 1400, 735, Lt.cwin('e4', 'what would have', 0.5, null, 0.1), Lt.cwin('e6', 'but there is only', 0.25), Object.assign({ bg: '#6B74D8', color: P.white, size: 60 }, o));
+    stk(ctx, 'the perfect test', 960, 110, Lt.cwin('e5', 'comparing two', 0.5, null, 2.0), Lt.cwin('e5', 'scientists call', 0.25), Object.assign({ bg: P.green, color: P.white }, o));
+    stk(ctx, 'the counterfactual ideal', 960, 110, Lt.cwin('e5', 'scientists call', 0.5, null, 0.9), Lt.win('e6', 0, 0.25), Object.assign({ bg: '#6B74D8', color: P.white, size: 64 }, o));
+    stk(ctx, 'only one me!', 1400, 110, Lt.cwin('e6', 'but there is only', 0.5, null, 0.4), Lt.win('e7', 0, 0.25), Object.assign({ bg: P.red, color: P.white }, o));
+    cross(ctx, 1400, 470, 1.3, Lt.cwin('e6', 'i cannot run', 0.5, null, 0.3) * (1 - Lt.cwin('e7', 'so scientists find', 0.3, null, 1.0)));
+    stk(ctx, 'the next best thing', 960, 110, Lt.cwin('e7', 'so scientists find', 0.5, null, 1.2), Lt.win('e8', 0, 0.25), Object.assign({ bg: P.green, color: P.white }, o));
+    stk(ctx, 'runners just like me', 1400, 735, Lt.cwin('e7', 'another group', 0.5, null, 0.6), Lt.win('e8', 0, 0.25), Object.assign({ bg: P.white, size: 52 }, o));
+    // e8: the checklist
+    if (Lt.after('e8')) {
+      const rows = [['same age', 0.0], ['same practice', 0.5], ['same race', 1.0]];
+      const a0 = Lt.cwin('e8', 'alike in every', 0.4, null, 0.2);
+      ctx.save(); ctx.globalAlpha = 0.85 * clamp(a0, 0, 1); ctx.fillStyle = '#EEF4FF'; ctx.fillRect(0, 0, W, H); ctx.restore(); ctx.save(); ctx.globalAlpha = clamp(a0, 0, 1); ctx.fillStyle = P.white; roundRect(ctx, 640, 250, 640, 470, 30); ctx.fill(); ctx.strokeStyle = P.ink; ctx.lineWidth = 7; ctx.stroke(); ctx.restore();
+      rows.forEach(([s, off], i) => { const a = Lt.cwin('e8', 'alike in every', 0.4, null, 0.4 + off); if (a <= 0) return; ctx.save(); ctx.globalAlpha = clamp(a, 0, 1); text(ctx, s, 760, 320 + i * 105, { size: 52, weight: 700, color: P.ink, align: 'left' }); ctx.restore(); tick(ctx, 1190, 320 + i * 105, 0.75, a); });
+      const ex = Lt.cwin('e8', 'except the socks', 0.4, null, 0.2);
+      if (ex > 0) { ctx.save(); ctx.globalAlpha = clamp(ex, 0, 1); text(ctx, 'socks: different', 760, 635, { size: 52, weight: 700, color: SPOT, align: 'left' }); ctx.restore(); sockShape(ctx, 1185, 640, 'spotty', 0.8 * E.outBack(clamp(ex, 0, 1))); }
+    }
+  }
+
+  // ======================= THE HAT (test, t1, t2) =======================
+  // 20 runners; 8 fast ones have a lightning badge. Picked "from the hat", each team of 10 here gets 4 fast + 6 others
+  // (with lots of runners, random picking makes the teams alike; Try it 2 shows that with few runners chance can make them differ).
+  const RUN = Array.from({ length: 20 }, (_, i) => ({ c: BUDDY[i % 6], fast: [1, 3, 6, 8, 11, 13, 16, 18].includes(i) }));
+  const TEAM = (() => { const A = [1, 6, 11, 16, 0, 2, 5, 9, 12, 15], B = RUN.map((r, i) => i).filter(i => !A.includes(i)); return [A, B]; })();
+  const HAT = { x: 960, y: 470 };
+  function hatDraw(ctx, x, y, s) { ctx.save(); ctx.translate(x, y); ctx.scale(s, s); ctx.fillStyle = '#2B2D42'; ctx.strokeStyle = P.ink; ctx.lineWidth = 6; ellipse(ctx, 0, 100, 190, 44, '#2B2D42', P.ink, 6); roundRect(ctx, -120, -110, 240, 210, 16); ctx.fill(); ctx.stroke(); ctx.fillStyle = P.red; ctx.fillRect(-120, 40, 240, 34); ctx.strokeRect(-120, 40, 240, 34); ellipse(ctx, 0, -110, 120, 26, '#3B3E5A', P.ink, 6); ctx.restore(); }
+  function card(ctx, x, y, color, a, rot) { if (a <= 0) return; ctx.save(); ctx.globalAlpha = clamp(a, 0, 1); ctx.translate(x, y); ctx.rotate(rot || 0); ctx.fillStyle = P.white; roundRect(ctx, -34, -22, 68, 44, 8); ctx.fill(); ctx.strokeStyle = P.ink; ctx.lineWidth = 3; ctx.stroke(); circle(ctx, -14, 0, 10, color, P.ink, 2); ctx.fillStyle = P.grey; ctx.fillRect(2, -5, 22, 5); ctx.fillRect(2, 5, 16, 5); ctx.restore(); }
+  const teamPos = (team, k) => ({ x: (team ? 1200 : 170) + (k % 5) * 135, y: k < 5 ? 470 : 610 });
+  function hatScene(ctx, t, Lt) {
+    thinkBg(ctx);
+    const into = Lt.cwin('test', "put all the runners'", 1.2, E.inOut, 0.3), out = Lt.cwin('test', 'and pick them', 1.6, E.inOut, 0.6);
+    const raceOn = Lt.cafter('t1', 'then they race'), rp = seg(t, Lt.chunk('t1', 'then they race') + 0.3, Lt.chunk('t1', 'then they race') + 2.4, E.inOut);
+    if (!raceOn) {
+      const hs = Lt.win('test', 0.2, 0.5, E.outBack); if (hs > 0) hatDraw(ctx, HAT.x, HAT.y, hs);
+      RUN.forEach((r, i) => {
+        const sx = 120 + i * 88, sy = 200, team = TEAM[0].includes(i) ? 0 : 1, k = TEAM[team].indexOf(i), tp = teamPos(team, k);
+        const ci = clamp(into * 1.3 - i * 0.02, 0, 1), co = clamp(out * 1.5 - i * 0.03, 0, 1);
+        if (co <= 0) {
+          if (ci < 1) buddy(ctx, sx, sy + 20, 0.4, r.c, t, { fast: r.fast });
+          card(ctx, lerp(sx, HAT.x, ci), lerp(sy + 90, HAT.y - 40, ci) - Math.sin(PI * ci) * 120, r.c, ci > 0 ? 1 - seg(ci, 0.85, 1) : 0, ci * 3);
+        } else {
+          const cx = lerp(HAT.x, tp.x, co), cy = lerp(HAT.y - 60, tp.y, co) - Math.sin(PI * co) * 160;
+          if (co < 1) card(ctx, cx, cy, r.c, 1, (1 - co) * 3); else buddy(ctx, tp.x, tp.y, 0.5, r.c, t, { fast: r.fast, socks: team ? 'plain' : 'spotty' });
+        }
+      });
+      const tl = Lt.cwin('test', 'half get spotty', 0.4, null, 0.2), tr = Lt.cwin('test', 'half get plain', 0.4, null, 0.2);
+      if (tl > 0) L.sticker(ctx, 'spotty socks team', 440, 740, tl, { bg: SPOT, color: P.white, size: 46, rot: 0 });
+      if (tr > 0) L.sticker(ctx, 'plain socks team', 1470, 740, tr, { bg: PLAIN, color: P.white, size: 46, rot: 0 });
+      const alike = Lt.cwin('t1', 'with lots of', 0.5, null, 1.6);
+      if (alike > 0) { ctx.save(); ctx.globalAlpha = clamp(alike, 0, 1); text(ctx, '4 fast + 6 others', 440, 360, { size: 40, weight: 700, color: P.ink }); text(ctx, '4 fast + 6 others', 1470, 360, { size: 40, weight: 700, color: P.ink }); ctx.restore(); }
+    } else {
+      // the race: two lanes, each team runs together; on average both teams arrive together (just as fast)
+      for (const [team, y] of [[0, 430], [1, 690]]) {
+        lane(ctx, 0, W, y + 70, 180); finishLine(ctx, 1640, y - 110, y + 70);
+        TEAM[team].forEach((i, k) => { const sp = RUN[i].fast ? 1 : 0.86, p = clamp(rp * 1.15 * sp, 0, 1), x = lerp(170 + (k % 5) * 70, 1300 + (k % 5) * 70 - (RUN[i].fast ? 0 : 50), p); buddy(ctx, x, y - 30 + (k < 5 ? 0 : 50), 0.38, RUN[i].c, t + i, { run: p > 0 && p < 1 ? t + i : null, fast: RUN[i].fast, socks: team ? 'plain' : 'spotty' }); });
+        L.sticker(ctx, team ? 'plain' : 'spotty', 140, y - 130, 1, { bg: team ? PLAIN : SPOT, color: P.white, size: 40, rot: 0 });
+      }
+      const fin = Lt.cwin('t1', 'and both groups', 0.5, E.outBack, 0.2);
+      if (fin > 0) { L.sticker(ctx, 'team time: about 10 seconds', 1300, 250, fin, { bg: P.white, size: 42, rot: 0 }); L.sticker(ctx, 'team time: about 10 seconds', 1300, 510, fin, { bg: P.white, size: 42, rot: 0 }); }
+    }
+    const o = { size: 76, rot: -0.03 };
+    stk(ctx, 'TEST!', 960, 110, Lt.cwin('test', 'scientists test', 0.5), Lt.cwin('test', "put all the runners'", 0.25), Object.assign({ bg: P.blue, color: P.white, size: 100 }, o));
+    stk(ctx, 'at random: nobody chooses', 960, 110, Lt.cwin('test', 'and pick them', 0.5, null, 0.5), Lt.win('t1', 0, 0.25), Object.assign({ bg: P.sun, size: 64 }, o));
+    stk(ctx, 'lots of runners', 960, 110, Lt.cwin('t1', 'with lots of', 0.5, null, 0.1), Lt.cwin('t1', 'with lots of', 0.25, null, 1.6), Object.assign({ bg: P.white }, o));
+    stk(ctx, 'alike!', 960, 110, Lt.cwin('t1', 'with lots of', 0.5, null, 1.7), Lt.cwin('t1', 'then they race', 0.25), Object.assign({ bg: P.green, color: P.white, size: 90 }, o));
+    stk(ctx, 'just as fast!', 960, 110, Lt.cwin('t1', 'and both groups', 0.5, null, 1.0), Lt.win('t2', 0, 0.25), Object.assign({ bg: P.green, color: P.white }, o));
+    if (Lt.after('t2')) {
+      const a = Lt.win('t2', 0, 0.5); ctx.save(); ctx.globalAlpha = 0.9 * clamp(a, 0, 1); ctx.fillStyle = '#EEF4FF'; ctx.fillRect(0, 0, W, H); ctx.restore();
+      sockShape(ctx, 760, 430, 'spotty', 3.2 * E.outBack(clamp(a, 0, 1))); text(ctx, '=', 960, 430, { size: 160 * clamp(a, 0, 1), weight: 700, color: P.ink }); sockShape(ctx, 1170, 430, 'plain', 3.2 * E.outBack(clamp(a, 0, 1)));
+      stk(ctx, 'no difference', 960, 160, Lt.cwin('t2', 'did not seem', 0.5, null, 0.6), 0, Object.assign({ bg: P.grey, size: 84 }, o));
+    }
+    if (!raceOn) L.pip(ctx, { x: 1830, y: 700, s: 0.5, t, mood: 'talk', armR: -0.6, armL: 0.6, lookX: -0.8, lookY: 0.2 }); if (Lt.after('t2')) L.pip(ctx, { x: 960, y: 690, s: 0.6, t, mood: 'talk', armR: -0.6, armL: 0.6, lookY: -0.4 });
+  }
+
+  // ======================= DOCTORS (real) =======================
+  function bottle(ctx, x, y, s) { ctx.save(); ctx.translate(x, y); ctx.scale(s, s); ctx.fillStyle = '#FFFFFF'; ctx.strokeStyle = P.ink; ctx.lineWidth = 6; roundRect(ctx, -46, -40, 92, 130, 18); ctx.fill(); ctx.stroke(); ctx.fillStyle = P.blue; roundRect(ctx, -36, -66, 72, 30, 8); ctx.fill(); ctx.stroke(); ctx.fillStyle = '#DDEBFF'; ctx.fillRect(-46, 0, 92, 50); ctx.strokeRect(-46, 0, 92, 50); ctx.fillStyle = P.red; ctx.fillRect(-6, 8, 12, 34); ctx.fillRect(-17, 19, 34, 12); ctx.restore(); }
+  function doctorScene(ctx, t, Lt) {
+    thinkBg(ctx);
+    const a = Lt.win('real', 0.2, 0.6, E.outBack), b = Lt.cwin('real', 'to see if', 0.6, E.outBack);
+    for (const team of [0, 1]) { const x0 = team ? 1180 : 220; for (let k = 0; k < 6; k++) { const ak = clamp(a * 1.5 - k * 0.08, 0, 1); if (ak > 0) buddy(ctx, x0 + (k % 3) * 170, 470 + Math.floor(k / 3) * 170, 0.55 * E.outBack(ak), BUDDY[(k + team * 2) % 6], t + k, {}); } }
+    hatDraw(ctx, 960, 420, 0.55 * E.outBack(clamp(a, 0, 1)));
+    if (b > 0) { bottle(ctx, 560, 250, 0.9 * E.outBack(clamp(b, 0, 1))); ctx.save(); ctx.globalAlpha = clamp(b, 0, 1); text(ctx, 'new medicine', 560, 360, { size: 40, weight: 700, color: P.ink }); text(ctx, 'no new medicine', 1340, 360, { size: 40, weight: 700, color: P.ink }); ctx.restore(); }
+    const o = { size: 76, rot: -0.03 };
+    stk(ctx, 'Doctors do it too!', 960, 110, Lt.cwin('real', 'doctors test', 0.5, null, 0.2), Lt.cwin('real', 'to see if', 0.25, null, 0.8), Object.assign({ bg: P.blue, color: P.white }, o));
+    stk(ctx, 'Does it really help?', 960, 110, Lt.cwin('real', 'to see if', 0.5, null, 0.9), 0, Object.assign({ bg: P.sun }, o));
+    L.pip(ctx, { x: 960, y: 760, s: 0.6, t, mood: 'talk', armR: -0.6, armL: 0.6, lookY: -0.4 });
+  }
+
+  // ======================= SAY IT, TRY AT HOME, OUTRO =======================
+  function sayScene(ctx, t, Lt) {
+    L.sky(ctx); L.sun(ctx, 1720, 160, 80, t); L.ground(ctx, 640);
+    ctx.fillStyle = TRACK; ctx.fillRect(0, 700, W, 120);
+    const o = { x: 480, y: 600, s: 1.1, t, mood: 'talk', armR: -1.2 + 0.2 * Math.sin(t * 8), armL: -1.2 - 0.2 * Math.sin(t * 8), lookX: 0.4, lookY: -0.3 };
+    curie(ctx, o, 'spotty');
+    curie(ctx, { x: 1440, y: 600, s: 1.1, t: t + 0.6, mood: 'happy', armR: -1.0, armL: -1.0, lookX: -0.4, lookY: -0.3, ghost: 1 }, 'plain');
+    L.sayItSticker(ctx, 'Ask what would happen without it!', Lt.cwin('sayit', 'ask what would', 0.8), t);
+  }
+  // a paper plane, nose pointing right; sticker on it (o.sticker)
+  function plane(ctx, x, y, s, rot, o) {
+    o = o || {}; ctx.save(); ctx.translate(x, y); ctx.rotate(rot || 0); ctx.scale(s, s); ctx.lineJoin = 'round'; ctx.strokeStyle = P.ink; ctx.lineWidth = 5;
+    ctx.fillStyle = '#FFFFFF'; ctx.beginPath(); ctx.moveTo(120, 0); ctx.lineTo(-100, -60); ctx.lineTo(-60, 0); ctx.closePath(); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = '#E3ECF7'; ctx.beginPath(); ctx.moveTo(120, 0); ctx.lineTo(-60, 0); ctx.lineTo(-90, 40); ctx.closePath(); ctx.fill(); ctx.stroke();
+    if (o.sticker) L.star(ctx, -30, -22, 18, P.sun, 0);
+    ctx.restore();
+  }
+  function tryScene(ctx, t, Lt) {
+    L.sky(ctx, { top: '#BFE3FF', bottom: '#FFF1D6' }); ctx.fillStyle = '#E8C793'; ctx.fillRect(0, 700, W, H - 700);
+    L.tryBanner(ctx, Lt.win('try1', 0, 0.6)); L.grownUpBadge(ctx, 1760, 330, Lt.win('try1', 1.5, 0.6));
+    const pa = Lt.cwin('try1', 'ask a grown-up', 0.6, E.outBack, 1.5);
+    const t1 = Lt.chunk('try2', 'throw it five'), tSt = Lt.chunk('try2', 'then put a sticker'), tAg = Lt.chunk('try2', 'and throw it five');
+    const sticker = t >= tSt + 0.6;
+    if (Lt.after('try2')) { ctx.fillStyle = P.white; ctx.fillRect(320, 700, 14, 60); for (let i = 1; i <= 5; i++) { ctx.fillStyle = P.ink; ctx.fillRect(320 + i * 260, 730, 6, 30); text(ctx, String(i), 323 + i * 260, 785, { size: 30, weight: 700, color: P.ink }); } text(ctx, 'start', 327, 675, { size: 34, weight: 700, color: P.ink }); }
+    const flying = (t > t1 + 0.3 && t < tSt) || t > tAg + 0.2;
+    if (pa > 0) {
+      const k = E.outBack(clamp(pa, 0, 1));
+      if (!flying) plane(ctx, 960, 430, 1.6 * k, -0.1, { sticker });
+      else { const f = (t * 0.55) % 1; plane(ctx, lerp(380, 1440, f), 470 - Math.sin(PI * f) * 140 + f * 160, 1.0, 0.15 * Math.cos(PI * f), { sticker }); }
+    }
+    const tally = (x, y, n, lab, col) => { text(ctx, lab, x, y, { size: 40, weight: 700, color: col, stroke: P.white, strokeWidth: 8 }); for (let i = 0; i < n; i++) circle(ctx, x - 100 + i * 50, y + 50, 16, col, P.ink, 4); };
+    if (t > t1 + 0.3) tally(560, 250, clamp(Math.ceil(5 * (Math.min(t, tSt) - t1 - 0.3) / Math.max(0.5, tSt - t1 - 0.6)), 0, 5), 'no sticker', P.blue);
+    if (t > tAg + 0.2) { const tE = Lt.chunk('try2', 'does the sticker'); tally(1360, 250, clamp(Math.ceil(5 * (t - tAg - 0.2) / Math.max(0.5, tE - tAg - 0.4)), 0, 5), 'with a sticker', P.sunDeep); }
+    const st = Lt.cwin('try2', 'then put a sticker', 0.5, null, 0.6) * (1 - Lt.cwin('try2', 'and throw it five', 0.3));
+    if (st > 0) { ctx.save(); ctx.globalAlpha = clamp(st, 0, 1); L.arrow(ctx, 1180, 330, 1010, 400, P.sunDeep, 12); text(ctx, 'sticker', 1250, 300, { size: 44, weight: 700, color: P.ink, stroke: P.white, strokeWidth: 8 }); ctx.restore(); }
+    L.pip(ctx, { x: 200, y: 590, s: 0.7, t, mood: Lt.cafter('try2', 'does the sticker', 0.5) ? 'wow' : 'talk', armR: -0.4, armL: 0.6, lookX: 0.9, lookY: -0.2 });
+    stk(ctx, 'Does the sticker make a difference?', 960, 620, Lt.cwin('try2', 'does the sticker', 0.5, null, 0.6), 0, { bg: P.sun, size: 54, rot: -0.02 });
+  }
+  // the outro (as L.scenes.outro), with the phrase box sized to fit
+  function outro(ctx, t, Lt, phrase) {
+    L.sky(ctx, { top: '#5FB8FF', bottom: '#CDEBFF' }); L.confetti(ctx, t, 21, 70); L.ground(ctx, 860);
+    L.pip(ctx, { x: 560, y: 720, s: 1.4, t, mood: Lt.cafter('bye', 'bye-bye') ? 'happy' : 'talk', armR: -1.1 + Math.sin(t * 8) * 0.35, armL: 0.6 });
+    const lp = Lt.win('bye', 0, 0.6, E.outBack); ctx.save(); ctx.translate(1380, 340); ctx.scale(lp, lp); L.logo(ctx, 0, 0, 1, t); ctx.restore();
+    const pp = Lt.cwin('bye', 'remember', 0.6, E.outBack, 0.3);
+    if (pp > 0) { ctx.save(); ctx.translate(1340, 640); ctx.scale(pp, pp); ctx.font = '700 60px Fredoka'; const k = Math.min(1, 980 / ctx.measureText(phrase).width), size = Math.floor(60 * k); ctx.font = '700 ' + size + 'px Fredoka'; const w = ctx.measureText(phrase).width + 90; ctx.fillStyle = P.white; roundRect(ctx, -w / 2, -60, w, 120, 40); ctx.fill(); ctx.strokeStyle = P.ink; ctx.lineWidth = 8; ctx.stroke(); text(ctx, phrase, 0, 4, { size, weight: 700, color: P.ink }); ctx.restore(); }
+    const bp = Lt.cwin('bye', 'bye-bye', 0.6, E.outBack); if (bp > 0) L.sticker(ctx, 'Bye-bye!', 1380, 790, bp, { bg: P.sun, rot: 0.05, size: 84 });
+  }
+
+  // ======================= TRY IT 1: WHAT IF? (race Curie against a what-if Curie) =======================
+  const T1 = { x0: 230, x1: 1560, yA: 400, yB: 720, btn: [{ k: 'socks', x: 520, y: 960 }, { k: 'road', x: 900, y: 960 }, { k: 'go', x: 1360, y: 960 }], bw: 330, bh: 120 };
+  const T1D = { flat: 2.6, hill: 3.6 };   // seconds on screen; shown as 9 and 12 seconds
+  function t1Draw(ctx, s, t) {
+    L.sky(ctx); L.ground(ctx, 560); L.sun(ctx, 1750, 120, 70, t);
+    // lane A: what happened (spotty socks, flat road); lane B: what if...?
+    for (const [y, lab] of [[T1.yA, 'what happened'], [T1.yB, 'what if...?']]) { lane(ctx, 0, W, y + 110, 150); finishLine(ctx, T1.x1 + 130, y - 40, y + 110); text(ctx, lab, 200, y - 100, { size: 46, weight: 700, color: lab === 'what if...?' ? '#6B74D8' : P.ink, stroke: P.white, strokeWidth: 9, align: 'left' }); }
+    if (s.roadB === 'hill') { ctx.fillStyle = '#B5713A'; ctx.beginPath(); ctx.moveTo(600, T1.yB + 110); ctx.quadraticCurveTo(900, T1.yB - 60, 1200, T1.yB + 110); ctx.closePath(); ctx.fill(); ctx.strokeStyle = P.ink; ctx.lineWidth = 5; ctx.stroke(); text(ctx, 'uphill', 900, T1.yB + 40, { size: 40, weight: 700, color: P.white, stroke: P.ink, strokeWidth: 8 }); }
+    const pA = clamp(s.time / T1D.flat, 0, 1), pB = clamp(s.time / T1D[s.roadB], 0, 1);
+    const hillY = x => s.roadB === 'hill' && x > 600 && x < 1200 ? -Math.sin(PI * (x - 600) / 600) * 85 : 0;
+    const xA = lerp(T1.x0, T1.x1, pA), xB = lerp(T1.x0, T1.x1, pB), runA = s.run && pA < 1, runB = s.run && pB < 1;
+    const arms = (on, ph) => on ? { armR: -0.4 + 0.5 * Math.sin(t * 18 + ph), armL: -0.4 - 0.5 * Math.sin(t * 18 + ph) } : { armR: 0.4, armL: 0.4 };
+    curie(ctx, Object.assign({ x: xA, y: T1.yA - (runA ? Math.abs(Math.sin(t * 9)) * 10 : 0), s: 0.75, t, mood: s.done && pA >= 1 ? 'wow' : 'happy', lookX: 0.8, bob: !runA }, arms(runA, 0)), 'spotty');
+    curie(ctx, Object.assign({ x: xB, y: T1.yB + hillY(xB) - (runB ? Math.abs(Math.sin(t * 9 + 1)) * 10 : 0), s: 0.75, t: t + 0.5, mood: s.done && pB >= 1 ? 'wow' : 'happy', lookX: 0.8, bob: !runB, ghost: 1 }, s.sockB));
+    // times
+    if (pA >= 1 && s.time > 0) L.sticker(ctx, '9 seconds', 1700, T1.yA - 130, 1, { bg: P.white, size: 44, rot: 0 });
+    if (pB >= 1 && s.time > 0) L.sticker(ctx, s.roadB === 'hill' ? '12 seconds' : '9 seconds', 1700, T1.yB - 130, 1, { bg: P.white, size: 44, rot: 0 });
+    // buttons
+    T1.btn.forEach(b => {
+      ctx.save(); ctx.translate(b.x, b.y); const go = b.k === 'go';
+      ctx.fillStyle = go ? (s.run ? P.grey : P.green) : P.white; ctx.strokeStyle = P.ink; ctx.lineWidth = 7; roundRect(ctx, -T1.bw / 2, -T1.bh / 2, T1.bw, T1.bh, 30); ctx.fill(); ctx.stroke();
+      if (b.k === 'socks') { sockShape(ctx, -100, 8, s.sockB, 0.9); text(ctx, s.sockB === 'spotty' ? 'spotty' : 'plain', 30, 4, { size: 44, weight: 700, color: P.ink }); }
+      if (b.k === 'road') { ctx.fillStyle = s.roadB === 'hill' ? '#B5713A' : TRACK; if (s.roadB === 'hill') { ctx.beginPath(); ctx.moveTo(-150, 30); ctx.quadraticCurveTo(-100, -40, -50, 30); ctx.closePath(); ctx.fill(); ctx.stroke(); } else { ctx.fillRect(-150, 10, 100, 20); ctx.strokeRect(-150, 10, 100, 20); } text(ctx, s.roadB === 'hill' ? 'uphill' : 'flat', 40, 4, { size: 44, weight: 700, color: P.ink }); }
+      if (go) text(ctx, 'Go!', 0, 4, { size: 60, weight: 700, color: P.white, stroke: P.ink, strokeWidth: 8 });
+      ctx.restore();
+    });
+    text(ctx, 'change the what-if race:', 710, 870, { size: 34, weight: 700, color: P.ink, stroke: P.white, strokeWidth: 7 });
+    if (!s.touched) { const bob = Math.sin(t * 4) * 6; text(ctx, 'tap Go!', 1360, 860 + bob, { size: 46, weight: 700, color: P.ink, stroke: P.white, strokeWidth: 9 }); }
+  }
+
+  // ======================= TRY IT 2: PICK FROM A HAT (unfair vs random teams) =======================
+  // 12 runners: 6 fast (8 s), 6 slower (12 s). Teams of 6: average time of each team.
+  const T2 = { btn: [{ k: 'me', x: 620, y: 960 }, { k: 'hat', x: 1300, y: 960 }], bw: 480, bh: 120 };
+  const T2R = [1, 0, 1, 0, 0, 1, 1, 0, 1, 0, 0, 1].map((f, i) => ({ fast: !!f, c: BUDDY[i % 6] }));
+  const t2Avg = ids => ids.reduce((a, i) => a + (T2R[i].fast ? 8 : 12), 0) / ids.length;
+  function t2Pick(s, how) {
+    const ids = T2R.map((r, i) => i);
+    if (how === 'me') { s.A = ids.filter(i => T2R[i].fast); s.B = ids.filter(i => !T2R[i].fast); }
+    else { s.hats = (s.hats || 0) + 1; const r = L.rng(1000 + s.hats * 7919); for (let i = ids.length - 1; i > 0; i--) { const j = Math.floor(r() * (i + 1)); [ids[i], ids[j]] = [ids[j], ids[i]]; } s.A = ids.slice(0, 6); s.B = ids.slice(6); }
+    s.how = how; s.picks++; s.anim = 0; s.cued = false;
+  }
+  function t2Draw(ctx, s, t) {
+    thinkBg(ctx);
+    for (const [team, x0] of [[0, 90], [1, 990]]) {
+      ctx.fillStyle = P.white; roundRect(ctx, x0, 150, 840, 600, 34); ctx.fill(); ctx.strokeStyle = P.ink; ctx.lineWidth = 7; ctx.stroke();
+      L.sticker(ctx, team ? 'plain socks team' : 'spotty socks team', x0 + 420, 150, 1, { bg: team ? PLAIN : SPOT, color: P.white, size: 46, rot: 0 });
+      const ids = s.A ? (team ? s.B : s.A) : [];
+      ids.forEach((i, k) => { const a = clamp(s.anim * 3 - k * 0.15, 0, 1); if (a > 0) buddy(ctx, x0 + 150 + (k % 3) * 270, 320 + Math.floor(k / 3) * 210, 0.62 * E.outBack(a), T2R[i].c, t + i, { fast: T2R[i].fast, socks: team ? 'plain' : 'spotty' }); });
+      if (s.A && s.anim >= 1) text(ctx, 'team time: ' + Math.round(t2Avg(ids)) + ' seconds', x0 + 420, 700, { size: 42, weight: 700, color: P.ink });
+    }
+    if (!s.A) { text(ctx, '12 runners: 6 fast, 6 slower', 960, 450, { size: 54, weight: 700, color: P.ink, stroke: P.white, strokeWidth: 10 }); hatDraw(ctx, 1300, 760, 0.35); }
+    T2.btn.forEach(b => {
+      ctx.save(); ctx.translate(b.x, b.y); ctx.fillStyle = b.k === 'hat' ? P.sun : P.white; ctx.strokeStyle = P.ink; ctx.lineWidth = 7; roundRect(ctx, -T2.bw / 2, -T2.bh / 2, T2.bw, T2.bh, 30); ctx.fill(); ctx.stroke();
+      text(ctx, b.k === 'hat' ? 'Pick from a hat' : 'Pick fast ones for spotty', 0, 4, { size: b.k === 'hat' ? 46 : 38, weight: 700, color: P.ink }); ctx.restore();
+    });
+    if (!s.touched) { const bob = Math.sin(t * 4) * 6; text(ctx, 'tap a button', 960, 860 + bob, { size: 44, weight: 700, color: P.ink, stroke: P.white, strokeWidth: 9 }); }
+    L.pip(ctx, { x: 960, y: 960, s: 0.4, t, mood: s.lastCue === 'fair' ? 'wow' : s.lastCue === 'unfair' ? 'sad' : 'happy', armR: -0.6, armL: 0.6, lookY: -0.6 });
+  }
+
+  L.episodes.ep19 = {
+    id: 'ep19', num: 19, title: 'How do we know what made something happen?', short: 'What if?', phrase: 'Ask what would happen without it!',
+    thumb: {
+      big: 'WHAT IF?', small1: 'How do we know', small2: 'what made it happen?', pip: { x: 1180, y: 700 },
+      bg: (ctx, t) => {
+        L.sky(ctx); L.ground(ctx, 640); ctx.fillStyle = TRACK; ctx.fillRect(0, 610, W, 200); finishLine(ctx, 1760, 610, 810);
+        curie(ctx, { x: 1560, y: 690, s: 1.0, t: 0.6, mood: 'happy', armR: -0.9, armL: 0.5, lookX: -0.6, ghost: 1 }, 'plain');
+        sockShape(ctx, 1040, 820, 'spotty', 1.6); sockShape(ctx, 1320, 820, 'spotty', 1.6);
+      }
+    },
+    lines: [
+      { id: 'hello', text: "Hello, little scientists! I'm Curie. Welcome to the Little Scientists Club!", say: "Hello, little scientists! I'm *Curie*! Welcome... to the Little Scientists Club!", hold: 0.3 },
+      { id: 'q', text: "Today's big question: how do we know what made something happen?", say: "Today's big question... How do we *know* what made something happen?", hold: 0.6 },
+      { id: 's1', text: 'Today is race day! I am wearing my new spotty socks.', say: 'Today is *race* day! I am wearing my new *spotty* socks.', hold: 0.4 },
+      { id: 's2', text: 'Ready, steady, go! I win! My lucky socks made me win!', say: 'Ready... {pause 0.2}Steady... {pause 0.2}Go! {pause 1.6}I *win*! My *lucky* socks... made me win!', hold: 0.8 },
+      { id: 'look', text: "Did they really? Let's look closer.", say: "Did they *really*? Let's look *closer*.", hold: 0.8 },
+      { id: 'e1', text: 'To know if the socks helped, we need to know what would have happened without them.', say: 'To know if the socks *helped*... we need to know... what would have happened *without* them.', hold: 0.6 },
+      { id: 'e2', text: 'Imagine two of me, in the same race, at the same time. One wears spotty socks. One wears plain socks.', say: 'Imagine *two* of me... in the same race, at the same time. One wears *spotty* socks. One wears *plain* socks.', hold: 0.5 },
+      { id: 'e3', text: 'If we both finish together, the socks made no difference. If spotty-socks me finishes first... the socks helped!', say: 'If we both finish *together*... the socks made *no* difference. If spotty-socks me finishes *first*... the socks *helped*!', hold: 0.6 },
+      { id: 'e4', text: 'Scientists call this the counterfactual: what would have happened if things had been different.', say: 'Scientists call this... the *counterfactual*. What would have happened, if things had been *different*.', hold: 0.6 },
+      { id: 'e5', text: 'Comparing two of me, the same in every way except the socks, is the perfect test. Scientists call it the counterfactual ideal.', say: 'Comparing two of me, the same in every way except the socks, is the *perfect* test. Scientists call it... the counterfactual *ideal*.', hold: 0.6 },
+      { id: 'e6', text: 'But there is only one me! I cannot run the same race twice, at the same time.', say: 'But there is only *one* me! I cannot run the same race *twice*, at the same time.', hold: 0.6 },
+      { id: 'e7', text: 'So scientists find the next best thing: another group of runners, just like me, in plain socks.', say: 'So scientists find the next best thing... another *group* of runners, just like me, in plain socks.', hold: 0.5 },
+      { id: 'e8', text: 'The two groups should be alike in every way that matters... except the socks.', say: 'The two groups should be *alike* in every way that matters... except the *socks*.', hold: 1.0 },
+      { id: 'test', text: "Scientists test it! Put all the runners' names in a hat, and pick them at random, without looking. Half get spotty socks, half get plain socks.", say: "{sfx:ding}Scientists *test* it! Put all the runners' names in a *hat*... and pick them at *random*, without looking. Half get spotty socks... half get plain socks.", hold: 0.5 },
+      { id: 't1', text: 'With lots of runners, picking at random makes the two groups alike. Then they race... and both groups are just as fast!', say: 'With *lots* of runners, picking at random makes the two groups *alike*. Then they race... and both groups are *just* as fast!', hold: 0.8 },
+      { id: 't2', text: 'So the spotty socks did not seem to make a difference.', say: 'So the spotty socks... did *not* seem to make a difference.', hold: 0.8 },
+      { id: 'real', text: 'Doctors test new medicines this way, to see if they really help.', say: '{sfx:ding}*Doctors* test new medicines this way... to see if they *really* help.', hold: 1.0 },
+      { id: 'sayit', text: 'Say it with me: Ask what would happen without it!', say: 'Say it with me... {sfx:ding}Ask what would happen *without* it! {pause 0.9} {slow}Ask what would happen... without it!{/slow}', hold: 1.4 },
+      { id: 'try1', text: "Let's try it at home! Ask a grown-up to help you fold a paper plane.", say: "{sfx:tada}Let's try it at home! Ask a grown-up to help you fold a *paper plane*.", hold: 0.4 },
+      { id: 'try2', text: 'Throw it five times. Then put a sticker on it, and throw it five times again, the same way, from the same spot. Does the sticker make a difference?', say: 'Throw it *five* times. Then put a *sticker* on it... and throw it five times *again*, the same way, from the same spot. {sfx:ding}Does the sticker make a *difference*?', hold: 1.6 },
+      { id: 'bye', text: 'Great job, little scientist! Remember: ask what would happen without it! See you next time at the Little Scientists Club! Bye-bye!', say: '{sfx:tada}Great job, little scientist! Remember... ask what would happen *without* it! See you next time, at the Little Scientists Club! {hi}Bye-bye!{/hi}', hold: 1.2 }
+    ],
+    sfx: [
+      { line: 's2', chunk: 'go!', offset: 0.5, name: 'whoosh', vol: 0.4 },
+      { line: 's2', chunk: 'go!', offset: 2.3, name: 'tada', vol: 0.5 },
+      { line: 'look', chunk: "let's look", offset: 0.5, name: 'zoom' },
+      { line: 'e2', chunk: 'imagine two', offset: 0.5, name: 'pop', vol: 0.5 },
+      { line: 'e6', chunk: 'i cannot run', offset: 0.4, name: 'pop', vol: 0.4 },
+      { line: 'test', chunk: 'and pick them', offset: 0.6, name: 'whoosh', vol: 0.35 },
+      { line: 't1', chunk: 'and both groups', offset: 0.8, name: 'sparkle', vol: 0.6 }
+    ],
+    scenes: [
+      { from: 'hello', draw: (ctx, t, Lt) => L.scenes.intro(ctx, t, Lt) },
+      { from: 'q', draw: (ctx, t, Lt) => L.scenes.question(ctx, t, Lt, (c, tt) => { sockShape(c, -120, 20, 'spotty', 1.6); text(c, '?', 60, 0, { size: 120, weight: 700, color: P.ink }); L.star(c, 150, -60, 40, P.sun, tt); }, { word: 'How?' }) },
+      { from: 's1', draw: (ctx, t, Lt) => raceScene(ctx, t, Lt) },
+      { from: 'look', transition: 'cut', draw: (ctx, t, Lt) => lookScene(ctx, t, Lt) },
+      { from: 'e1', transition: 'cut', draw: (ctx, t, Lt) => twoScene(ctx, t, Lt) },
+      { from: 'test', draw: (ctx, t, Lt) => hatScene(ctx, t, Lt) },
+      { from: 'real', draw: (ctx, t, Lt) => doctorScene(ctx, t, Lt) },
+      { from: 'sayit', draw: (ctx, t, Lt) => sayScene(ctx, t, Lt) },
+      { from: 'try1', draw: (ctx, t, Lt) => tryScene(ctx, t, Lt) },
+      { from: 'bye', draw: (ctx, t, Lt) => outro(ctx, t, Lt, 'Ask what would happen without it!') }
+    ],
+    interactives: [
+      {
+        title: 'What if?',
+        hint: 'Change one thing in the what-if race: the socks, or the road. Then tap Go! Which change makes a difference?',
+        init: s => { s.sockB = 'spotty'; s.roadB = 'flat'; s.run = false; s.done = false; s.time = 0; s.touched = false; s.lastCue = ''; s.runs = 0; },
+        update: (s, dt, cue) => {
+          if (s.run) { s.time += dt; if (s.time >= T1D[s.roadB] + 0.1) { s.run = false; s.done = true; const id = s.roadB === 'hill' && s.sockB === 'plain' ? 'two' : s.roadB === 'hill' ? 'hill' : s.sockB === 'plain' ? 'same' : 'twin'; if (s.lastCue !== id) { s.lastCue = id; cue(id); } if (L.sound) { try { L.sound.tone(id === 'hill' ? 440 : 880, 0.3, { type: 'triangle', vol: 0.2 }); } catch (e) { /* no sound */ } } } }
+        },
+        draw: (ctx, s, t) => t1Draw(ctx, s, t),
+        pointer: (s, type, x, y) => {
+          if (type !== 'down') return;
+          for (const b of T1.btn) if (Math.abs(x - b.x) < T1.bw / 2 + 10 && Math.abs(y - b.y) < T1.bh / 2 + 15) {
+            s.touched = true; if (s.run) return;
+            if (b.k === 'socks') { s.sockB = s.sockB === 'spotty' ? 'plain' : 'spotty'; s.done = false; s.time = 0; }
+            if (b.k === 'road') { s.roadB = s.roadB === 'flat' ? 'hill' : 'flat'; s.done = false; s.time = 0; }
+            if (b.k === 'go') { s.run = true; s.done = false; s.time = 0; s.runs++; s.lastCue = ''; }
+            if (L.sound) { try { L.sound.tone(520, 0.12, { type: 'triangle', vol: 0.2 }); } catch (e) { /* no sound */ } }
+            return;
+          }
+        },
+        cues: {
+          twin: 'Everything the same... so the same time!',
+          same: 'Plain socks, same race... same time! The socks make no difference.',
+          hill: 'Uphill, the what-if me is slower. The hill makes a difference!',
+          two: 'Two things changed! Now we cannot tell which one made the difference.'
+        }
+      },
+      {
+        title: 'Pick from a hat',
+        hint: 'Make two teams. Put all the fast runners on one team, or pick from a hat. Which way is fair?',
+        init: s => { s.A = null; s.B = null; s.how = ''; s.picks = 0; s.hats = 0; s.anim = 0; s.cued = false; s.touched = false; s.lastCue = ''; },
+        update: (s, dt, cue) => {
+          if (s.A && s.anim < 1) s.anim = Math.min(1, s.anim + dt * 1.2);
+          if (s.A && s.anim >= 1 && !s.cued) {
+            s.cued = true; const d = Math.abs(t2Avg(s.A) - t2Avg(s.B));
+            const id = s.how === 'me' ? 'unfair' : d <= 1 ? 'fair' : 'again';
+            s.lastCue = id; cue(id);
+          }
+        },
+        draw: (ctx, s, t) => t2Draw(ctx, s, t),
+        pointer: (s, type, x, y) => {
+          if (type !== 'down') return;
+          for (const b of T2.btn) if (Math.abs(x - b.x) < T2.bw / 2 + 10 && Math.abs(y - b.y) < T2.bh / 2 + 15) { s.touched = true; t2Pick(s, b.k); if (L.sound) { try { L.sound.tone(b.k === 'hat' ? 660 : 330, 0.15, { type: 'triangle', vol: 0.2 }); } catch (e) { /* no sound */ } } return; }
+        },
+        cues: {
+          unfair: 'Not fair! All the fast runners are on the spotty team.',
+          fair: 'Picked from a hat, the teams are alike... and about as fast!',
+          again: 'Picked fairly! But by chance, these teams came out a bit different. With lots more runners, the hat makes teams more alike.'
+        }
+      }
+    ]
+  };
+})(typeof window !== 'undefined' ? window : globalThis);
