@@ -8690,3 +8690,555 @@
     ]
   };
 })(typeof window !== 'undefined' ? window : globalThis);
+
+/* Episode 20 — How did a doctor find out what was making people sick?  (John Snow and cholera, London 1854)
+   Story: long ago, in 1854, in a busy part of London (Soho), lots of people became very ill at once with cholera (a tummy illness
+   that makes the body lose lots of water). Most doctors thought it spread through bad, smelly air ("miasma").
+   -> look closer: one doctor, John Snow, thought cholera was spread by dirty water, not by the air. People got water from street
+   pumps; he found where the people with cholera lived: most lived close to one pump, on Broad Street, and drank its water. He told
+   the people in charge (the parish Board of Guardians) and they took the handle off the pump. The outbreak was already slowing
+   (Snow's own daily counts, shown as a bar chart), but that pump could not make anyone else ill. Later, people found that dirty
+   water from a leaky cesspit (a "toilet pit") next to the pump could seep into its well.
+   -> test: the bigger study: two water companies sent water down the same streets; one took river water below the city, where
+   sewage flowed in (Southwark and Vauxhall), the other cleaner water from higher up the river (Lambeth, moved to Thames Ditton in
+   1852). Next-door houses got different water; rich or poor, the people were alike except for their water; in homes with the dirty
+   water, about six times as many people died of cholera (Rothman Table 5.1: 0.0161 vs 0.0027; the video says "cholera struck").
+   A natural experiment. -> real: John Snow is called the father of epidemiology. -> say it -> try at home (a crumb map).
+   Sources: Kenneth J. Rothman, Epidemiology: An Introduction, 3rd ed. (OUP), Ch. 2 "From Hippocrates to Snow and Frost" (John Snow
+   1813-1858; the pump handle; the epidemic already waning, Figure 2.1; the infant index case, the defective brickwork and the
+   cesspool; miasma; the two water companies; natural experiment) and Ch. 5 "John Snow's Natural Experiment" (Table 5.1);
+   Lash, VanderWeele, Haneuse and Rothman, Modern Epidemiology, 4th ed. (2021), Ch. 1 and Ch. 6 (the natural experiment, Snow 1855
+   quoted); London Museum, "John Snow, cholera and the Broad Street pump" (Soho outbreak from 31 August 1854; mapping the deaths);
+   LSHTM podcast, March 2013, John Snow bicentenary special. No personal details of any patient are used.
+   Try it 1 "Find the pump" (add the homes where cholera struck, then tap the pump they cluster around: the handle comes off);
+   Try it 2 "Two water pipes" (switch houses between the two companies' pipes, then wait a month and compare). */
+(function (global) {
+  const L = global.LSC; const LSC = L; const { W, H, P, E, seg, clamp, lerp, circle, ellipse, text, roundRect } = L;
+  L.episodes = L.episodes || {};
+  const PI = Math.PI, TAU = PI * 2;
+  const stk = (ctx, s, x, y, pIn, pOut, o) => L.sticker(ctx, s, x, y, pIn * (1 - (pOut || 0)), o);
+  const DIRTY = '#9C7A3C', DIRTY_D = '#6E5524', CLEAN = '#4EA8FF', CLEAN_D = '#2F7FD6', PUMP = '#3F5A4E', PUMP_D = '#2C4038';
+  const BRICK = '#C9805E', BRICK_D = '#A9654A', STONE = '#E9DCC3', COAT = ['#3D4A6B', '#7A4B3A', '#4E6B4A', '#6B4E7A', '#8A6A3A'];
+  const SKIN = ['#F5CFAE', '#D9A57E', '#B97E57', '#8D5A3B'];
+  const PAPER = '#F6EEDB';
+
+  // ---------- a person (Victorian London); (x, y) = between the feet on the ground; total height about 330 * s ----------
+  // o: coat, skin, hat ('top' | 'bowler' | 'bonnet' | null), snow (sideburns + bow tie), mood ('happy' | 'talk' | 'sad'), point (arm angle), bucket, lookX
+  function person(ctx, x, y, s, t, o) {
+    o = o || {}; const bob = o.still ? 0 : Math.sin(t * 2.2 + x * 0.013) * 3;
+    ctx.save(); ctx.translate(x, y + bob); ctx.scale(s * (o.flip ? -1 : 1), s); ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+    ellipse(ctx, -24, -8, 24, 11, P.ink); ellipse(ctx, 24, -8, 24, 11, P.ink);
+    ctx.fillStyle = '#3A3A48'; ctx.fillRect(-34, -70, 22, 62); ctx.fillRect(12, -70, 22, 62);
+    const coat = o.coat || COAT[0];
+    ctx.fillStyle = coat; ctx.strokeStyle = P.ink; ctx.lineWidth = 6;
+    ctx.beginPath(); ctx.moveTo(-60, -60); ctx.lineTo(-46, -168); ctx.quadraticCurveTo(0, -186, 46, -168); ctx.lineTo(60, -60); ctx.quadraticCurveTo(0, -48, -60, -60); ctx.closePath(); ctx.fill(); ctx.stroke();
+    // arms
+    const arm = (sx, ang) => { ctx.save(); ctx.translate(sx * 44, -158); ctx.rotate(sx * ang); ctx.fillStyle = coat; roundRect(ctx, -13, 0, 26, 96, 13); ctx.fill(); ctx.stroke(); circle(ctx, 0, 100, 14, o.skin || SKIN[0], P.ink, 4); ctx.restore(); };
+    arm(-1, 0.15); arm(1, o.point != null ? o.point : -0.15);
+    if (o.bucket) { ctx.save(); ctx.translate(60, -56); ctx.fillStyle = '#9AA5B8'; ctx.beginPath(); ctx.moveTo(-30, 0); ctx.lineTo(30, 0); ctx.lineTo(22, 56); ctx.lineTo(-22, 56); ctx.closePath(); ctx.fill(); ctx.stroke(); ctx.beginPath(); ctx.arc(0, 0, 30, PI, TAU); ctx.stroke(); ctx.restore(); }
+    // head
+    const hx = (o.lookX || 0) * 4;
+    circle(ctx, 0, -222, 52, o.skin || SKIN[0], P.ink, 6);
+    if (o.snow) { ctx.fillStyle = '#5A3A26'; roundRect(ctx, -54, -236, 16, 46, 8); ctx.fill(); roundRect(ctx, 38, -236, 16, 46, 8); ctx.fill(); }
+    const sad = o.mood === 'sad';
+    for (const sx of [-1, 1]) { if (sad) { ctx.strokeStyle = P.ink; ctx.lineWidth = 5; ctx.beginPath(); ctx.arc(sx * 18 + hx, -226, 8, 0.1 * PI, 0.9 * PI); ctx.stroke(); } else circle(ctx, sx * 18 + hx, -228, 7, P.ink); }
+    ctx.strokeStyle = P.ink; ctx.lineWidth = 5;
+    if (o.mood === 'talk' && Math.sin(t * 14) > 0) ellipse(ctx, hx, -198, 11, 8, P.ink);
+    else { ctx.beginPath(); if (sad) ctx.arc(hx, -186, 14, 1.2 * PI, 1.8 * PI); else ctx.arc(hx, -206, 15, 0.2 * PI, 0.8 * PI); ctx.stroke(); }
+    if (o.snow) { ctx.fillStyle = P.ink; ctx.beginPath(); ctx.moveTo(0, -170); ctx.lineTo(-20, -182); ctx.lineTo(-20, -158); ctx.closePath(); ctx.moveTo(0, -170); ctx.lineTo(20, -182); ctx.lineTo(20, -158); ctx.closePath(); ctx.fill(); }
+    // hat
+    if (o.hat === 'top') { ctx.fillStyle = '#26262F'; ellipse(ctx, 0, -266, 68, 13, '#26262F', P.ink, 5); roundRect(ctx, -40, -350, 80, 86, 8); ctx.fill(); ctx.stroke(); }
+    if (o.hat === 'bowler') { ctx.fillStyle = '#4A3A2E'; ellipse(ctx, 0, -262, 64, 12, '#4A3A2E', P.ink, 5); ctx.beginPath(); ctx.arc(0, -264, 42, PI, TAU); ctx.closePath(); ctx.fill(); ctx.stroke(); }
+    if (o.hat === 'bonnet') { ctx.fillStyle = '#F2E6C9'; ctx.lineWidth = 6; ctx.beginPath(); ctx.arc(0, -228, 64, 1.05 * PI, 1.95 * PI); ctx.lineTo(56, -214); ctx.arc(0, -228, 50, 1.95 * PI, 1.05 * PI, true); ctx.closePath(); ctx.fill(); ctx.stroke(); }
+    ctx.restore();
+  }
+  const snowPerson = (ctx, x, y, s, t, o) => person(ctx, x, y, s, t, Object.assign({ coat: '#2F3A5C', skin: SKIN[0], hat: 'top', snow: true }, o || {}));
+
+  // ---------- the street pump; (x, y) = base on the ground; o.off 0..1 takes the handle away; o.drip shows a drop ----------
+  function pump(ctx, x, y, s, t, o) {
+    o = o || {}; ctx.save(); ctx.translate(x, y); ctx.scale(s, s); ctx.lineJoin = 'round'; ctx.strokeStyle = P.ink; ctx.lineWidth = 6;
+    ctx.fillStyle = '#8E8E99'; roundRect(ctx, -70, -24, 140, 24, 6); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = PUMP; roundRect(ctx, -36, -300, 72, 278, 14); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = PUMP_D; ctx.fillRect(-36, -120, 72, 16); ctx.strokeRect(-36, -120, 72, 16);
+    ellipse(ctx, 0, -302, 52, 18, PUMP_D, P.ink, 6); circle(ctx, 0, -334, 18, PUMP_D, P.ink, 6);
+    // spout
+    ctx.fillStyle = PUMP; roundRect(ctx, 30, -206, 64, 26, 10); ctx.fill(); ctx.stroke(); roundRect(ctx, 72, -206, 22, 46, 8); ctx.fill(); ctx.stroke();
+    if (o.drip) { const f = (t * 0.9) % 1; ctx.save(); ctx.globalAlpha = 1 - f; drop(ctx, 83, -146 + f * 90, 13, o.dripColor || CLEAN); ctx.restore(); }
+    // handle (pivot at the top left); off = lifted away
+    const off = clamp(o.off || 0, 0, 1);
+    if (off < 1) {
+      ctx.save(); ctx.translate(-36 - off * 140, -240 - off * 220); ctx.rotate(-0.35 - off * 1.6 + (o.pumpIt ? Math.sin(t * 6) * 0.25 : 0)); ctx.globalAlpha = 1 - seg(off, 0.7, 1);
+      ctx.fillStyle = PUMP_D; roundRect(ctx, -170, -12, 176, 24, 12); ctx.fill(); ctx.stroke(); circle(ctx, -170, 0, 18, PUMP_D, P.ink, 5); circle(ctx, 0, 0, 12, '#8E8E99', P.ink, 4);
+      ctx.restore();
+    }
+    ctx.restore();
+  }
+  function drop(ctx, x, y, r, color) { ctx.save(); ctx.translate(x, y); ctx.fillStyle = color; ctx.strokeStyle = P.ink; ctx.lineWidth = Math.max(3, r * 0.22); ctx.beginPath(); ctx.moveTo(0, -r * 1.6); ctx.bezierCurveTo(r * 0.9, -r * 0.4, r, r * 0.2, r, r * 0.35); ctx.arc(0, r * 0.35, r, 0, PI); ctx.bezierCurveTo(-r, r * 0.2, -r * 0.9, -r * 0.4, 0, -r * 1.6); ctx.closePath(); ctx.fill(); ctx.stroke(); ctx.restore(); }
+  // tiny wiggly germs inside a drop (dirty water)
+  function germs(ctx, x, y, r, t) { for (let i = 0; i < 3; i++) { const a = i * 2.1 + t; const gx = x + Math.cos(a) * r * 0.45, gy = y + r * 0.2 + Math.sin(a * 1.3) * r * 0.35; circle(ctx, gx, gy, r * 0.16, '#6BBF59', P.ink, 3); } }
+  function tick(ctx, x, y, s, p) { if (p <= 0) return; const k = E.outBack(clamp(p, 0, 1)) * s; ctx.save(); ctx.translate(x, y); ctx.scale(k, k); circle(ctx, 0, 0, 50, P.green, P.ink, 6); ctx.strokeStyle = P.white; ctx.lineWidth = 13; ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.beginPath(); ctx.moveTo(-22, 2); ctx.lineTo(-5, 19); ctx.lineTo(24, -18); ctx.stroke(); ctx.restore(); }
+  function cross(ctx, x, y, s, p) { if (p <= 0) return; const k = E.outBack(clamp(p, 0, 1)) * s; ctx.save(); ctx.translate(x, y); ctx.scale(k, k); circle(ctx, 0, 0, 50, P.red, P.ink, 6); ctx.strokeStyle = P.white; ctx.lineWidth = 13; ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(-19, -19); ctx.lineTo(19, 19); ctx.moveTo(19, -19); ctx.lineTo(-19, 19); ctx.stroke(); ctx.restore(); }
+  // an ill person tucked in bed (a face and a blanket), centred at (x, y)
+  function illFace(ctx, x, y, s, skin) { ctx.save(); ctx.translate(x, y); ctx.scale(s, s); circle(ctx, 0, 0, 34, skin, P.ink, 5); ctx.strokeStyle = P.ink; ctx.lineWidth = 4; for (const sx of [-1, 1]) { ctx.beginPath(); ctx.arc(sx * 12, -4, 6, 0.1 * PI, 0.9 * PI); ctx.stroke(); } ctx.beginPath(); ctx.arc(0, 22, 10, 1.2 * PI, 1.8 * PI); ctx.stroke(); ctx.fillStyle = '#E86F8C'; roundRect(ctx, -46, 20, 92, 34, 12); ctx.fill(); ctx.stroke(); ctx.restore(); }
+  // a London terrace house (flat front); (x, y) = bottom centre; w, h
+  function terrace(ctx, x, y, w, h, color, o) {
+    o = o || {}; ctx.save(); ctx.strokeStyle = P.ink; ctx.lineWidth = 6; ctx.fillStyle = color || BRICK;
+    ctx.fillRect(x - w / 2, y - h, w, h); ctx.strokeRect(x - w / 2, y - h, w, h);
+    ctx.fillStyle = '#5A5A68'; ctx.fillRect(x - w / 2 - 8, y - h - 22, w + 16, 22); ctx.strokeRect(x - w / 2 - 8, y - h - 22, w + 16, 22);
+    ctx.fillStyle = '#7A6A5A'; ctx.fillRect(x + w / 4 - 14, y - h - 62, 28, 40); ctx.strokeRect(x + w / 4 - 14, y - h - 62, 28, 40);
+    const rows = o.rows || 2, wins = [];
+    for (let r = 0; r < rows; r++) for (const sx of [-1, 1]) { const wx = x + sx * w * 0.24, wy = y - h + 40 + r * (h - 150) / Math.max(1, rows - 1 || 1); wins.push([wx, wy + 40]); ctx.fillStyle = '#CFE6F5'; roundRect(ctx, wx - 30, wy, 60, 80, 6); ctx.fill(); ctx.stroke(); ctx.beginPath(); ctx.moveTo(wx, wy); ctx.lineTo(wx, wy + 80); ctx.stroke(); }
+    ctx.fillStyle = o.door || '#3D4A6B'; roundRect(ctx, x - 26, y - 100, 52, 100, 8); ctx.fill(); ctx.stroke();
+    ctx.restore(); return wins;
+  }
+  function cobbles(ctx, y0) { ctx.fillStyle = '#C9C2B4'; ctx.fillRect(0, y0, W, H - y0); ctx.strokeStyle = 'rgba(43,45,66,0.18)'; ctx.lineWidth = 3; for (let y = y0 + 20, k = 0; y < H; y += 34, k++) for (let x = (k % 2) * 30; x < W; x += 60) { ctx.beginPath(); ctx.ellipse(x, y, 24, 12, 0, 0, TAU); ctx.stroke(); } }
+  // the smelly air: soft green wisps drifting
+  function wisps(ctx, t, a, n) { if (a <= 0) return; ctx.save(); ctx.globalAlpha = 0.55 * clamp(a, 0, 1); ctx.strokeStyle = '#8FBF5A'; ctx.lineWidth = 14; ctx.lineCap = 'round'; for (let i = 0; i < (n || 7); i++) { const x0 = 160 + i * 250 + Math.sin(t * 0.6 + i) * 30, y0 = 300 + (i % 3) * 90; ctx.beginPath(); for (let k = 0; k <= 20; k++) { const xx = x0 + k * 9, yy = y0 + Math.sin(k * 0.6 + t * 2 + i) * 18 - k * 3; k ? ctx.lineTo(xx, yy) : ctx.moveTo(xx, yy); } ctx.stroke(); } ctx.restore(); }
+
+  // ======================= SOHO, 1854 (s1, s2, s3, look) =======================
+  const ST = [{ x: 220, w: 300, h: 420, c: BRICK }, { x: 540, w: 320, h: 470, c: '#B9906A' }, { x: 1380, w: 320, h: 460, c: BRICK_D }, { x: 1720, w: 320, h: 420, c: '#B9906A' }];
+  function streetBg(ctx, t, opt) {
+    opt = opt || {};
+    L.sky(ctx, { top: '#C9D6E3', bottom: '#EDE6DA' }); L.cloud(ctx, 900 + Math.sin(t * 0.2) * 20, 130, 0.9);
+    cobbles(ctx, 700); ctx.fillStyle = STONE; ctx.fillRect(0, 680, W, 30); ctx.strokeStyle = P.ink; ctx.lineWidth = 5; ctx.beginPath(); ctx.moveTo(0, 680); ctx.lineTo(W, 680); ctx.moveTo(0, 710); ctx.lineTo(W, 710); ctx.stroke();
+    const wins = []; ST.forEach(h => wins.push(...terrace(ctx, h.x, 690, h.w, h.h, h.c)));
+    return wins;
+  }
+  function sohoScene(ctx, t, Lt) {
+    const wins = streetBg(ctx, t);
+    // the ill people appear at the windows on "lots of people"
+    wins.forEach(([wx, wy], i) => { const a = Lt.cwin('s1', 'lots of people', 0.5, E.outBack, 0.15 * ((i * 5) % 8)); if (a > 0) illFace(ctx, wx, wy - 4, 0.62 * a, SKIN[i % 4]); });
+    pump(ctx, 960, 735, 1.05, t, {});
+    // passers-by
+    if (!Lt.after('look')) { person(ctx, 1120, 790, 0.62, t, { coat: COAT[1], skin: SKIN[2], hat: 'bonnet', bucket: true }); person(ctx, 1560, 800, 0.6, t + 1, { coat: COAT[2], skin: SKIN[1], hat: 'bowler' }); }
+    wisps(ctx, t, Lt.cwin('s3', 'most doctors', 1.0, null, 1.3) * (1 - Lt.cwin('look', 'had a different', 0.6)));
+    // John Snow walks in
+    const sw = Lt.cwin('look', 'but one doctor', 1.4, E.out);
+    if (sw > 0) snowPerson(ctx, lerp(2050, 1340, sw), 800, 0.78, t, { mood: Lt.cafter('look', 'john snow') ? 'talk' : 'happy', lookX: -1, flip: false, still: sw < 1 });
+    L.pip(ctx, { x: 270, y: 740, s: 0.75, t, mood: Lt.cafter('s1', 'lots of people') && !Lt.after('look') ? 'sad' : 'talk', armR: -0.4, armL: 0.6, lookX: 0.7, lookY: -0.2 });
+    const o = { size: 72, rot: -0.04 };
+    stk(ctx, 'London, 1854', 960, 120, Lt.win('s1', 0.1, 0.5), Lt.cwin('s1', 'lots of people', 0.25, null, 0.6), Object.assign({ bg: P.sun, size: 84 }, o));
+    stk(ctx, 'very ill', 960, 120, Lt.cwin('s1', 'lots of people', 0.5, null, 0.9), Lt.win('s2', 0, 0.25), Object.assign({ bg: P.white }, o));
+    stk(ctx, 'CHOLERA', 960, 120, Lt.cwin('s2', 'cholera', 0.5), Lt.cwin('s2', 'it upsets', 0.25), Object.assign({ bg: P.red, color: P.white, size: 96 }, o));
+    stk(ctx, 'a tummy illness', 960, 120, Lt.cwin('s2', 'it upsets', 0.5, null, 0.4), Lt.cwin('s2', 'and makes your body', 0.25, null, 0.6), Object.assign({ bg: P.white }, o));
+    stk(ctx, 'loses lots of water', 960, 120, Lt.cwin('s2', 'and makes your body', 0.5, null, 0.8), Lt.win('s3', 0, 0.25), Object.assign({ bg: CLEAN, color: P.white }, o));
+    const dw = Lt.cwin('s2', 'and makes your body', 0.4, null, 0.8) * (1 - Lt.win('s3', 0, 0.3));
+    if (dw > 0) { ctx.save(); ctx.globalAlpha = clamp(dw, 0, 1); for (let i = 0; i < 3; i++) drop(ctx, 1300 + i * 70, 250 + ((t * 0.8 + i * 0.33) % 1) * 60, 20, CLEAN); ctx.restore(); }
+    stk(ctx, 'bad, smelly air?', 960, 120, Lt.cwin('s3', 'most doctors', 0.5, null, 1.4), Lt.cwin('s3', 'they called it', 0.25), Object.assign({ bg: '#8FBF5A', color: P.white }, o));
+    stk(ctx, 'MIASMA', 960, 120, Lt.cwin('s3', 'miasma', 0.5), Lt.win('look', 0, 0.25), Object.assign({ bg: '#8FBF5A', color: P.white, size: 96 }, o));
+    stk(ctx, 'Dr John Snow', 1340, 360, Lt.cwin('look', 'john snow', 0.5), Lt.cwin('look', "let's look", 0.25), Object.assign({ bg: P.white, size: 60 }, o));
+    stk(ctx, 'a different idea!', 960, 120, Lt.cwin('look', 'had a different', 0.5, null, 0.3), Lt.cwin('look', "let's look", 0.25), Object.assign({ bg: P.sun }, o));
+    // the zoom into the pump water
+    const zp = seg(t, Lt.chunk('look', "let's look") + 0.4, Lt.end('look') + 0.7, E.in);
+    if (zp > 0) { const fx = 1043, fy = 560, r = lerp(90, 2300, zp); ctx.save(); ctx.beginPath(); ctx.arc(fx, fy, r, 0, TAU); ctx.clip(); clueBg(ctx); drop(ctx, lerp(fx, 960, zp), lerp(fy, 470, zp), lerp(20, 120, zp), CLEAN); ctx.restore(); if (zp < 1) L.magnifier(ctx, fx, fy, r, zp); }
+  }
+
+  // ======================= SNOW'S IDEA (e1) and THE PUMPS (e2) =======================
+  function clueBg(ctx) { ctx.fillStyle = '#EEF4FF'; ctx.fillRect(-W, -H, 3 * W, 3 * H); ctx.strokeStyle = 'rgba(78,168,255,0.10)'; ctx.lineWidth = 3; for (let x = 0; x <= W; x += 120) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke(); } for (let y = 0; y <= H; y += 120) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke(); } }
+  function ideaScene(ctx, t, Lt) {
+    clueBg(ctx);
+    snowPerson(ctx, 470, 800, 1.25, t, { mood: 'happy', point: -1.2, lookX: 1 });
+    const a = Lt.win('e1', 0.1, 0.6, E.outBack);
+    L.thoughtBubble(ctx, 1240, 420, 900, 520, a, 1);
+    if (a > 0.5) {
+      const w = Lt.cwin('e1', 'john snow thought', 0.6, E.outBack, 1.6), n = Lt.cwin('e1', 'not by the air', 0.6, E.outBack);
+      if (w > 0) { drop(ctx, 1040, 430, 90 * E.outBack(clamp(w, 0, 1)), DIRTY); if (w > 0.6) germs(ctx, 1040, 430, 90, t); text(ctx, 'dirty water', 1040, 600, { size: 46, weight: 700, color: DIRTY_D }); tick(ctx, 1130, 330, 0.7, w); }
+      if (n > 0) { ctx.save(); ctx.globalAlpha = clamp(n, 0, 1); ctx.strokeStyle = '#8FBF5A'; ctx.lineWidth = 16; ctx.lineCap = 'round'; for (let i = 0; i < 3; i++) { ctx.beginPath(); for (let k = 0; k <= 16; k++) { const xx = 1340 + k * 11, yy = 380 + i * 60 + Math.sin(k * 0.7 + t * 2 + i) * 14; k ? ctx.lineTo(xx, yy) : ctx.moveTo(xx, yy); } ctx.stroke(); } text(ctx, 'smelly air', 1430, 600, { size: 46, weight: 700, color: '#5E8A35' }); ctx.restore(); cross(ctx, 1560, 330, 0.7, n); }
+    }
+    stk(ctx, 'water, not air', 960, 110, Lt.cwin('e1', 'not by the air', 0.5, null, 0.3), 0, { bg: P.sun, size: 72, rot: -0.03 });
+    L.pip(ctx, { x: 1760, y: 760, s: 0.6, t, mood: 'talk', armR: -0.6, armL: 0.6, lookX: -0.8 });
+  }
+  function pumpsScene(ctx, t, Lt) {
+    streetBg(ctx, t);
+    pump(ctx, 960, 735, 1.05, t, { pumpIt: true, drip: true });
+    const a = Lt.win('e2', 0.1, 0.8, E.out);
+    person(ctx, lerp(1300, 1120, a), 800, 0.66, t, { coat: COAT[3], skin: SKIN[3], hat: 'bonnet', bucket: true, flip: true });
+    person(ctx, 720, 800, 0.66, t + 0.7, { coat: COAT[4], skin: SKIN[1], bucket: true });
+    person(ctx, 1560, 800, 0.62, t + 1.3, { coat: COAT[0], skin: SKIN[0], hat: 'bowler', bucket: true, flip: true });
+    stk(ctx, 'water pumps', 960, 120, Lt.cwin('e2', 'back then', 0.5, null, 1.6), 0, { bg: P.white, size: 76, rot: -0.03 });
+    L.pip(ctx, { x: 270, y: 740, s: 0.75, t, mood: 'talk', armR: -0.6, armL: 0.6, lookX: 0.8 });
+  }
+
+  // ======================= THE CLUES ON A MAP (e3) =======================
+  // a plan of the streets: Broad Street runs across at y 330; three pumps; dots for the homes where cholera struck
+  const MP = { H1: 330, H2: 610, V1: 470, V2: 1380, road: 64 };
+  const PUMPS = [{ id: 'broad', x: 940, y: 330, name: 'Broad Street' }, { id: 'west', x: 470, y: 690, name: '' }, { id: 'east', x: 1600, y: 610, name: '' }];
+  const onRoad = (x, y) => Math.abs(y - MP.H1) < MP.road / 2 + 10 || Math.abs(y - MP.H2) < MP.road / 2 + 10 || Math.abs(x - MP.V1) < MP.road / 2 + 10 || Math.abs(x - MP.V2) < MP.road / 2 + 10;
+  const DOTS = (() => { const r = L.rng(1854), out = []; let guard = 0; while (out.length < 44 && guard++ < 5000) { const near = out.length % 5 !== 4; let x, y; if (near) { const a = r() * TAU, d = Math.pow(r(), 0.8) * 300; x = 940 + Math.cos(a) * d * 1.25; y = 330 + Math.sin(a) * d * 0.8; } else { x = 170 + r() * 1600; y = 170 + r() * 610; } if (x < 150 || x > 1770 || y < 160 || y > 780 || onRoad(x, y)) continue; out.push([x, y]); } return out; })();
+  function mapDraw(ctx, t, nDots, o) {
+    o = o || {}; ctx.fillStyle = PAPER; ctx.fillRect(0, 0, W, H);
+    ctx.fillStyle = '#E8D9B8'; ctx.fillRect(120, 150, 1680, 650); ctx.strokeStyle = P.ink; ctx.lineWidth = 6; ctx.strokeRect(120, 150, 1680, 650);
+    ctx.fillStyle = '#FFFDF6'; for (const y of [MP.H1, MP.H2]) ctx.fillRect(120, y - MP.road / 2, 1680, MP.road); for (const x of [MP.V1, MP.V2]) ctx.fillRect(x - MP.road / 2, 150, MP.road, 650);
+    ctx.strokeStyle = 'rgba(43,45,66,0.35)'; ctx.lineWidth = 3; for (const y of [MP.H1, MP.H2]) { ctx.beginPath(); ctx.moveTo(120, y - MP.road / 2); ctx.lineTo(1800, y - MP.road / 2); ctx.moveTo(120, y + MP.road / 2); ctx.lineTo(1800, y + MP.road / 2); ctx.stroke(); } for (const x of [MP.V1, MP.V2]) { ctx.beginPath(); ctx.moveTo(x - MP.road / 2, 150); ctx.lineTo(x - MP.road / 2, 800); ctx.moveTo(x + MP.road / 2, 150); ctx.lineTo(x + MP.road / 2, 800); ctx.stroke(); }
+    if (o.label) text(ctx, 'Broad Street', 1150, MP.H1 + 4, { size: 34, weight: 700, color: P.ink });
+    if (o.ring > 0) { ctx.save(); ctx.globalAlpha = clamp(o.ring, 0, 1); ctx.strokeStyle = P.red; ctx.lineWidth = 9; ctx.setLineDash([22, 14]); ctx.beginPath(); ctx.ellipse(940, 330, 420 * E.outBack(clamp(o.ring, 0, 1)), 230 * E.outBack(clamp(o.ring, 0, 1)), 0, 0, TAU); ctx.stroke(); ctx.restore(); }
+    for (let i = 0; i < Math.min(nDots, DOTS.length); i++) { const k = clamp(nDots - i, 0, 1); const [x, y] = DOTS[i]; circle(ctx, x, y, 13 * E.outBack(k), P.ink); }
+    PUMPS.forEach(p => { const off = p.id === 'broad' ? (o.off || 0) : 0; const hi = p.id === 'broad' ? (o.hi || 0) : 0; if (hi > 0) circle(ctx, p.x, p.y, 54 + 8 * Math.sin(t * 5), 'rgba(255,210,63,' + (0.7 * hi) + ')'); circle(ctx, p.x, p.y, 34, PUMP, P.ink, 6); ctx.strokeStyle = P.white; ctx.lineWidth = 6; ctx.beginPath(); ctx.moveTo(p.x - 12, p.y + 10); ctx.lineTo(p.x - 12, p.y - 12); ctx.lineTo(p.x + 14, p.y - 12); ctx.stroke(); if (off < 1) { ctx.save(); ctx.globalAlpha = 1 - off; ctx.strokeStyle = PUMP_D; ctx.lineWidth = 10; ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(p.x - 30, p.y - 22 - off * 60); ctx.lineTo(p.x - 74, p.y - 50 - off * 90); ctx.stroke(); ctx.restore(); } });
+    PUMPS.forEach(p => text(ctx, 'pump', p.x + 75, p.y - 40, { size: 28, weight: 700, color: P.ink, stroke: PAPER, strokeWidth: 6 }));
+  }
+  function mapScene(ctx, t, Lt) {
+    const t0 = Lt.chunk('e3', 'he found out') + 0.3, t1 = Lt.chunk('e3', 'most of them') + 0.4;
+    const n = clamp((t - t0) / Math.max(0.5, t1 - t0), 0, 1) * DOTS.length;
+    mapDraw(ctx, t, n, { label: Lt.cafter('e3', 'on broad street', 0.1), ring: Lt.cwin('e3', 'most of them', 0.6, null, 0.6), hi: Lt.cwin('e3', 'on broad street', 0.5) });
+    // "and drank its water": little arrows from dots to the Broad Street pump
+    const dr = Lt.cwin('e3', 'and drank', 0.6, null, 0.1);
+    if (dr > 0) { ctx.save(); ctx.globalAlpha = clamp(dr, 0, 1); [[700, 230], [1180, 220], [720, 450], [1150, 460], [880, 500]].forEach(([x, y]) => L.arrow(ctx, x, y, lerp(x, 940, 0.62), lerp(y, 330, 0.62), CLEAN_D, 8)); ctx.restore(); }
+    const o = { size: 64, rot: -0.03 };
+    stk(ctx, 'homes where cholera struck', 960, 80, Lt.cwin('e3', 'he found out', 0.5, null, 0.3), Lt.cwin('e3', 'most of them', 0.25), Object.assign({ bg: P.white }, o));
+    stk(ctx, 'close to one pump!', 960, 80, Lt.cwin('e3', 'most of them', 0.5, null, 0.5), Lt.win('e5', 0, 0.25), Object.assign({ bg: P.sun }, o));
+    L.pip(ctx, { x: 1860, y: 900, s: 0.45, t, mood: Lt.cafter('e3', 'most of them', 0.5) ? 'wow' : 'talk', armR: -0.6, armL: 0.6, lookX: -0.8, lookY: -0.4 });
+  }
+
+  // ======================= THE HANDLE COMES OFF (e5), THE DAILY COUNTS (e6) =======================
+  // Snow's daily counts of fatal attacks, 26 Aug to 12 Sep 1854 (On the Mode of Communication of Cholera, 1855; Rothman Figure 2.1)
+  const DAYS = [1, 1, 1, 1, 8, 56, 143, 116, 54, 46, 36, 20, 28, 12, 11, 5, 5, 1], HANDLE_DAY = 13;   // index 13 = 8 September
+  function handleOff(t, Lt) { return seg(t, Lt.chunk('e5', 'and they took') + 1.0, Lt.chunk('e5', 'and they took') + 2.2, E.inOut); }
+  function handleScene(ctx, t, Lt) {
+    streetBg(ctx, t);
+    const off = handleOff(t, Lt);
+    pump(ctx, 960, 735, 1.05, t, { off });
+    snowPerson(ctx, 560, 800, 0.8, t, { mood: Lt.cafter('e5', 'and they took') ? 'happy' : 'talk', point: Lt.cafter('e5', 'and they took') ? -0.15 : -1.1, lookX: 1 });
+    const ba = Lt.win('e5', 0.1, 0.8, E.out);
+    person(ctx, lerp(1900, 1380, ba), 800, 0.78, t, { coat: '#5A2E3A', skin: SKIN[1], hat: 'top', flip: true, lookX: -1 });
+    person(ctx, lerp(2100, 1600, ba), 800, 0.74, t + 0.5, { coat: '#3A4A3A', skin: SKIN[0], hat: 'bowler', flip: true, lookX: -1 });
+    // a person with a bucket comes, then walks away (nobody can use it)
+    if (Lt.cafter('e5', 'so nobody could', 0.1)) { const w = Lt.cwin('e5', 'so nobody could', 1.6, E.inOut, 0.1); person(ctx, lerp(760, 300, w), 800, 0.6, t, { coat: COAT[3], skin: SKIN[2], hat: 'bonnet', bucket: true, flip: w > 0.05, mood: 'happy' }); }
+    const o = { size: 72, rot: -0.03 };
+    stk(ctx, 'the people in charge', 1480, 300, Lt.cwin('e5', 'he told', 0.5, null, 0.6), Lt.cwin('e5', 'and they took', 0.25, null, 0.8), Object.assign({ bg: P.white, size: 54 }, o));
+    stk(ctx, 'no handle!', 960, 120, Lt.cwin('e5', 'and they took', 0.5, null, 1.8), Lt.win('e6', 0, 0.25), Object.assign({ bg: P.sun, size: 90 }, o));
+    if (Lt.cafter('e5', 'and they took', 1.0) && !Lt.cafter('e5', 'and they took', 2.6)) L.sparkles(ctx, 860, 400, t, 3, 6, 160, P.sun);
+  }
+  function chartScene(ctx, t, Lt) {
+    clueBg(ctx);
+    const a = Lt.win('e6', 0.05, 0.6, E.outBack);
+    ctx.save(); ctx.globalAlpha = clamp(a, 0, 1);
+    ctx.fillStyle = P.white; roundRect(ctx, 150, 170, 1620, 600, 34); ctx.fill(); ctx.strokeStyle = P.ink; ctx.lineWidth = 7; ctx.stroke();
+    text(ctx, 'people very ill each day', 960, 225, { size: 44, weight: 700, color: P.ink });
+    const x0 = 250, bw = 74, yb = 700, k = 380 / 143;
+    ctx.strokeStyle = P.ink; ctx.lineWidth = 5; ctx.beginPath(); ctx.moveTo(x0 - 20, yb); ctx.lineTo(x0 + DAYS.length * (bw + 10) + 10, yb); ctx.stroke();
+    DAYS.forEach((d, i) => { const g = clamp(Lt.win('e6', 0.3 + i * 0.07, 0.4), 0, 1); const h = d * k * g; const x = x0 + i * (bw + 10); ctx.fillStyle = i >= HANDLE_DAY ? CLEAN : P.red; ctx.fillRect(x, yb - h, bw, h); if (h > 0) ctx.strokeRect(x, yb - h, bw, h); });
+    text(ctx, '31 Aug', x0 + 5 * (bw + 10) + bw / 2, yb + 34, { size: 28, weight: 700, color: P.ink }); text(ctx, '8 Sept', x0 + HANDLE_DAY * (bw + 10) + bw / 2, yb + 34, { size: 28, weight: 700, color: P.ink });
+    ctx.restore();
+    // "already slowing down": an arrow along the falling bars
+    const sl = Lt.cwin('e6', 'the illness was already', 0.6, null, 1.4);
+    if (sl > 0) { ctx.save(); ctx.globalAlpha = clamp(sl, 0, 1); L.arrow(ctx, 250 + 7 * 84 + 40, 300, 250 + 7 * 84 + 40 + lerp(0, 440, sl), lerp(300, 560, sl), P.green, 12); ctx.restore(); }
+    // handle off marker
+    const hm = Lt.cwin('e6', 'but now', 0.5, E.outBack, 0.1);
+    if (hm > 0) { const x = 250 + HANDLE_DAY * 84 + 37; ctx.save(); ctx.globalAlpha = clamp(hm, 0, 1); ctx.strokeStyle = PUMP; ctx.lineWidth = 6; ctx.setLineDash([14, 10]); ctx.beginPath(); ctx.moveTo(x, 300); ctx.lineTo(x, 690); ctx.stroke(); ctx.restore(); L.sticker(ctx, 'handle off', x, 300, hm, { bg: P.sun, size: 44, rot: 0 }); }
+    const o = { size: 70, rot: -0.03 };
+    stk(ctx, 'already slowing down', 960, 100, Lt.cwin('e6', 'the illness was already', 0.5, null, 1.0), Lt.cwin('e6', 'but now', 0.25), Object.assign({ bg: P.green, color: P.white }, o));
+    stk(ctx, 'no more water from that pump', 960, 100, Lt.cwin('e6', 'but now', 0.5, null, 0.9), 0, Object.assign({ bg: P.white, size: 60 }, o));
+    L.pip(ctx, { x: 1840, y: 900, s: 0.42, t, mood: 'talk', armR: -0.6, armL: 0.6, lookX: -0.8, lookY: -0.4 });
+  }
+
+  // ======================= THE LEAKY PIT (e7) =======================
+  function pitScene(ctx, t, Lt) {
+    L.sky(ctx, { top: '#C9D6E3', bottom: '#EDE6DA' });
+    // underground cut-away
+    const gy = 360; ctx.fillStyle = '#B08A63'; ctx.fillRect(0, gy, W, H - gy); ctx.fillStyle = 'rgba(0,0,0,0.06)'; for (let i = 0; i < 60; i++) { const r = L.rng(60 + i); circle(ctx, r() * W, gy + 30 + r() * 600, 6 + r() * 10, 'rgba(90,60,30,0.25)'); }
+    ctx.fillStyle = '#C9C2B4'; ctx.fillRect(0, gy - 30, W, 30); ctx.strokeStyle = P.ink; ctx.lineWidth = 6; ctx.beginPath(); ctx.moveTo(0, gy - 30); ctx.lineTo(W, gy - 30); ctx.moveTo(0, gy); ctx.lineTo(W, gy); ctx.stroke();
+    // the well shaft under the pump, with water at the bottom
+    const wx = 760; ctx.fillStyle = '#8C8C96'; ctx.fillRect(wx - 70, gy, 140, 430); ctx.fillStyle = '#5E5E6A'; ctx.fillRect(wx - 50, gy, 100, 430); ctx.strokeRect(wx - 70, gy, 140, 430);
+    const leak = Lt.cwin('e7', 'could seep', 1.4, null, 0.1);
+    ctx.fillStyle = leak > 0 ? 'rgb(' + Math.round(lerp(95, 156, leak)) + ',' + Math.round(lerp(184, 122, leak)) + ',' + Math.round(lerp(255, 60, leak)) + ')' : CLEAN; ctx.fillRect(wx - 50, gy + 290, 100, 140); ctx.strokeRect(wx - 50, gy + 290, 100, 140);
+    ctx.strokeStyle = PUMP_D; ctx.lineWidth = 14; ctx.beginPath(); ctx.moveTo(wx, gy - 30); ctx.lineTo(wx, gy + 360); ctx.stroke();
+    pump(ctx, wx, gy - 30, 0.75, t, { off: 1 });
+    // the pit, lined with bricks, a few loose ones on the side facing the well
+    const px = 1200, py0 = gy + 60, pw = 280, ph = 300;
+    ctx.fillStyle = BRICK; ctx.fillRect(px - pw / 2 - 30, py0, pw + 60, ph + 30); ctx.fillStyle = DIRTY; ctx.fillRect(px - pw / 2, py0 + 60, pw, ph - 60); ctx.strokeStyle = P.ink; ctx.lineWidth = 5; ctx.strokeRect(px - pw / 2 - 30, py0, pw + 60, ph + 30); ctx.strokeRect(px - pw / 2, py0 + 60, pw, ph - 60);
+    for (let r = 0; r < 6; r++) { ctx.strokeStyle = BRICK_D; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(px - pw / 2 - 30, py0 + r * 55); ctx.lineTo(px - pw / 2, py0 + r * 55); ctx.stroke(); }
+    ctx.fillStyle = '#B08A63'; for (const [bx, by] of [[px - pw / 2 - 30, py0 + 170], [px - pw / 2 - 30, py0 + 235]]) { ctx.fillRect(bx, by, 30, 40); }
+    ctx.fillStyle = '#6E6A60'; roundRect(ctx, px - pw / 2 - 40, py0 - 26, pw + 80, 26, 8); ctx.fill(); ctx.strokeStyle = P.ink; ctx.lineWidth = 5; ctx.stroke();
+    // dirty water seeping towards the well
+    if (leak > 0) { for (let i = 0; i < 6; i++) { const f = ((t * 0.35 + i / 6) % 1); const x = lerp(px - pw / 2 - 30, wx + 70, f), y = py0 + 190 + Math.sin(f * PI) * 30 + (i % 2) * 40; ctx.save(); ctx.globalAlpha = clamp(leak, 0, 1) * (1 - seg(f, 0.85, 1)); drop(ctx, x, y, 14, DIRTY); ctx.restore(); } }
+    const lp = Lt.cwin('e7', 'later, people found', 0.5, null, 1.6), lw = Lt.cwin('e7', 'later, people found', 0.5, null, 0.6);
+    if (lw > 0) L.sticker(ctx, 'the pump\'s well', wx, gy + 470, lw, { bg: P.white, size: 40, rot: 0 });
+    if (lp > 0) L.sticker(ctx, 'leaky toilet pit', px, gy + 400, lp, { bg: DIRTY, color: P.white, size: 44, rot: 0 });
+    stk(ctx, 'dirty water got in!', 960, 120, Lt.cwin('e7', 'could seep', 0.5, null, 0.6), 0, { bg: P.sun, size: 76, rot: -0.03 });
+    snowPerson(ctx, 1600, gy - 30, 0.62, t, { mood: 'happy', lookX: -1, flip: true });
+    L.pip(ctx, { x: 260, y: 240, s: 0.6, t, mood: Lt.cafter('e7', 'could seep', 0.4) ? 'wow' : 'talk', armR: -0.6, armL: 0.6, lookX: 0.8, lookY: 0.4 });
+  }
+
+  // ======================= TWO WATER COMPANIES (test, t1, t2, t3, t4) =======================
+  // river across the top, flowing left to right (upstream = left); the city's dirty water flows in around x 1000-1300.
+  // Company 1 takes water downstream of the city (x 1640): dirty. Company 2 takes water upstream (x 300): cleaner.
+  const HS = [{ x: 330, s: 0.78, w: 'd' }, { x: 520, s: 0.56, w: 'c' }, { x: 700, s: 0.6, w: 'd' }, { x: 890, s: 0.8, w: 'd' }, { x: 1080, s: 0.56, w: 'c' }, { x: 1260, s: 0.78, w: 'd' }, { x: 1450, s: 0.6, w: 'c' }, { x: 1630, s: 0.8, w: 'c' }];
+  const RV = { y0: 160, y1: 290 }, PIPE = { c: 470, d: 520 }, STREET = 780;
+  function river(ctx, t, dirtyAmt) {
+    ctx.fillStyle = P.ground; ctx.fillRect(0, 0, W, RV.y1 + 60);
+    ctx.fillStyle = CLEAN; ctx.fillRect(0, RV.y0, W, RV.y1 - RV.y0);
+    if (dirtyAmt > 0) { const g = ctx.createLinearGradient(1000, 0, 1450, 0); g.addColorStop(0, 'rgba(156,122,60,0)'); g.addColorStop(1, 'rgba(156,122,60,' + (0.9 * dirtyAmt) + ')'); ctx.fillStyle = g; ctx.fillRect(1000, RV.y0, W - 1000, RV.y1 - RV.y0); }
+    ctx.strokeStyle = P.ink; ctx.lineWidth = 6; ctx.beginPath(); ctx.moveTo(0, RV.y0); ctx.lineTo(W, RV.y0); ctx.moveTo(0, RV.y1); ctx.lineTo(W, RV.y1); ctx.stroke();
+    ctx.strokeStyle = 'rgba(255,255,255,0.7)'; ctx.lineWidth = 5; ctx.lineCap = 'round'; for (let i = 0; i < 9; i++) { const x = ((i * 230 + t * 60) % (W + 200)) - 100, y = RV.y0 + 35 + (i % 3) * 32; ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + 70, y); ctx.lineTo(x + 56, y - 10); ctx.stroke(); }
+    // the city on the far bank, with drains into the river
+    for (let i = 0; i < 11; i++) { const x = 960 + i * 70, h = 40 + (i % 3) * 20; ctx.fillStyle = i % 2 ? BRICK : '#B9906A'; ctx.fillRect(x, RV.y0 - h - 20, 60, h); ctx.strokeStyle = P.ink; ctx.lineWidth = 4; ctx.strokeRect(x, RV.y0 - h - 20, 60, h); }
+    for (const x of [1030, 1170, 1310]) { ctx.strokeStyle = DIRTY_D; ctx.lineWidth = 12; ctx.beginPath(); ctx.moveTo(x, RV.y0 - 20); ctx.lineTo(x, RV.y0 + 20); ctx.stroke(); if (dirtyAmt > 0) { ctx.save(); ctx.globalAlpha = dirtyAmt; drop(ctx, x, RV.y0 + 40 + ((t * 0.8) % 1) * 30, 10, DIRTY); ctx.restore(); } }
+  }
+  function waterHouse(ctx, x, s, w, o) {
+    o = o || {}; const hw = 260 * s, hh = 300 * s; ctx.save(); ctx.strokeStyle = P.ink; ctx.lineWidth = 5; ctx.fillStyle = s > 0.7 ? '#D9A07A' : '#C9B79A';
+    ctx.fillRect(x - hw / 2, STREET - hh, hw, hh); ctx.strokeRect(x - hw / 2, STREET - hh, hw, hh);
+    ctx.fillStyle = '#5A5A68'; ctx.fillRect(x - hw / 2 - 6, STREET - hh - 16, hw + 12, 16); ctx.strokeRect(x - hw / 2 - 6, STREET - hh - 16, hw + 12, 16);
+    ctx.fillStyle = '#CFE6F5'; for (const sx of [-1, 1]) { roundRect(ctx, x + sx * hw * 0.24 - 20 * s, STREET - hh + 40 * s, 40 * s, 60 * s, 4); ctx.fill(); ctx.stroke(); }
+    ctx.fillStyle = '#3D4A6B'; roundRect(ctx, x - 22 * s, STREET - 90 * s, 44 * s, 90 * s, 6); ctx.fill(); ctx.stroke();
+    if (o.tag) { drop(ctx, x, STREET - hh - 60, 22, w === 'd' ? DIRTY : CLEAN); }
+    ctx.restore();
+  }
+  function pipes(ctx, a, flowT) {
+    if (a <= 0) return; ctx.save(); ctx.globalAlpha = clamp(a, 0, 1); ctx.lineCap = 'round';
+    // company 2 (cleaner, upstream) and company 1 (dirty, downstream): intakes, then a pipe along the street
+    for (const [k, ix, col, cd] of [['c', 300, CLEAN, CLEAN_D], ['d', 1640, DIRTY, DIRTY_D]]) {
+      const y = PIPE[k]; ctx.strokeStyle = P.ink; ctx.lineWidth = 22; ctx.beginPath(); ctx.moveTo(ix, RV.y1 - 20); ctx.lineTo(ix, y); ctx.moveTo(220, y); ctx.lineTo(1720, y); ctx.stroke();
+      ctx.strokeStyle = col; ctx.lineWidth = 12; ctx.beginPath(); ctx.moveTo(ix, RV.y1 - 20); ctx.lineTo(ix, y); ctx.moveTo(220, y); ctx.lineTo(1720, y); ctx.stroke();
+      HS.forEach(h => { if (h.w !== k) return; const top = STREET - 300 * h.s - 16; ctx.strokeStyle = P.ink; ctx.lineWidth = 16; ctx.beginPath(); ctx.moveTo(h.x + (k === 'c' ? -30 : 30), y); ctx.lineTo(h.x + (k === 'c' ? -30 : 30), Math.max(top, y + 10)); ctx.stroke(); ctx.strokeStyle = col; ctx.lineWidth = 8; ctx.stroke(); });
+      ctx.fillStyle = cd; roundRect(ctx, ix - 60, RV.y1 + 4, 120, 70, 12); ctx.fill(); ctx.strokeStyle = P.ink; ctx.lineWidth = 5; ctx.stroke();
+      text(ctx, k === 'c' ? 'company 2' : 'company 1', ix, RV.y1 + 40, { size: 26, weight: 700, color: P.white });
+      if (flowT != null) for (let i = 0; i < 6; i++) { const f = (flowT * 0.4 + i / 6) % 1; circle(ctx, lerp(220, 1720, k === 'c' ? f : 1 - f), y, 6, P.white); }
+    }
+    ctx.restore();
+  }
+  function companiesScene(ctx, t, Lt) {
+    const dirty = Lt.cwin('t1', 'one took its water', 0.8, null, 1.4);
+    river(ctx, t, Math.max(dirty, Lt.after('t1') ? 1 : 0));
+    ctx.fillStyle = '#EDE6DA'; ctx.fillRect(0, RV.y1 + 60, W, H - RV.y1 - 60); ctx.fillStyle = '#C9C2B4'; ctx.fillRect(0, STREET, W, H - STREET); ctx.strokeStyle = P.ink; ctx.lineWidth = 5; ctx.beginPath(); ctx.moveTo(0, STREET); ctx.lineTo(W, STREET); ctx.stroke();
+    const pa = Lt.cwin('test', 'two water companies', 0.8, E.out, 0.6);
+    const tags = Lt.cafter('t2', 'next-door houses', 0.4);
+    HS.forEach((h, i) => { const a = Lt.cwin('test', 'in parts of london', 0.5, E.outBack, 0.2 + i * 0.08); if (a > 0) { ctx.save(); ctx.globalAlpha = clamp(a, 0, 1); waterHouse(ctx, h.x, h.s, h.w, { tag: tags }); ctx.restore(); } });
+    pipes(ctx, pa, t);
+    // t1: the intakes, labelled
+    const i1 = Lt.cwin('t1', 'one took its water', 0.5, E.outBack, 0.6), i2 = Lt.cwin('t1', 'the other took', 0.5, E.outBack, 0.6);
+    if (i1 > 0) L.sticker(ctx, 'dirty water', 1640, 95, i1, { bg: DIRTY, color: P.white, size: 44, rot: 0.03 });
+    if (i2 > 0) L.sticker(ctx, 'cleaner water', 300, 95, i2, { bg: CLEAN, color: P.white, size: 44, rot: -0.03 });
+    const up = Lt.cwin('t1', 'from higher up', 0.5, null, 0.2);
+    if (up > 0) { ctx.save(); ctx.globalAlpha = clamp(up, 0, 1); text(ctx, 'up the river', 640, 225, { size: 36, weight: 700, color: P.white, stroke: P.ink, strokeWidth: 7 }); ctx.restore(); }
+    const bl = Lt.cwin('t1', 'one took its water', 0.5, null, 1.2); if (bl > 0) { ctx.save(); ctx.globalAlpha = clamp(bl, 0, 1) * (1 - Lt.win('t2', 0, 0.3)); text(ctx, 'the city', 1340, 40, { size: 32, weight: 700, color: P.ink, stroke: P.white, strokeWidth: 7 }); ctx.restore(); }
+    const o = { size: 66, rot: -0.03 };
+    stk(ctx, 'TEST!', 960, 400, Lt.cwin('test', 'scientists test', 0.5), Lt.cwin('test', 'in parts of london', 0.25), Object.assign({ bg: P.blue, color: P.white, size: 96 }, o));
+    stk(ctx, 'two water companies', 960, 400, Lt.cwin('test', 'two water companies', 0.5, null, 0.4), Lt.win('t1', 0, 0.25), Object.assign({ bg: P.white }, o));
+    stk(ctx, 'next door, different water', 960, 400, Lt.cwin('t2', 'next-door houses', 0.5, null, 0.6), Lt.cwin('t2', 'rich or poor', 0.25), Object.assign({ bg: P.white, size: 58 }, o));
+    stk(ctx, 'big houses and small', 960, 400, Lt.cwin('t2', 'rich or poor', 0.5, null, 0.3), Lt.cwin('t2', 'the people were', 0.25, null, 0.4), Object.assign({ bg: P.white, size: 58 }, o));
+    stk(ctx, 'alike, except the water', 960, 400, Lt.cwin('t2', 'the people were', 0.5, null, 0.6), Lt.win('t3', 0, 0.25), Object.assign({ bg: P.green, color: P.white, size: 58 }, o));
+    // t3, t4: the result board
+    if (Lt.after('t3')) {
+      const a = Lt.win('t3', 0, 0.5); ctx.save(); ctx.globalAlpha = 0.88 * clamp(a, 0, 1); ctx.fillStyle = '#EEF4FF'; ctx.fillRect(0, 0, W, H); ctx.restore();
+      ctx.save(); ctx.globalAlpha = clamp(a, 0, 1);
+      for (const [k, x0, col, lab] of [['d', 150, DIRTY, 'dirty water'], ['c', 1070, CLEAN, 'cleaner water']]) { ctx.fillStyle = P.white; roundRect(ctx, x0, 210, 700, 500, 34); ctx.fill(); ctx.strokeStyle = P.ink; ctx.lineWidth = 7; ctx.stroke(); drop(ctx, x0 + 100, 330, 46, col); text(ctx, lab, x0 + 400, 330, { size: 54, weight: 700, color: col === CLEAN ? CLEAN_D : DIRTY_D }); }
+      ctx.restore();
+      const r = Lt.cwin('t3', 'cholera struck', 0.5, null, 0.2);
+      for (let i = 0; i < 6; i++) { const g = clamp(r * 7 - i, 0, 1); if (g > 0) illFace(ctx, 300 + (i % 3) * 200, 470 + Math.floor(i / 3) * 130, 0.95 * E.outBack(g), SKIN[i % 4]); }
+      if (r > 0) illFace(ctx, 1420, 470, 0.95 * E.outBack(clamp(r * 7, 0, 1)), SKIN[1]);
+      if (r > 0.95) { ctx.save(); ctx.globalAlpha = seg(r, 0.95, 1); text(ctx, 'for every 1 here', 1420, 650, { size: 40, weight: 700, color: P.ink }); text(ctx, 'about 6 here', 500, 690, { size: 40, weight: 700, color: P.ink }); ctx.restore(); }
+      stk(ctx, 'about 6 times as often!', 960, 110, Lt.cwin('t3', 'cholera struck', 0.5, null, 1.4), Lt.win('t4', 0, 0.25), Object.assign({ bg: P.sun }, o));
+      stk(ctx, 'NATURAL EXPERIMENT', 960, 110, Lt.cwin('t4', 'a natural experiment', 0.5), 0, Object.assign({ bg: '#6B74D8', color: P.white, size: 74 }, o));
+      const two = Lt.cwin('t4', 'two groups', 0.5, null, 0.2);
+      if (two > 0) { tick(ctx, 960, 400, 0.8, two); ctx.save(); ctx.globalAlpha = clamp(two, 0, 1); text(ctx, 'alike', 960, 470, { size: 40, weight: 700, color: P.ink }); ctx.restore(); }
+      const ex = Lt.cwin('t4', 'except one', 0.5, null, 0.1);
+      if (ex > 0) { ctx.save(); ctx.globalAlpha = clamp(ex, 0, 1); text(ctx, 'except', 960, 560, { size: 40, weight: 700, color: P.ink }); text(ctx, 'the water', 960, 610, { size: 40, weight: 700, color: P.ink }); ctx.restore(); drop(ctx, 920, 680, 26 * E.outBack(clamp(ex, 0, 1)), DIRTY); drop(ctx, 1000, 680, 26 * E.outBack(clamp(ex, 0, 1)), CLEAN); }
+    }
+    L.pip(ctx, { x: 1840, y: 690, s: 0.42, t, mood: Lt.cafter('t3', 'cholera struck', 0.6) ? 'wow' : 'talk', armR: -0.6, armL: 0.6, lookX: -0.8, lookY: 0.2 });
+  }
+
+  // ======================= THE FATHER OF EPIDEMIOLOGY (real) =======================
+  function realScene(ctx, t, Lt) {
+    clueBg(ctx);
+    const a = Lt.win('real', 0.1, 0.7, E.outBack);
+    ctx.save(); ctx.translate(700, 470); ctx.scale(a, a);
+    ctx.fillStyle = '#C9A15A'; roundRect(ctx, -250, -310, 500, 620, 30); ctx.fill(); ctx.strokeStyle = P.ink; ctx.lineWidth = 8; ctx.stroke();
+    ctx.fillStyle = '#E9E2D2'; roundRect(ctx, -210, -270, 420, 470, 18); ctx.fill(); ctx.stroke();
+    ctx.save(); ctx.beginPath(); roundRect(ctx, -210, -270, 420, 470, 18); ctx.clip(); snowPerson(ctx, 0, 330, 1.4, t, { hat: null, still: true }); ctx.restore();
+    text(ctx, 'John Snow', 0, 240, { size: 44, weight: 700, color: P.ink }); text(ctx, '1813 - 1858', 0, 282, { size: 32, weight: 600, color: P.ink });
+    ctx.restore();
+    const f = Lt.cwin('real', 'the father of', 0.6, E.outBack, 0.3), s = Lt.cwin('real', 'the science of', 0.6, E.outBack, 0.3);
+    stk(ctx, 'the father of epidemiology', 1360, 300, f, 0, { bg: '#6B74D8', color: P.white, size: 56, rot: -0.03 });
+    if (s > 0) { ctx.save(); ctx.globalAlpha = clamp(s, 0, 1); ctx.fillStyle = P.white; roundRect(ctx, 1040, 420, 640, 220, 30); ctx.fill(); ctx.strokeStyle = P.ink; ctx.lineWidth = 6; ctx.stroke(); text(ctx, 'finding out what', 1360, 490, { size: 46, weight: 700, color: P.ink }); text(ctx, 'makes people ill', 1360, 560, { size: 46, weight: 700, color: P.ink }); ctx.restore(); }
+    L.pip(ctx, { x: 1700, y: 760, s: 0.6, t, mood: Lt.cafter('real', 'the father of', 0.4) ? 'wow' : 'talk', armR: -0.6, armL: 0.6, lookX: -0.8 });
+  }
+
+  // ======================= SAY IT, TRY AT HOME, OUTRO =======================
+  function sayScene(ctx, t, Lt) {
+    streetBg(ctx, t); pump(ctx, 1380, 735, 1.0, t, { off: 1 });
+    L.pip(ctx, { x: 560, y: 600, s: 1.1, t, mood: 'talk', armR: -1.2 + 0.2 * Math.sin(t * 8), armL: -1.2 - 0.2 * Math.sin(t * 8), lookX: 0.4, lookY: -0.3 });
+    snowPerson(ctx, 1620, 800, 0.7, t, { lookX: -1, flip: true });
+    L.sayItSticker(ctx, 'Follow the clues to find the cause!', Lt.cwin('sayit', 'follow the clues', 0.8), t);
+  }
+  // the kitchen plan on paper: the table, chairs, and crumb dots clustering around one chair
+  const CRUMBS = (() => { const r = L.rng(77), out = []; for (let i = 0; i < 26; i++) { const near = i % 6 !== 5; if (near) { const a = r() * TAU, d = 30 + r() * 110; out.push([1290 + Math.cos(a) * d * 1.4, 520 + Math.sin(a) * d]); } else out.push([760 + r() * 900, 300 + r() * 380]); } return out; })();
+  function tryScene(ctx, t, Lt) {
+    L.sky(ctx, { top: '#BFE3FF', bottom: '#FFF1D6' }); ctx.fillStyle = '#E8C793'; ctx.fillRect(0, 760, W, H - 760);
+    L.tryBanner(ctx, Lt.win('try1', 0, 0.6) * (1 - Lt.win('try2', 0, 0.4))); L.grownUpBadge(ctx, 180, 330, Lt.win('try1', 1.5, 0.6));
+    const pa = Lt.cwin('try1', 'ask a grown-up', 0.6, E.outBack, 0.4);
+    if (pa > 0) {
+      ctx.save(); ctx.translate(1210, 470); ctx.scale(pa, pa); ctx.translate(-1210, -470);
+      ctx.fillStyle = '#FFFFFF'; roundRect(ctx, 680, 230, 1060, 500, 12); ctx.fill(); ctx.strokeStyle = P.ink; ctx.lineWidth = 6; ctx.stroke();
+      // the pencil
+      ctx.save(); ctx.translate(1660, 760); ctx.rotate(-0.5); ctx.fillStyle = P.sun; roundRect(ctx, -110, -14, 200, 28, 6); ctx.fill(); ctx.stroke(); ctx.fillStyle = '#F2C9A0'; ctx.beginPath(); ctx.moveTo(90, -14); ctx.lineTo(130, 0); ctx.lineTo(90, 14); ctx.closePath(); ctx.fill(); ctx.stroke(); ctx.restore();
+      ctx.restore();
+    }
+    // the drawn plan: walls, table, chairs (on "draw a map")
+    const dm = Lt.cwin('try1', 'and draw a map', 1.4, null, 0.2);
+    if (dm > 0) {
+      ctx.save(); ctx.strokeStyle = '#6A6A78'; ctx.lineWidth = 6; ctx.setLineDash([2400]); ctx.lineDashOffset = 2400 * (1 - clamp(dm, 0, 1)); ctx.strokeRect(730, 270, 960, 420); ctx.restore();
+      ctx.save(); ctx.globalAlpha = seg(dm, 0.4, 1); ctx.strokeStyle = '#6A6A78'; ctx.lineWidth = 5; roundRect(ctx, 1160, 440, 260, 160, 14); ctx.stroke(); for (const [cx, cy] of [[1130, 520], [1450, 520], [1290, 410], [1290, 630]]) { ctx.strokeRect(cx - 26, cy - 26, 52, 52); } text(ctx, 'table', 1290, 522, { size: 34, weight: 700, color: '#6A6A78' }); ctx.strokeRect(760, 300, 200, 90); text(ctx, 'cooker', 860, 347, { size: 30, weight: 700, color: '#6A6A78' }); ctx.strokeRect(1500, 300, 160, 90); text(ctx, 'fridge', 1580, 347, { size: 30, weight: 700, color: '#6A6A78' }); ctx.restore();
+    }
+    // crumb dots, one by one on "put a dot"
+    const t0 = Lt.chunk('try2', 'after snack time') + 1.0, t1 = Lt.chunk('try2', 'where are the most') + 0.2;
+    const n = clamp((t - t0) / Math.max(0.5, t1 - t0), 0, 1) * CRUMBS.length;
+    for (let i = 0; i < Math.min(n, CRUMBS.length); i++) { const k = clamp(n - i, 0, 1); circle(ctx, CRUMBS[i][0], CRUMBS[i][1], 10 * E.outBack(k), P.red); }
+    const ring = Lt.cwin('try2', 'what is near', 0.6, null, 0.3);
+    if (ring > 0) { ctx.save(); ctx.globalAlpha = clamp(ring, 0, 1); ctx.strokeStyle = P.sunDeep; ctx.lineWidth = 8; ctx.setLineDash([18, 12]); ctx.beginPath(); ctx.ellipse(1290, 520, 230, 170, 0, 0, TAU); ctx.stroke(); ctx.restore(); }
+    L.pip(ctx, { x: 420, y: 640, s: 0.75, t, mood: Lt.cafter('try2', 'where are the most', 0.5) ? 'wow' : 'talk', armR: -0.4, armL: 0.6, lookX: 0.9, lookY: -0.1 });
+    stk(ctx, 'a dot for every crumb', 1210, 160, Lt.cwin('try2', 'after snack time', 0.5, null, 0.4), Lt.cwin('try2', 'where are the most', 0.25), { bg: P.white, size: 56, rot: -0.02 });
+    stk(ctx, 'Where are the most dots?', 1210, 160, Lt.cwin('try2', 'where are the most', 0.5, null, 0.2), 0, { bg: P.sun, size: 56, rot: -0.02 });
+  }
+  function outro(ctx, t, Lt, phrase) {
+    L.sky(ctx, { top: '#5FB8FF', bottom: '#CDEBFF' }); L.confetti(ctx, t, 21, 70); L.ground(ctx, 860);
+    L.pip(ctx, { x: 560, y: 720, s: 1.4, t, mood: Lt.cafter('bye', 'bye-bye') ? 'happy' : 'talk', armR: -1.1 + Math.sin(t * 8) * 0.35, armL: 0.6 });
+    const lp = Lt.win('bye', 0, 0.6, E.outBack); ctx.save(); ctx.translate(1380, 340); ctx.scale(lp, lp); L.logo(ctx, 0, 0, 1, t); ctx.restore();
+    const pp = Lt.cwin('bye', 'remember', 0.6, E.outBack, 0.3);
+    if (pp > 0) { ctx.save(); ctx.translate(1340, 640); ctx.scale(pp, pp); ctx.font = '700 60px Fredoka'; const k = Math.min(1, 980 / ctx.measureText(phrase).width), size = Math.floor(60 * k); ctx.font = '700 ' + size + 'px Fredoka'; const w = ctx.measureText(phrase).width + 90; ctx.fillStyle = P.white; roundRect(ctx, -w / 2, -60, w, 120, 40); ctx.fill(); ctx.strokeStyle = P.ink; ctx.lineWidth = 8; ctx.stroke(); text(ctx, phrase, 0, 4, { size, weight: 700, color: P.ink }); ctx.restore(); }
+    const bp = Lt.cwin('bye', 'bye-bye', 0.6, E.outBack); if (bp > 0) L.sticker(ctx, 'Bye-bye!', 1380, 790, bp, { bg: P.sun, rot: 0.05, size: 84 });
+  }
+
+  // ======================= TRY IT 1: FIND THE PUMP =======================
+  const T1 = { btn: { x: 960, y: 960, w: 560, h: 110 }, need: 12 };
+  function t1Draw(ctx, s, t) {
+    mapDraw(ctx, t, s.shown, { label: s.found, hi: s.found ? 1 : 0, off: s.off, ring: s.found ? 1 : 0 });
+    ctx.save(); ctx.translate(T1.btn.x, T1.btn.y); ctx.fillStyle = s.shown >= DOTS.length ? P.grey : P.white; ctx.strokeStyle = P.ink; ctx.lineWidth = 7; roundRect(ctx, -T1.btn.w / 2, -T1.btn.h / 2, T1.btn.w, T1.btn.h, 30); ctx.fill(); ctx.stroke(); circle(ctx, -220, 0, 16, P.ink); text(ctx, 'Find more homes', 30, 4, { size: 46, weight: 700, color: P.ink }); ctx.restore();
+    text(ctx, Math.floor(s.shown) + ' homes where cholera struck', 960, 95, { size: 46, weight: 700, color: P.ink, stroke: P.white, strokeWidth: 9 });
+    if (s.msg > 0 && !s.found && s.shown < T1.need) text(ctx, 'Find more homes first!', 960, 860, { size: 40, weight: 700, color: P.red, stroke: P.white, strokeWidth: 8 });
+    if (s.shown >= T1.need && !s.found) { const bob = Math.sin(t * 4) * 6; text(ctx, 'Which pump? Tap it!', 960, 860 + bob, { size: 42, weight: 700, color: P.ink, stroke: P.white, strokeWidth: 8 }); }
+    if (!s.touched) { const bob = Math.sin(t * 4) * 6; text(ctx, 'tap me', 1350, 965 + bob, { size: 44, weight: 700, color: P.ink, stroke: P.white, strokeWidth: 9 }); }
+    if (s.found && s.off >= 1) L.sticker(ctx, 'no handle!', 940, 210, 1, { bg: P.sun, size: 56, rot: -0.03 });
+    L.pip(ctx, { x: 1840, y: 960, s: 0.42, t, mood: s.found ? 'wow' : 'happy', armR: -0.6, armL: 0.6, lookX: -0.8, lookY: -0.4 });
+  }
+
+  // ======================= TRY IT 2: TWO WATER PIPES =======================
+  // 8 houses; tap a house to switch its pipe. "Wait a month" shows who fell ill: dirty-water homes have about six times the cases.
+  const T2 = { btn: { x: 960, y: 960, w: 480, h: 110 } };
+  const T2D = [2, 1, 2, 1, 2, 1, 2, 1], T2C = [0, 0, 1, 0, 0, 0, 0, 1];   // per house: ill if on the dirty pipe / on the cleaner pipe (about 6 to 1)
+  function t2Ill(s) { return s.w.map((w, i) => w === 'd' ? T2D[i] : T2C[i]); }
+  function t2Draw(ctx, s, t) {
+    river(ctx, t, 1); ctx.fillStyle = '#EDE6DA'; ctx.fillRect(0, RV.y1 + 60, W, H - RV.y1 - 60); ctx.fillStyle = '#C9C2B4'; ctx.fillRect(0, STREET, W, H - STREET); ctx.strokeStyle = P.ink; ctx.lineWidth = 5; ctx.beginPath(); ctx.moveTo(0, STREET); ctx.lineTo(W, STREET); ctx.stroke();
+    const saved = HS.map(h => h.w); HS.forEach((h, i) => { h.w = s.w[i]; });
+    HS.forEach(h => waterHouse(ctx, h.x, h.s, h.w, { tag: true }));
+    pipes(ctx, 1, t);
+    HS.forEach((h, i) => { h.w = saved[i]; });
+    if (s.shown) { const ill = t2Ill(s); HS.forEach((h, i) => { for (let k = 0; k < ill[i]; k++) illFace(ctx, h.x - 30 + k * 60, 640, 0.5, SKIN[(i + k) % 4]); }); const sum = w => ill.reduce((a, v, i) => a + (s.w[i] === w ? v : 0), 0), cnt = w => s.w.filter(x => x === w).length; text(ctx, 'dirty water homes: ' + sum('d') + ' ill in ' + cnt('d') + ' homes', 560, 880, { size: 36, weight: 700, color: DIRTY_D, stroke: P.white, strokeWidth: 7 }); text(ctx, 'cleaner water homes: ' + sum('c') + ' ill in ' + cnt('c') + ' homes', 1380, 880, { size: 36, weight: 700, color: CLEAN_D, stroke: P.white, strokeWidth: 7 }); }
+    ctx.save(); ctx.translate(T2.btn.x, T2.btn.y); ctx.fillStyle = P.sun; ctx.strokeStyle = P.ink; ctx.lineWidth = 7; roundRect(ctx, -T2.btn.w / 2, -T2.btn.h / 2, T2.btn.w, T2.btn.h, 30); ctx.fill(); ctx.stroke(); text(ctx, 'Wait a month', 0, 4, { size: 48, weight: 700, color: P.ink }); ctx.restore();
+    if (!s.touched) { const bob = Math.sin(t * 4) * 6; text(ctx, 'tap a house to change its pipe', 960, 400 + bob, { size: 42, weight: 700, color: P.ink, stroke: P.white, strokeWidth: 9 }); }
+    L.pip(ctx, { x: 1840, y: 980, s: 0.38, t, mood: s.lastCue === 'more' || s.lastCue === 'clean' ? 'wow' : 'happy', armR: -0.6, armL: 0.6, lookX: -0.8, lookY: -0.4 });
+  }
+
+  L.episodes.ep20 = {
+    id: 'ep20', num: 20, title: 'How did a doctor find out what was making people sick?', short: 'John Snow', phrase: 'Follow the clues to find the cause!',
+    thumb: {
+      big: 'THE PUMP', small1: 'John Snow and', small2: 'What made people sick?', pip: { x: 560, y: 760 },
+      bg: (ctx, t) => {
+        streetBg(ctx, 0.5); pump(ctx, 1450, 760, 1.6, 0.5, {}); snowPerson(ctx, 1770, 820, 0.85, 0.5, { lookX: -1, flip: true, still: true });
+        L.questionMark(ctx, 1290, 250, 1.2, 0.5, P.red);
+      }
+    },
+    lines: [
+      { id: 'hello', text: "Hello, little scientists! I'm Curie. Welcome to the Little Scientists Club!", say: "Hello, little scientists! I'm *Curie*! Welcome... to the Little Scientists Club!", hold: 0.3 },
+      { id: 'q', text: "Today's big question: how did a doctor find out what was making people sick?", say: "Today's big question... How did a doctor find out what was making people *sick*?", hold: 0.6 },
+      { id: 's1', text: 'Long ago, in 1854, in a busy part of London, lots of people became very ill, all at once.', say: 'Long ago, in eighteen fifty-four... in a busy part of London... lots of people became very *ill*, all at once.', hold: 0.4 },
+      { id: 's2', text: 'The illness was called cholera. It upsets your tummy, and makes your body lose lots of water.', say: 'The illness was called... *cholera*. It upsets your *tummy*... and makes your body lose *lots* of water.', hold: 0.4 },
+      { id: 's3', text: 'Most doctors thought it spread through bad, smelly air. They called it miasma.', say: 'Most doctors thought it spread through bad, *smelly* air. They called it... *miasma*.', hold: 0.5 },
+      { id: 'look', text: "But one doctor, John Snow, had a different idea. Let's look closer.", say: "But one doctor... *John Snow*... had a *different* idea. Let's look *closer*.", hold: 0.8 },
+      { id: 'e1', text: 'John Snow thought cholera was spread by dirty water, not by the air.', say: 'John Snow thought cholera was spread by dirty *water*... not by the *air*.', hold: 0.6 },
+      { id: 'e2', text: 'Back then, many people got their water from pumps in the street.', say: 'Back then, many people got their water from *pumps*, in the street.', hold: 0.4 },
+      { id: 'e3', text: 'He found out where people with cholera lived. Most of them lived close to one pump, on Broad Street, and drank its water.', say: 'He found out where people with cholera *lived*. Most of them lived close to *one* pump... on Broad Street... and drank its water.', hold: 0.8 },
+      { id: 'e5', text: 'He told the people in charge, and they took the handle off the pump, so nobody could use it.', say: 'He told the people in *charge*... and they took the *handle* off the pump... so nobody could use it.', hold: 0.8 },
+      { id: 'e6', text: 'The illness was already slowing down. But now, that pump could not make anyone else ill.', say: 'The illness was *already* slowing down. But now, that pump could not make anyone *else* ill.', hold: 0.8 },
+      { id: 'e7', text: 'Later, people found that dirty water from a leaky toilet pit, next to the pump, could seep into it.', say: 'Later, people found that dirty water, from a leaky toilet pit next to the pump... could *seep* into it.', hold: 1.0 },
+      { id: 'test', text: 'Scientists test it! In parts of London, two water companies sent water down the same streets.', say: '{sfx:ding}Scientists *test* it! In parts of London... two water companies sent water down the *same* streets.', hold: 0.5 },
+      { id: 't1', text: 'One took its water from lower down the river, where the city\'s dirty water flowed in. The other took cleaner water, from higher up the river.', say: 'One took its water from *lower* down the river, where the city\'s dirty water flowed in. The other took *cleaner* water... from higher up the river.', hold: 0.6 },
+      { id: 't2', text: 'Next-door houses got different water. Rich or poor, the people were alike, except for their water.', say: 'Next-door houses got *different* water. Rich or poor... the people were *alike*, except for their water.', hold: 0.6 },
+      { id: 't3', text: 'And in homes with the dirty water, cholera struck about six times as often!', say: 'And in homes with the dirty water... cholera struck about *six* times as often!', hold: 1.0 },
+      { id: 't4', text: 'Scientists call this a natural experiment: two groups, alike in every way that matters, except one.', say: 'Scientists call this... a *natural* experiment. Two groups, alike in every way that matters... except *one*.', hold: 0.8 },
+      { id: 'real', text: 'Today, John Snow is called the father of epidemiology: the science of finding out what makes people ill.', say: '{sfx:ding}Today, John Snow is called... the father of *epidemiology*. The science of finding out what makes people *ill*.', hold: 1.0 },
+      { id: 'sayit', text: 'Say it with me: Follow the clues to find the cause!', say: 'Say it with me... {sfx:ding}Follow the clues to find the *cause*! {pause 0.9} {slow}Follow the clues... to find the cause!{/slow}', hold: 1.4 },
+      { id: 'try1', text: "Let's try it at home! Ask a grown-up for paper and a pencil, and draw a map of your kitchen floor.", say: "{sfx:tada}Let's try it at home! Ask a grown-up for paper and a pencil... and draw a *map* of your kitchen floor.", hold: 0.4 },
+      { id: 'try2', text: 'After snack time, put a dot on your map for every crumb. Where are the most dots? What is near them?', say: 'After snack time, put a *dot* on your map for every crumb. {sfx:ding}Where are the *most* dots? What is *near* them?', hold: 1.6 },
+      { id: 'bye', text: 'Great job, little scientist! Remember: follow the clues to find the cause! See you next time at the Little Scientists Club! Bye-bye!', say: '{sfx:tada}Great job, little scientist! Remember... follow the clues to find the *cause*! See you next time, at the Little Scientists Club! {hi}Bye-bye!{/hi}', hold: 1.2 }
+    ],
+    sfx: [
+      { line: 'look', chunk: "let's look", offset: 0.5, name: 'zoom' },
+      { line: 'e3', chunk: 'most of them', offset: 0.6, name: 'sparkle', vol: 0.5 },
+      { line: 'e5', chunk: 'and they took', offset: 1.4, name: 'pop', vol: 0.5 },
+      { line: 'e7', chunk: 'could seep', offset: 0.9, name: 'whoosh', vol: 0.3 },
+      { line: 't3', chunk: 'cholera struck', offset: 1.6, name: 'sparkle', vol: 0.5 }
+    ],
+    scenes: [
+      { from: 'hello', draw: (ctx, t, Lt) => L.scenes.intro(ctx, t, Lt) },
+      { from: 'q', draw: (ctx, t, Lt) => L.scenes.question(ctx, t, Lt, (c, tt) => { pump(c, -40, 170, 0.75, tt, { drip: true }); text(c, '?', 150, -20, { size: 140, weight: 700, color: P.ink }); }, { word: 'How?' }) },
+      { from: 's1', draw: (ctx, t, Lt) => sohoScene(ctx, t, Lt) },
+      { from: 'e1', transition: 'cut', draw: (ctx, t, Lt) => ideaScene(ctx, t, Lt) },
+      { from: 'e2', draw: (ctx, t, Lt) => pumpsScene(ctx, t, Lt) },
+      { from: 'e3', draw: (ctx, t, Lt) => mapScene(ctx, t, Lt) },
+      { from: 'e5', draw: (ctx, t, Lt) => handleScene(ctx, t, Lt) },
+      { from: 'e6', draw: (ctx, t, Lt) => chartScene(ctx, t, Lt) },
+      { from: 'e7', draw: (ctx, t, Lt) => pitScene(ctx, t, Lt) },
+      { from: 'test', draw: (ctx, t, Lt) => companiesScene(ctx, t, Lt) },
+      { from: 'real', draw: (ctx, t, Lt) => realScene(ctx, t, Lt) },
+      { from: 'sayit', draw: (ctx, t, Lt) => sayScene(ctx, t, Lt) },
+      { from: 'try1', draw: (ctx, t, Lt) => tryScene(ctx, t, Lt) },
+      { from: 'bye', draw: (ctx, t, Lt) => outro(ctx, t, Lt, 'Follow the clues to find the cause!') }
+    ],
+    interactives: [
+      {
+        title: 'Find the pump',
+        hint: 'Tap "Find more homes" to mark where cholera struck. Where do the dots crowd together? Tap the pump you think made people ill.',
+        init: s => { s.shown = 0; s.target = 0; s.found = false; s.off = 0; s.msg = 0; s.touched = false; s.lastCue = ''; },
+        update: (s, dt, cue) => {
+          if (s.shown < s.target) s.shown = Math.min(s.target, s.shown + dt * 6);
+          s.msg = Math.max(0, s.msg - dt);
+          if (s.found) s.off = Math.min(1, s.off + dt * 0.8);
+          if (s.shown >= T1.need && s.lastCue === '') { s.lastCue = 'clue'; cue('clue'); }
+          if (s.pend) { const id = s.pend; s.pend = null; if (s.lastCue !== id || id === 'other') { s.lastCue = id; cue(id); } }
+        },
+        draw: (ctx, s, t) => t1Draw(ctx, s, t),
+        pointer: (s, type, x, y) => {
+          if (type !== 'down') return;
+          const b = T1.btn;
+          if (Math.abs(x - b.x) < b.w / 2 + 10 && Math.abs(y - b.y) < b.h / 2 + 15) { s.touched = true; s.target = Math.min(DOTS.length, Math.floor(s.target) + 4); if (L.sound) { try { L.sound.tone(620, 0.1, { type: 'triangle', vol: 0.2 }); } catch (e) { /* no sound */ } } return; }
+          for (const p of PUMPS) if (Math.hypot(x - p.x, y - p.y) < 95) {
+            s.touched = true;
+            if (s.shown < T1.need) { s.msg = 2; return; }
+            if (p.id === 'broad') { if (!s.found) { s.found = true; s.pend = 'pump'; } }
+            else s.pend = 'other';
+            if (L.sound) { try { L.sound.tone(p.id === 'broad' ? 880 : 330, 0.25, { type: 'triangle', vol: 0.2 }); } catch (e) { /* no sound */ } }
+            return;
+          }
+        },
+        cues: {
+          clue: 'Look where the dots crowd together. Which pump is close to them?',
+          pump: 'Yes! Most dots are close to the Broad Street pump. Off comes the handle!',
+          other: 'Only a few dots are near this pump. Look where the dots crowd together!'
+        }
+      },
+      {
+        title: 'Two water pipes',
+        hint: 'Tap a house to switch it between the dirty-water pipe and the cleaner-water pipe. Then tap "Wait a month". Which homes have more cholera?',
+        init: s => { s.w = HS.map(h => h.w); s.shown = false; s.touched = false; s.lastCue = ''; s.pend = null; },
+        update: (s, dt, cue) => { if (s.pend) { const id = s.pend; s.pend = null; s.lastCue = id; cue(id); } },
+        draw: (ctx, s, t) => t2Draw(ctx, s, t),
+        pointer: (s, type, x, y) => {
+          if (type !== 'down') return;
+          const b = T2.btn;
+          if (Math.abs(x - b.x) < b.w / 2 + 10 && Math.abs(y - b.y) < b.h / 2 + 15) {
+            s.touched = true; s.shown = true; const nd = s.w.filter(w => w === 'd').length;
+            s.pend = nd === s.w.length ? 'same' : nd === 0 ? 'clean' : 'more';
+            if (L.sound) { try { L.sound.tone(660, 0.2, { type: 'triangle', vol: 0.2 }); } catch (e) { /* no sound */ } }
+            return;
+          }
+          for (let i = 0; i < HS.length; i++) { const h = HS[i]; if (Math.abs(x - h.x) < 88 && y > STREET - 300 * h.s - 90 && y < STREET + 20) { s.touched = true; s.w[i] = s.w[i] === 'd' ? 'c' : 'd'; s.shown = false; if (L.sound) { try { L.sound.tone(s.w[i] === 'd' ? 300 : 700, 0.12, { type: 'triangle', vol: 0.2 }); } catch (e) { /* no sound */ } } return; } }
+        },
+        cues: {
+          more: 'Homes with the dirty river water got cholera far more often!',
+          same: 'Every home has the dirty water, so there is nothing to compare. Give some homes the cleaner pipe!',
+          clean: 'All the homes have cleaner water, and hardly anyone got ill! But with no dirty-water homes, there is nothing to compare.'
+        }
+      }
+    ]
+  };
+})(typeof window !== 'undefined' ? window : globalThis);
