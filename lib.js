@@ -9750,3 +9750,625 @@
     ]
   };
 })(typeof window !== 'undefined' ? window : globalThis);
+
+/* Episode 21 — Why can't we take big bottles or sharp things on a plane?  (airport security and the X-ray scanner)
+   Story: Curie packs her bag for a flight (teddy, a big bottle of water, her art scissors). At the airport the security
+   officer smiles: the big bottle and the scissors can't come in the cabin bag. Why not?
+   -> look inside the scanner: X-rays are a kind of invisible light that can pass through things. Test: a teddy, a pair of scissors
+   and a bottle of water go through: the teddy looks pale (X-rays pass through), the scissor blades dark (metal blocks them).
+   Sharp things are easy to spot; in the cabin people sit close together and a sharp thing could hurt someone, so sharp
+   things travel in the big suitcase under the plane. Liquids are trickier: on the X-ray picture water, juice and shampoo
+   look alike, a few liquids can be harmful or catch fire easily, and the scanner can't always tell which is which; so cabin
+   bottles must be 100 ml or less, all in one small clear bag; small amounts are much safer and the clear bag lets officers
+   check every bottle. Wow fact: new 3D (CT) scanners at some airports check liquids better, so bigger bottles are allowed
+   there. -> say it -> try at home (a torch through paper, a bottle of water and a spoon).
+   Sources (checked 23 Oct 2026): Airports Authority of India, airport security information (prohibited items: knives, pointed
+   metal scissors; liquids, aerosols and gels in containers of no more than 100 ml in one clear re-sealable 1-litre bag;
+   medicines and baby food exempt); Air India cabin baggage guidelines; ICAO guidelines on liquids (UN News, Dec 2006);
+   BBC Science Focus "How does an airport scanner work?" (dual-energy X-ray; organic orange, metal/glass blue-green, denser =
+   darker); Which? "The UK's airport liquid rules for 2026" (CT scanners, up to 2 litres at some airports).
+   No attacks, weapons or plots are mentioned in the video (series rule: no danger stories).
+   Try it 1 "Pack my bag" (pack, scan, the officer checks); Try it 2 "X-ray eyes" (tap things to see them as the scanner does). */
+(function (global) {
+  const L = global.LSC; const LSC = L; const { W, H, P, E, seg, clamp, lerp, circle, ellipse, text, roundRect } = L;
+  L.episodes = L.episodes || {};
+  const PI = Math.PI, TAU = PI * 2;
+  const stk = (ctx, s, x, y, pIn, pOut, o) => L.sticker(ctx, s, x, y, pIn * (1 - (pOut || 0)), o);
+  // X-ray picture palette (as on airport screens: organic orange, metal blue, denser = darker)
+  const XR = { bg: '#F4F6FA', soft: 'rgba(242,166,90,0.45)', softLine: 'rgba(200,120,50,0.8)', liquid: '#E8893A', liquidLine: '#B8641F', metal: '#2F4FA8', metalLine: '#1D2F66' };
+  const RAY = '#9B6BFF', BELT = '#4A4F63', OFFICER = '#2F4A7A';
+  const SKIN = ['#F5CFAE', '#D9A57E', '#B97E57', '#8D5A3B'];
+  const BAG = '#4EA8FF', CASE = '#E0533D';
+
+  // ---------- props. Each takes xr (true = drawn as the X-ray scanner shows it) ----------
+  function teddy(ctx, x, y, s, xr) {
+    ctx.save(); ctx.translate(x, y); ctx.scale(s, s); const f = xr ? XR.soft : '#C98A55', l = xr ? XR.softLine : P.ink, lw = xr ? 4 : 6;
+    for (const [cx, cy, r] of [[-38, -92, 22], [38, -92, 22], [0, -60, 48], [0, 20, 58], [-56, 4, 20], [56, 4, 20], [-34, 72, 22], [34, 72, 22]]) circle(ctx, cx, cy, r, f, l, lw);
+    if (!xr) { circle(ctx, -16, -66, 6, P.ink); circle(ctx, 16, -66, 6, P.ink); ellipse(ctx, 0, -46, 14, 10, '#E8C49A', P.ink, 4); circle(ctx, 0, -50, 5, P.ink); }
+    ctx.restore();
+  }
+  // a bottle; o.size 'big' | 'small'; o.color liquid colour; o.fill 0..1; o.xr; o.label text; o.flame (warning label)
+  function bottle(ctx, x, y, s, o) {
+    o = o || {}; const big = o.size !== 'small', w = big ? 70 : 40, h = big ? 200 : 100, neck = big ? 24 : 16;
+    ctx.save(); ctx.translate(x, y); ctx.scale(s, s); ctx.lineJoin = 'round';
+    const body = () => { ctx.beginPath(); ctx.moveTo(-neck / 2, -h); ctx.lineTo(-neck / 2, -h + h * 0.14); ctx.quadraticCurveTo(-w / 2, -h + h * 0.2, -w / 2, -h + h * 0.32); ctx.lineTo(-w / 2, -10); ctx.quadraticCurveTo(-w / 2, 0, -w / 2 + 10, 0); ctx.lineTo(w / 2 - 10, 0); ctx.quadraticCurveTo(w / 2, 0, w / 2, -10); ctx.lineTo(w / 2, -h + h * 0.32); ctx.quadraticCurveTo(w / 2, -h + h * 0.2, neck / 2, -h + h * 0.14); ctx.lineTo(neck / 2, -h); ctx.closePath(); };
+    if (o.xr) { body(); ctx.fillStyle = 'rgba(242,166,90,0.25)'; ctx.fill(); ctx.save(); body(); ctx.clip(); ctx.fillStyle = XR.liquid; ctx.fillRect(-w, -h * 0.82, 2 * w, h); ctx.restore(); body(); ctx.strokeStyle = XR.liquidLine; ctx.lineWidth = 4; ctx.stroke(); }
+    else {
+      body(); ctx.fillStyle = 'rgba(220,240,255,0.85)'; ctx.fill();
+      ctx.save(); body(); ctx.clip(); ctx.fillStyle = o.color || P.water; ctx.fillRect(-w, -h * (o.fill == null ? 0.82 : o.fill), 2 * w, h); ctx.restore();
+      body(); ctx.strokeStyle = P.ink; ctx.lineWidth = 6; ctx.stroke();
+      ctx.fillStyle = o.cap || P.blueDeep; roundRect(ctx, -neck / 2 - 4, -h - 22, neck + 8, 24, 5); ctx.fill(); ctx.stroke();
+      if (o.label) { ctx.fillStyle = P.white; roundRect(ctx, -w / 2 + 6, -h * 0.55, w - 12, h * 0.26, 6); ctx.fill(); ctx.lineWidth = 3; ctx.stroke(); text(ctx, o.label, 0, -h * 0.42, { size: big ? 22 : 16, weight: 700, color: P.ink }); }
+      if (o.flame) { ctx.save(); ctx.translate(0, -h * 0.42); ctx.rotate(PI / 4); ctx.fillStyle = P.sun; ctx.fillRect(-20, -20, 40, 40); ctx.lineWidth = 4; ctx.strokeRect(-20, -20, 40, 40); ctx.restore(); ctx.fillStyle = P.red; ctx.beginPath(); ctx.moveTo(0, -h * 0.42 - 16); ctx.quadraticCurveTo(14, -h * 0.42, 6, -h * 0.42 + 12); ctx.lineTo(-6, -h * 0.42 + 12); ctx.quadraticCurveTo(-14, -h * 0.42, 0, -h * 0.42 - 16); ctx.fill(); }
+    }
+    ctx.restore();
+  }
+  function scissors(ctx, x, y, s, rot, xr) {
+    ctx.save(); ctx.translate(x, y); ctx.rotate(rot || 0); ctx.scale(s, s); ctx.lineJoin = 'round';
+    const metal = xr ? XR.metal : '#C9CED8', ml = xr ? XR.metalLine : P.ink;
+    for (const sg of [-1, 1]) { ctx.save(); ctx.rotate(sg * 0.18); ctx.fillStyle = metal; ctx.strokeStyle = ml; ctx.lineWidth = 5; ctx.beginPath(); ctx.moveTo(0, -6); ctx.lineTo(120, -2 * sg - 3); ctx.lineTo(0, 8); ctx.closePath(); ctx.fill(); ctx.stroke(); ctx.restore(); }
+    for (const sg of [-1, 1]) { ctx.save(); ctx.rotate(sg * 0.5); ctx.strokeStyle = xr ? XR.softLine : P.ink; ctx.lineWidth = 6; ctx.fillStyle = xr ? XR.soft : (sg < 0 ? P.red : P.blue); ctx.beginPath(); ctx.ellipse(-54, 0, 30, 20, 0, 0, TAU); ctx.fill(); ctx.stroke(); ctx.fillStyle = xr ? XR.bg : '#FFF7E6'; ctx.beginPath(); ctx.ellipse(-54, 0, 16, 9, 0, 0, TAU); ctx.fill(); ctx.restore(); }
+    circle(ctx, 0, 0, 7, xr ? XR.metalLine : P.greyDark, ml, 3);
+    ctx.restore();
+  }
+  function knife(ctx, x, y, s, rot, xr) {
+    ctx.save(); ctx.translate(x, y); ctx.rotate(rot || 0); ctx.scale(s, s); ctx.lineJoin = 'round';
+    ctx.fillStyle = xr ? XR.metal : '#C9CED8'; ctx.strokeStyle = xr ? XR.metalLine : P.ink; ctx.lineWidth = 5;
+    ctx.beginPath(); ctx.moveTo(0, -14); ctx.lineTo(110, -14); ctx.quadraticCurveTo(140, -10, 150, 6); ctx.lineTo(0, 6); ctx.closePath(); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = xr ? XR.soft : P.brown; ctx.strokeStyle = xr ? XR.softLine : P.ink; roundRect(ctx, -80, -14, 82, 26, 10); ctx.fill(); ctx.stroke();
+    ctx.restore();
+  }
+  function spoon(ctx, x, y, s, rot, xr) {
+    ctx.save(); ctx.translate(x, y); ctx.rotate(rot || 0); ctx.scale(s, s); ctx.fillStyle = xr ? XR.metal : '#C9CED8'; ctx.strokeStyle = xr ? XR.metalLine : P.ink; ctx.lineWidth = 5;
+    ctx.beginPath(); ctx.ellipse(60, 0, 42, 28, 0, 0, TAU); ctx.fill(); ctx.stroke(); roundRect(ctx, -90, -8, 110, 16, 8); ctx.fill(); ctx.stroke(); ctx.restore();
+  }
+  function book(ctx, x, y, s, xr) { ctx.save(); ctx.translate(x, y); ctx.scale(s, s); ctx.fillStyle = xr ? XR.soft : P.green; ctx.strokeStyle = xr ? XR.softLine : P.ink; ctx.lineWidth = xr ? 4 : 6; roundRect(ctx, -60, -80, 120, 160, 10); ctx.fill(); ctx.stroke(); if (!xr) { ctx.fillStyle = P.white; ctx.fillRect(-36, -50, 72, 14); L.star(ctx, 0, 20, 24, P.sun, 0); } ctx.restore(); }
+  function apple(ctx, x, y, s, xr) { ctx.save(); ctx.translate(x, y); ctx.scale(s, s); circle(ctx, -18, 0, 46, xr ? XR.soft : P.red, xr ? XR.softLine : P.ink, xr ? 4 : 6); circle(ctx, 18, 0, 46, xr ? XR.soft : P.red, xr ? XR.softLine : P.ink, xr ? 4 : 6); ctx.fillStyle = xr ? XR.soft : P.red; ctx.fillRect(-30, -30, 60, 60); ctx.strokeStyle = xr ? XR.softLine : P.brown; ctx.lineWidth = 7; ctx.beginPath(); ctx.moveTo(0, -36); ctx.lineTo(6, -64); ctx.stroke(); if (!xr) ellipse(ctx, 26, -56, 18, 9, P.green, P.ink, 4); ctx.restore(); }
+  function backpack(ctx, x, y, s, o) {
+    o = o || {}; ctx.save(); ctx.translate(x, y); ctx.scale(s, s); ctx.lineJoin = 'round'; ctx.strokeStyle = o.xr ? 'rgba(80,100,140,0.6)' : P.ink; ctx.lineWidth = o.xr ? 4 : 7;
+    ctx.fillStyle = o.xr ? 'rgba(200,210,230,0.25)' : BAG; roundRect(ctx, -150, -240, 300, 240, 50); ctx.fill(); ctx.stroke();
+    if (!o.xr) { ctx.fillStyle = P.blueDeep; roundRect(ctx, -100, -110, 200, 90, 24); ctx.fill(); ctx.stroke(); ctx.beginPath(); ctx.arc(0, -240, 50, PI, TAU); ctx.lineWidth = 10; ctx.stroke(); }
+    ctx.restore();
+  }
+  function suitcase(ctx, x, y, s, open) {
+    ctx.save(); ctx.translate(x, y); ctx.scale(s, s); ctx.strokeStyle = P.ink; ctx.lineWidth = 7; ctx.lineJoin = 'round';
+    ctx.fillStyle = CASE; roundRect(ctx, -170, -220, 340, 220, 30); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = '#B83C2A'; ctx.fillRect(-90, -220, 20, 220); ctx.fillRect(70, -220, 20, 220);
+    ctx.beginPath(); ctx.moveTo(-50, -220); ctx.lineTo(-50, -260); ctx.lineTo(50, -260); ctx.lineTo(50, -220); ctx.lineWidth = 12; ctx.stroke();
+    circle(ctx, -120, 6, 16, P.ink); circle(ctx, 120, 6, 16, P.ink);
+    ctx.restore();
+  }
+  // a person: (x, y) between the feet; height about 330 * s. o: coat, skin, cap (security officer), mood, point
+  function person(ctx, x, y, s, t, o) {
+    o = o || {}; const bob = Math.sin(t * 2.2 + x * 0.013) * 3;
+    ctx.save(); ctx.translate(x, y + bob); ctx.scale(s * (o.flip ? -1 : 1), s); ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+    ellipse(ctx, -24, -8, 24, 11, P.ink); ellipse(ctx, 24, -8, 24, 11, P.ink);
+    ctx.fillStyle = '#2E3140'; ctx.fillRect(-34, -70, 22, 62); ctx.fillRect(12, -70, 22, 62);
+    const coat = o.coat || OFFICER; ctx.fillStyle = coat; ctx.strokeStyle = P.ink; ctx.lineWidth = 6;
+    ctx.beginPath(); ctx.moveTo(-58, -60); ctx.lineTo(-46, -168); ctx.quadraticCurveTo(0, -186, 46, -168); ctx.lineTo(58, -60); ctx.quadraticCurveTo(0, -48, -58, -60); ctx.closePath(); ctx.fill(); ctx.stroke();
+    if (o.cap) { ctx.fillStyle = P.sun; roundRect(ctx, 14, -150, 26, 18, 4); ctx.fill(); ctx.lineWidth = 3; ctx.stroke(); ctx.lineWidth = 6; }
+    const arm = (sx, ang) => { ctx.save(); ctx.translate(sx * 44, -158); ctx.rotate(sx * ang); ctx.fillStyle = coat; roundRect(ctx, -13, 0, 26, 96, 13); ctx.fill(); ctx.stroke(); circle(ctx, 0, 100, 14, o.skin || SKIN[0], P.ink, 4); ctx.restore(); };
+    arm(-1, 0.15); arm(1, o.point != null ? o.point : -0.15);
+    circle(ctx, 0, -222, 52, o.skin || SKIN[0], P.ink, 6);
+    for (const sx of [-1, 1]) circle(ctx, sx * 18, -228, 7, P.ink);
+    ctx.strokeStyle = P.ink; ctx.lineWidth = 5;
+    if (o.mood === 'talk' && Math.sin(t * 14) > 0) ellipse(ctx, 0, -198, 11, 8, P.ink); else { ctx.beginPath(); ctx.arc(0, -206, 15, 0.2 * PI, 0.8 * PI); ctx.stroke(); }
+    if (o.cap) { ctx.fillStyle = OFFICER; ctx.beginPath(); ctx.arc(0, -258, 50, PI, TAU); ctx.closePath(); ctx.fill(); ctx.stroke(); ctx.fillStyle = '#1F2F4F'; roundRect(ctx, -6, -268, 76, 16, 8); ctx.fill(); ctx.stroke(); circle(ctx, 0, -290, 9, P.sun, P.ink, 3); }
+    ctx.restore();
+  }
+  const officer = (ctx, x, y, s, t, o) => person(ctx, x, y, s, t, Object.assign({ cap: true, skin: SKIN[2] }, o || {}));
+  function tick(ctx, x, y, s, p) { if (p <= 0) return; const k = E.outBack(clamp(p, 0, 1)) * s; ctx.save(); ctx.translate(x, y); ctx.scale(k, k); circle(ctx, 0, 0, 50, P.green, P.ink, 6); ctx.strokeStyle = P.white; ctx.lineWidth = 13; ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.beginPath(); ctx.moveTo(-22, 2); ctx.lineTo(-5, 19); ctx.lineTo(24, -18); ctx.stroke(); ctx.restore(); }
+  function cross(ctx, x, y, s, p) { if (p <= 0) return; const k = E.outBack(clamp(p, 0, 1)) * s; ctx.save(); ctx.translate(x, y); ctx.scale(k, k); circle(ctx, 0, 0, 50, P.red, P.ink, 6); ctx.strokeStyle = P.white; ctx.lineWidth = 13; ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(-19, -19); ctx.lineTo(19, 19); ctx.moveTo(19, -19); ctx.lineTo(-19, 19); ctx.stroke(); ctx.restore(); }
+  function xrPanel(ctx, x, y, w, h, a) { if (a <= 0) return; ctx.save(); ctx.globalAlpha = clamp(a, 0, 1); ctx.fillStyle = '#2B2D42'; roundRect(ctx, x - 16, y - 16, w + 32, h + 32, 30); ctx.fill(); ctx.fillStyle = XR.bg; roundRect(ctx, x, y, w, h, 18); ctx.fill(); ctx.restore(); }
+  function lab(ctx) { ctx.fillStyle = '#EEF4FF'; ctx.fillRect(0, 0, W, H); ctx.strokeStyle = 'rgba(78,168,255,0.10)'; ctx.lineWidth = 3; for (let x = 0; x <= W; x += 120) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke(); } for (let y = 0; y <= H; y += 120) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke(); } }
+  function belt(ctx, x0, x1, y, t) { ctx.fillStyle = BELT; roundRect(ctx, x0, y, x1 - x0, 34, 17); ctx.fill(); ctx.strokeStyle = P.ink; ctx.lineWidth = 5; ctx.stroke(); ctx.strokeStyle = 'rgba(255,255,255,0.25)'; ctx.lineWidth = 3; for (let x = x0 + 20 + ((t * 40) % 40); x < x1 - 10; x += 40) { ctx.beginPath(); ctx.moveTo(x, y + 6); ctx.lineTo(x, y + 28); ctx.stroke(); } for (const xx of [x0 + 40, (x0 + x1) / 2, x1 - 40]) { ctx.fillStyle = '#6A6F84'; ctx.fillRect(xx - 10, y + 34, 20, 90); } }
+
+  // ======================= PACKING AT HOME (s1) =======================
+  const PACK = { x: 1180, y: 760 };
+  function homeScene(ctx, t, Lt) {
+    ctx.fillStyle = '#FFF1D6'; ctx.fillRect(0, 0, W, H); ctx.fillStyle = '#E8C793'; ctx.fillRect(0, 760, W, H - 760);
+    // window with a plane in the sky
+    ctx.fillStyle = '#BFE3FF'; roundRect(ctx, 1450, 120, 340, 260, 20); ctx.fill(); ctx.strokeStyle = P.ink; ctx.lineWidth = 8; ctx.stroke(); ctx.beginPath(); ctx.moveTo(1620, 120); ctx.lineTo(1620, 380); ctx.moveTo(1450, 250); ctx.lineTo(1790, 250); ctx.stroke();
+    plane(ctx, 1560 + Math.sin(t * 0.5) * 30, 200, 0.35, 0);
+    // bed
+    ctx.fillStyle = '#9B6BFF'; roundRect(ctx, 760, 620, 840, 150, 20); ctx.fill(); ctx.strokeStyle = P.ink; ctx.lineWidth = 6; ctx.stroke(); ctx.fillStyle = P.white; roundRect(ctx, 790, 580, 200, 70, 30); ctx.fill(); ctx.stroke();
+    backpack(ctx, PACK.x, PACK.y - 110, 1.0);
+    const items = [['my teddy', (c, k) => teddy(c, 0, 0, 1.4 * k)], ['a big bottle', (c, k) => bottle(c, 0, 120, 1.3 * k, { label: 'water' })], ['and my pointy scissors', (c, k) => scissors(c, 0, 0, 1.6 * k, -0.4)]];
+    items.forEach(([needle, draw], i) => {
+      const pop = Lt.cwin('s1', needle, 0.5, E.outBack), inn = Lt.cwin('s1', needle, 0.8, E.inOut, 1.1);
+      if (pop <= 0) return;
+      const x0 = 560 + i * 260, y0 = 360, x = lerp(x0, PACK.x - 40 + i * 40, inn), y = lerp(y0, PACK.y - 300, inn) - Math.sin(PI * inn) * 120;
+      ctx.save(); ctx.translate(x, y); if (inn < 1) draw(ctx, clamp(pop, 0, 1.2)); ctx.restore();
+    });
+    L.pip(ctx, { x: 300, y: 680, s: 1.1, t, mood: Lt.cafter('s1', 'i packed my bag') ? 'talk' : 'happy', armR: -0.6, armL: 0.6, lookX: 0.8 });
+    const o = { size: 70, rot: -0.04 };
+    stk(ctx, 'Flying today!', 960, 130, Lt.win('s1', 0.1, 0.5), Lt.cwin('s1', 'i packed my bag', 0.25), Object.assign({ bg: P.sun, size: 84 }, o));
+    stk(ctx, 'teddy', 560, 200, Lt.cwin('s1', 'my teddy', 0.5), Lt.cwin('s1', 'a big bottle', 0.25), Object.assign({ bg: P.white }, o));
+    stk(ctx, 'big bottle', 820, 200, Lt.cwin('s1', 'a big bottle', 0.5), Lt.cwin('s1', 'and my pointy scissors', 0.25), Object.assign({ bg: P.white }, o));
+    stk(ctx, 'scissors', 1080, 200, Lt.cwin('s1', 'and my pointy scissors', 0.5), Lt.win('s2', 0, 0.25), Object.assign({ bg: P.white }, o));
+  }
+  // a small plane (for windows and the say-it scene)
+  function plane(ctx, x, y, s, rot) {
+    ctx.save(); ctx.translate(x, y); ctx.rotate(rot || 0); ctx.scale(s, s); ctx.strokeStyle = P.ink; ctx.lineWidth = 8; ctx.lineJoin = 'round';
+    ctx.fillStyle = P.white; ctx.beginPath(); ctx.moveTo(-200, -20); ctx.quadraticCurveTo(-210, 30, -150, 30); ctx.lineTo(170, 30); ctx.quadraticCurveTo(230, 20, 230, 0); ctx.quadraticCurveTo(220, -30, 170, -30); ctx.lineTo(-150, -30); ctx.closePath(); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = P.blue; ctx.beginPath(); ctx.moveTo(-160, -28); ctx.lineTo(-210, -110); ctx.lineTo(-170, -110); ctx.lineTo(-100, -28); ctx.closePath(); ctx.fill(); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(-10, 10); ctx.lineTo(-80, 110); ctx.lineTo(-30, 110); ctx.lineTo(60, 10); ctx.closePath(); ctx.fill(); ctx.stroke();
+    for (let i = 0; i < 6; i++) circle(ctx, -90 + i * 40, -6, 9, '#BFE3FF', P.ink, 4);
+    ctx.restore();
+  }
+
+  // ======================= AT SECURITY (s2, look) =======================
+  const SC = { x0: 760, x1: 1180, y: 300, beltY: 640 };
+  function scannerBox(ctx, t) {
+    ctx.fillStyle = '#D7DCE6'; roundRect(ctx, SC.x0, SC.y, SC.x1 - SC.x0, SC.beltY - SC.y + 40, 30); ctx.fill(); ctx.strokeStyle = P.ink; ctx.lineWidth = 7; ctx.stroke();
+    ctx.fillStyle = '#2B2D42'; roundRect(ctx, SC.x0 + 40, SC.y + 120, SC.x1 - SC.x0 - 80, SC.beltY - SC.y - 120, 16); ctx.fill();
+    ctx.strokeStyle = '#596079'; ctx.lineWidth = 6; for (let x = SC.x0 + 60; x < SC.x1 - 50; x += 28) { ctx.beginPath(); ctx.moveTo(x, SC.y + 124); ctx.lineTo(x + Math.sin(t * 2 + x) * 3, SC.beltY - 6); ctx.stroke(); }
+    text(ctx, 'X-RAY', (SC.x0 + SC.x1) / 2, SC.y + 60, { size: 46, weight: 700, color: P.ink });
+    circle(ctx, SC.x1 - 50, SC.y + 60, 14, Math.sin(t * 4) > 0 ? P.green : '#2E7D3A', P.ink, 4);
+  }
+  function airportScene(ctx, t, Lt) {
+    ctx.fillStyle = '#E9EEF5'; ctx.fillRect(0, 0, W, H); ctx.fillStyle = '#C9D2DF'; ctx.fillRect(0, 740, W, H - 740);
+    ctx.fillStyle = '#BFE3FF'; ctx.fillRect(0, 60, W, 170); ctx.strokeStyle = P.ink; ctx.lineWidth = 5; ctx.strokeRect(-10, 60, W + 20, 170); for (let x = 240; x < W; x += 240) { ctx.beginPath(); ctx.moveTo(x, 60); ctx.lineTo(x, 230); ctx.stroke(); }
+    plane(ctx, 400 + ((t * 30) % 1500), 150, 0.3, -0.05);
+    belt(ctx, 260, 1700, SC.beltY, t);
+    // the backpack rides into the scanner (hidden inside it), then out
+    const ride = seg(t, Lt.start('s2'), Lt.chunk('s2', 'sorry, curie!'), E.inOut);
+    backpack(ctx, lerp(460, 1300, ride), SC.beltY, 0.6);
+    scannerBox(ctx, t);
+    // officer and the screen
+    ctx.fillStyle = '#2B2D42'; roundRect(ctx, 1300, 370, 230, 150, 14); ctx.fill(); ctx.fillStyle = XR.bg; roundRect(ctx, 1314, 384, 202, 122, 8); ctx.fill();
+    if (ride > 0.4) { ctx.save(); ctx.beginPath(); ctx.rect(1314, 384, 202, 122); ctx.clip(); teddy(ctx, 1370, 465, 0.45, true); bottle(ctx, 1430, 495, 0.45, { xr: true }); scissors(ctx, 1470, 440, 0.35, -0.4, true); ctx.restore(); }
+    ctx.fillStyle = '#6A6F84'; ctx.fillRect(1405, 520, 20, 120);
+    officer(ctx, 1620, 760, 0.9, t, { mood: Lt.cafter('s2', 'sorry, curie!') && !Lt.after('look') ? 'talk' : 'happy', point: Lt.cafter('s2', 'the big bottle and') ? -1.0 : -0.15, flip: true });
+    // the tray with the two things that can't come
+    const tr = Lt.cwin('s2', 'the big bottle and', 0.6, E.outBack, 0.2);
+    if (tr > 0) { ctx.save(); ctx.translate(560, 340); ctx.scale(tr, tr); ctx.fillStyle = '#9AA5B8'; roundRect(ctx, -160, -10, 320, 40, 12); ctx.fill(); ctx.strokeStyle = P.ink; ctx.lineWidth = 5; ctx.stroke(); bottle(ctx, -80, 0, 0.7, { label: 'water' }); scissors(ctx, 60, -30, 0.8, -0.3); ctx.restore(); }
+    L.pip(ctx, { x: 300, y: 660, s: 1.0, t, mood: Lt.cafter('s2', "can't come in") ? 'sad' : Lt.after('look') ? 'think' : 'talk', armR: -0.4, armL: 0.6, lookX: 0.8 });
+    const o = { size: 70, rot: -0.04 };
+    stk(ctx, 'security check', 960, 120, Lt.cwin('s2', 'at the airport', 0.5, null, 0.4), Lt.cwin('s2', 'sorry, curie!', 0.25), Object.assign({ bg: P.sun, size: 80 }, o));
+    stk(ctx, 'not in the cabin bag', 960, 120, Lt.cwin('s2', "can't come in", 0.5, null, 0.4), Lt.win('look', 0, 0.25), Object.assign({ bg: P.white }, o));
+    if (Lt.after('look')) { const q = Lt.cwin('look', 'why not?', 0.5, E.outBack) * (1 - Lt.cwin('look', "let's look inside", 0.3)); if (q > 0) L.questionMark(ctx, 560, 330, q, t, P.purple); }
+    // zoom into the scanner
+    const zp = seg(t, Lt.chunk('look', "let's look inside") + 0.4, Lt.end('look') + 0.7, E.in);
+    if (zp > 0) { const fx = (SC.x0 + SC.x1) / 2, fy = 500, r = lerp(110, 2300, zp); ctx.save(); ctx.beginPath(); ctx.arc(fx, fy, r, 0, TAU); ctx.clip(); lab(ctx); ctx.restore(); if (zp < 1) L.magnifier(ctx, fx, fy, r, zp); }
+  }
+
+  // ======================= INSIDE THE SCANNER (e1, test, t1) =======================
+  // Side view of a real airport scanner: a long belt runs through a tunnel with lead curtains at both ends. Under the belt,
+  // in the middle, the X-ray source shines a thin fan of X-rays up through the belt to a detector strip at the top of the
+  // tunnel. As a tray moves through the fan, the picture on the officer's screen is built up strip by strip.
+  const XS = { x0: 560, x1: 1360, top: 250, tun0: 620, tun1: 1300, tunTop: 400, beltY: 640, base: 790, beamX: 960 };
+  const MON = { x: 1450, y: 150, w: 420, h: 280 };
+  function tray(ctx, x, y, w) { ctx.save(); ctx.fillStyle = '#8E98AE'; ctx.strokeStyle = P.ink; ctx.lineWidth = 5; ctx.beginPath(); ctx.moveTo(x - w / 2, y - 46); ctx.lineTo(x + w / 2, y - 46); ctx.lineTo(x + w / 2 - 14, y); ctx.lineTo(x - w / 2 + 14, y); ctx.closePath(); ctx.fill(); ctx.stroke(); ctx.fillStyle = 'rgba(255,255,255,0.25)'; ctx.fillRect(x - w / 2 + 20, y - 40, w - 40, 8); ctx.restore(); }
+  function longBelt(ctx, t) {
+    ctx.fillStyle = BELT; ctx.fillRect(0, XS.beltY, W, 30); ctx.strokeStyle = P.ink; ctx.lineWidth = 5; ctx.beginPath(); ctx.moveTo(0, XS.beltY); ctx.lineTo(W, XS.beltY); ctx.moveTo(0, XS.beltY + 30); ctx.lineTo(W, XS.beltY + 30); ctx.stroke();
+    ctx.strokeStyle = 'rgba(255,255,255,0.22)'; ctx.lineWidth = 3; for (let x = ((t * 60) % 40); x < W; x += 40) { ctx.beginPath(); ctx.moveTo(x, XS.beltY + 6); ctx.lineTo(x, XS.beltY + 24); ctx.stroke(); }
+    // rollers and legs outside the scanner
+    for (const x of [120, 320, 1500, 1720]) { ctx.fillStyle = '#6A6F84'; ctx.fillRect(x - 12, XS.beltY + 30, 24, 140); ctx.strokeStyle = P.ink; ctx.lineWidth = 4; ctx.strokeRect(x - 12, XS.beltY + 30, 24, 140); }
+  }
+  // the scanner body; o.see (0..1): the near side of the tunnel turns see-through; o.beam (0..1): the X-ray fan
+  function bigScanner(ctx, t, o, inside) {
+    o = o || {}; const see = clamp(o.see || 0, 0, 1);
+    // hood and body
+    ctx.save(); ctx.fillStyle = '#D7DCE6'; ctx.strokeStyle = P.ink; ctx.lineWidth = 8;
+    ctx.beginPath(); ctx.moveTo(XS.x0, XS.base); ctx.lineTo(XS.x0, XS.top + 70); ctx.quadraticCurveTo(XS.x0, XS.top, XS.x0 + 70, XS.top); ctx.lineTo(XS.x1 - 70, XS.top); ctx.quadraticCurveTo(XS.x1, XS.top, XS.x1, XS.top + 70); ctx.lineTo(XS.x1, XS.base); ctx.closePath(); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = '#B8C0CF'; ctx.fillRect(XS.x0 + 8, XS.beltY + 34, XS.x1 - XS.x0 - 16, XS.base - XS.beltY - 42);
+    text(ctx, 'X-RAY', (XS.x0 + XS.x1) / 2, XS.top + 70, { size: 50, weight: 700, color: P.ink });
+    circle(ctx, XS.x1 - 60, XS.top + 70, 16, Math.sin(t * 4) > 0 ? P.green : '#2E7D3A', P.ink, 4);
+    // the tunnel: dark when closed, light and dashed when we look inside
+    ctx.fillStyle = see > 0 ? 'rgb(' + Math.round(lerp(43, 236, see)) + ',' + Math.round(lerp(45, 240, see)) + ',' + Math.round(lerp(66, 248, see)) + ')' : '#2B2D42';
+    roundRect(ctx, XS.tun0, XS.tunTop, XS.tun1 - XS.tun0, XS.beltY - XS.tunTop, 14); ctx.fill();
+    if (see > 0) { ctx.save(); ctx.globalAlpha = see; ctx.setLineDash([18, 12]); ctx.strokeStyle = P.greyDark; ctx.lineWidth = 5; roundRect(ctx, XS.tun0, XS.tunTop, XS.tun1 - XS.tun0, XS.beltY - XS.tunTop, 14); ctx.stroke(); ctx.restore(); }
+    ctx.restore();
+    // the things inside the tunnel (only visible when see-through)
+    if (inside && see > 0) { ctx.save(); ctx.globalAlpha = see; ctx.beginPath(); ctx.rect(XS.tun0, XS.tunTop, XS.tun1 - XS.tun0, XS.beltY - XS.tunTop + 2); ctx.clip(); inside(); ctx.restore(); }
+    // source under the belt and the detector strip at the top of the tunnel
+    if (see > 0) {
+      ctx.save(); ctx.globalAlpha = see;
+      ctx.fillStyle = '#3C4058'; roundRect(ctx, XS.beamX - 60, XS.beltY + 60, 120, 70, 14); ctx.fill(); ctx.strokeStyle = P.ink; ctx.lineWidth = 5; ctx.stroke(); circle(ctx, XS.beamX, XS.beltY + 70, 12, RAY, P.ink, 3);
+      ctx.fillStyle = '#7CC25A'; roundRect(ctx, XS.beamX - 110, XS.tunTop + 6, 220, 26, 8); ctx.fill(); ctx.stroke();
+      ctx.restore();
+    }
+    const beam = clamp(o.beam || 0, 0, 1);
+    if (beam > 0) {
+      ctx.save(); ctx.globalAlpha = beam; ctx.fillStyle = 'rgba(155,107,255,0.16)'; ctx.beginPath(); ctx.moveTo(XS.beamX, XS.beltY + 70); ctx.lineTo(XS.beamX - 100, XS.tunTop + 32); ctx.lineTo(XS.beamX + 100, XS.tunTop + 32); ctx.closePath(); ctx.fill();
+      ctx.strokeStyle = RAY; ctx.lineWidth = 5; ctx.setLineDash([18, 12]); ctx.lineDashOffset = -t * 120;
+      for (let k = -2; k <= 2; k++) { const top = o.stop ? o.stop(XS.beamX + k * 45) : XS.tunTop + 32; ctx.beginPath(); ctx.moveTo(XS.beamX, XS.beltY + 70); ctx.lineTo(lerp(XS.beamX, XS.beamX + k * 45, (XS.beltY + 70 - top) / (XS.beltY + 70 - XS.tunTop - 32)), top); ctx.stroke(); }
+      ctx.restore();
+    }
+    // lead curtains at both ends; they swing when something passes
+    for (const cx of [XS.tun0 + 14, XS.tun1 - 14]) {
+      const push = o.trayX != null ? clamp(1 - Math.abs(o.trayX - cx) / 220, 0, 1) : 0;
+      ctx.save(); ctx.strokeStyle = 'rgba(60,64,88,0.85)'; ctx.lineWidth = 9; ctx.lineCap = 'round';
+      for (let i = 0; i < 5; i++) { const y0 = XS.tunTop + 4, len = XS.beltY - XS.tunTop - 14; const sw = push * 0.9 * (cx < 960 ? 1 : -1) * (o.trayX > cx ? -1 : 1); ctx.beginPath(); ctx.moveTo(cx - 16 + i * 8, y0); ctx.lineTo(cx - 16 + i * 8 + Math.sin(sw) * len * 0.7, y0 + Math.cos(sw) * len); ctx.stroke(); }
+      ctx.restore();
+    }
+  }
+  // the officer's monitor: draw(ctx, x, y, w, h) paints the picture; reveal 0..1 builds it from the leading (right) edge
+  function monitor(ctx, m, reveal, draw, a) {
+    if (a <= 0) return; ctx.save(); ctx.globalAlpha = clamp(a, 0, 1);
+    ctx.fillStyle = '#6A6F84'; if (!m.big) ctx.fillRect(m.x + m.w / 2 - 14, m.y + m.h + 16, 28, 140);
+    ctx.fillStyle = '#2B2D42'; roundRect(ctx, m.x - 16, m.y - 16, m.w + 32, m.h + 32, 22); ctx.fill(); ctx.fillStyle = XR.bg; roundRect(ctx, m.x, m.y, m.w, m.h, 12); ctx.fill();
+    const r = clamp(reveal, 0, 1);
+    if (r > 0) { ctx.save(); ctx.beginPath(); ctx.rect(m.x + m.w * (1 - r), m.y, m.w * r, m.h); ctx.clip(); draw(ctx, m.x, m.y, m.w, m.h); ctx.restore(); if (r < 1) { ctx.fillStyle = 'rgba(155,107,255,0.5)'; ctx.fillRect(m.x + m.w * (1 - r) - 3, m.y, 6, m.h); } }
+    ctx.restore();
+  }
+  // pictures for the monitor, laid out in a 420 x 280 box and scaled to the monitor
+  const picBag = (c, x, y, w, h) => { c.save(); c.translate(x, y); c.scale(w / 420, h / 280); backpack(c, 210, 250, 0.62, { xr: true }); teddy(c, 150, 190, 0.55, true); bottle(c, 230, 235, 0.55, { xr: true }); scissors(c, 300, 175, 0.45, -0.4, true); c.restore(); };
+  const picTest = (c, x, y, w, h) => { c.save(); c.translate(x, y); c.scale(w / 420, h / 280); teddy(c, 95, 175, 0.7, true); scissors(c, 225, 150, 0.6, -0.5, true); bottle(c, 340, 250, 0.75, { xr: true }); c.restore(); };
+  function insideScene(ctx, t, Lt) {
+    ctx.fillStyle = '#E9EEF5'; ctx.fillRect(0, 0, W, H); ctx.fillStyle = '#C9D2DF'; ctx.fillRect(0, 800, W, H - 800);
+    const testPart = Lt.after('test');
+    // people stand behind the belt
+    L.pip(ctx, { x: 140, y: 540, s: 0.62, t, mood: Lt.cafter('t1', 'metal blocks', 0.3) ? 'wow' : 'talk', armR: -0.6, armL: 0.6, lookX: 0.8, lookY: 0.2 });
+    officer(ctx, 1800, 700, 0.62, t, { flip: true, mood: 'happy' });
+    longBelt(ctx, t);
+    const see = Lt.cwin('e1', 'x-rays are a kind', 0.8, null, 0.1);
+    const beam = Lt.cwin('e1', 'x-rays are a kind', 0.6, null, 0.9);
+    if (!testPart) {
+      // e1: a tray with Curie's backpack rides in from the left, disappears into the tunnel, and we look inside
+      const tx = lerp(420, 1680, seg(t, Lt.chunk('e1', 'every bag goes') + 0.2, Lt.end('e1') + 0.6, E.inOut));
+      const drawTray = () => { tray(ctx, tx, XS.beltY, 300); backpack(ctx, tx, XS.beltY - 30, 0.62, { xr: see > 0.5 && Math.abs(tx - XS.beamX) < 200 }); };
+      if (tx < XS.tun0 || tx > XS.tun1) drawTray();
+      bigScanner(ctx, t, { see, beam, trayX: tx }, drawTray);
+      if (tx >= XS.tun0 && tx <= XS.tun1 && see <= 0) { /* hidden in the dark tunnel */ }
+      const rev = clamp((tx + 150 - XS.beamX) / 300, 0, 1) * (beam > 0.3 ? 1 : 0);
+      monitor(ctx, MON, rev, picBag, Lt.cwin('e1', 'every bag goes', 0.5, null, 0.6));
+      const lab1 = Lt.cwin('e1', 'that can pass', 0.5, null, 0.4); if (lab1 > 0) { ctx.save(); ctx.globalAlpha = clamp(lab1, 0, 1); text(ctx, 'detector', XS.beamX + 210, XS.tunTop + 20, { size: 32, weight: 700, color: '#3E8E2E', align: 'left' }); text(ctx, 'X-rays', XS.beamX + 120, XS.beltY + 100, { size: 32, weight: 700, color: RAY, align: 'left' }); ctx.restore(); }
+      const nb = Lt.cwin('e1', 'x-rays are a kind', 0.5, null, 1.4); if (nb > 0) { ctx.save(); ctx.globalAlpha = clamp(nb, 0, 1) * 0.9; text(ctx, '(we draw them so you can see them)', 960, 215, { size: 30, weight: 600, color: P.greyDark }); ctx.restore(); }
+    } else {
+      // test: a tray with a teddy, scissors and a bottle of water; it rides through and the picture builds up
+      const ap = i => Lt.cwin('test', ["let's send a teddy", 'a pair of scissors', 'and a bottle of water'][i], 0.5, E.outBack, 0.2);
+      const r0 = Lt.chunk('test', 'and a bottle of water') + 0.9, r1 = Lt.chunk('t1', 'the teddy looks pale') + 0.2;
+      const tx = lerp(425, 1640, seg(t, r0, r1, E.inOut));
+      const blades = () => { const bx = tx + 10; return bx; };
+      const drawTray = () => {
+        tray(ctx, tx, XS.beltY, 400);
+        const xr = see > 0.5 && Math.abs(tx - XS.beamX) < 240;
+        if (ap(0) > 0) teddy(ctx, tx - 125, XS.beltY - 128, 0.62 * clamp(ap(0), 0, 1.2), xr);
+        if (ap(1) > 0) scissors(ctx, tx + 10, XS.beltY - 62, 0.75 * clamp(ap(1), 0, 1.2), -0.15, xr);
+        if (ap(2) > 0) bottle(ctx, tx + 135, XS.beltY - 40, 0.72 * clamp(ap(2), 0, 1.2), { label: 'water', xr });
+      };
+      if (tx < XS.tun0 + 40 || tx > XS.tun1 - 40) drawTray();
+      // rays stop at the scissor blades when they are in the fan
+      const stop = x => (Math.abs(x - (tx + 40)) < 70 && Math.abs(tx - XS.beamX) < 110 ? XS.beltY - 70 : XS.tunTop + 32);
+      bigScanner(ctx, t, { see: 1, beam: 1, trayX: tx, stop }, drawTray);
+      const rev = clamp((tx + 200 - XS.beamX) / 400, 0, 1);
+      // t1: the monitor grows so we can read the picture
+      const g = Lt.cwin('t1', 'the teddy looks pale', 0.8, E.inOut, 0.2);
+      if (g > 0) { ctx.save(); ctx.globalAlpha = 0.6 * g; ctx.fillStyle = '#E9EEF5'; ctx.fillRect(0, 0, W, H); ctx.restore(); }
+      const m = { x: lerp(MON.x, 760, g), y: lerp(MON.y, 150, g), w: lerp(MON.w, 900, g), h: lerp(MON.h, 600, g), big: g > 0.5 };
+      monitor(ctx, m, rev, picTest, 1);
+      const sx = m.w / 420, sy = m.h / 280;
+      const hl = (px, py, rr, a, c) => { if (a <= 0) return; ctx.save(); ctx.globalAlpha = clamp(a, 0, 1); ctx.strokeStyle = c; ctx.lineWidth = 9; ctx.setLineDash([18, 12]); ctx.beginPath(); ctx.arc(m.x + px * sx, m.y + py * sy, rr * sx, 0, TAU); ctx.stroke(); ctx.restore(); };
+      hl(95, 135, 70, Lt.cwin('t1', 'the teddy looks pale', 0.5, null, 0.9) * (1 - Lt.cwin('t1', 'the scissor blades', 0.3)), P.sunDeep);
+      hl(250, 135, 50, Lt.cwin('t1', 'the scissor blades', 0.5, null, 0.3), P.blueDeep);
+      if (g > 0.6) { ctx.save(); ctx.globalAlpha = seg(g, 0.6, 1); text(ctx, "the officer's screen", m.x + m.w / 2, m.y - 40, { size: 38, weight: 700, color: P.ink }); ctx.restore(); }
+    }
+    const o = { size: 64, rot: -0.03 };
+    stk(ctx, 'the X-ray scanner', 760, 130, Lt.cwin('e1', 'every bag goes', 0.5, null, 0.3), Lt.cwin('e1', 'x-rays are a kind', 0.25, null, 0.4), Object.assign({ bg: P.sun, size: 76 }, o));
+    stk(ctx, 'X-rays: invisible light', 760, 130, Lt.cwin('e1', 'x-rays are a kind', 0.5, null, 1.0), Lt.cwin('e1', 'that can pass', 0.25, null, 0.6), Object.assign({ bg: RAY, color: P.white }, o));
+    stk(ctx, 'they pass through things', 760, 130, Lt.cwin('e1', 'that can pass', 0.5, null, 0.6), Lt.win('test', 0, 0.25), Object.assign({ bg: P.white }, o));
+    stk(ctx, 'TEST!', 760, 130, Lt.cwin('test', 'scientists test it!', 0.5), Lt.cwin('test', "let's send a teddy", 0.25), Object.assign({ bg: P.blue, color: P.white, size: 96 }, o));
+    stk(ctx, 'teddy, scissors, water', 760, 130, Lt.cwin('test', "let's send a teddy", 0.5, null, 0.3), Lt.win('t1', 0, 0.25), Object.assign({ bg: P.white }, o));
+    stk(ctx, 'pale: X-rays pass through', 1210, 90, Lt.cwin('t1', 'the teddy looks pale', 0.5, null, 0.9), Lt.cwin('t1', 'the scissor blades', 0.25), Object.assign({ bg: XR.liquid, color: P.white, size: 56 }, o));
+    stk(ctx, 'dark: metal blocks X-rays', 1210, 90, Lt.cwin('t1', 'the scissor blades', 0.5, null, 0.4), 0, Object.assign({ bg: XR.metal, color: P.white, size: 56 }, o));
+  }
+
+  // ======================= SHARP THINGS (e4, e5) =======================
+  function cabin(ctx, t, x0, y0, w, h) {
+    // fuselage cut-away: cabin with seats on top, the hold below
+    ctx.fillStyle = P.white; roundRect(ctx, x0, y0, w, h, h / 2.2); ctx.fill(); ctx.strokeStyle = P.ink; ctx.lineWidth = 8; ctx.stroke();
+    const fy = y0 + h * 0.58; ctx.beginPath(); ctx.moveTo(x0 + 40, fy); ctx.lineTo(x0 + w - 40, fy); ctx.lineWidth = 6; ctx.stroke();
+    ctx.fillStyle = '#EDE3CF'; ctx.save(); ctx.beginPath(); roundRect(ctx, x0, y0, w, h, h / 2.2); ctx.clip(); ctx.fillRect(x0, fy, w, h); ctx.restore(); ctx.strokeStyle = P.ink; ctx.lineWidth = 8; roundRect(ctx, x0, y0, w, h, h / 2.2); ctx.stroke();
+    for (let i = 0; i < 7; i++) circle(ctx, x0 + 200 + i * ((w - 400) / 6), y0 + 60, 20, '#BFE3FF', P.ink, 4);
+    return fy;
+  }
+  function seatRow(ctx, x, fy, t, i) { ctx.fillStyle = '#4E6BB0'; roundRect(ctx, x - 30, fy - 150, 40, 150, 12); ctx.fill(); ctx.strokeStyle = P.ink; ctx.lineWidth = 5; ctx.stroke(); roundRect(ctx, x - 30, fy - 50, 90, 26, 8); ctx.fill(); ctx.stroke(); circle(ctx, x + 30, fy - 120 + Math.sin(t * 2 + i) * 2, 34, SKIN[i % 4], P.ink, 5); circle(ctx, x + 22, fy - 124, 4, P.ink); circle(ctx, x + 40, fy - 124, 4, P.ink); ctx.beginPath(); ctx.arc(x + 31, fy - 112, 9, 0.2 * PI, 0.8 * PI); ctx.lineWidth = 3; ctx.stroke(); }
+  function sharpScene(ctx, t, Lt) {
+    L.sky(ctx); L.cloud(ctx, 300, 120, 0.8); L.cloud(ctx, 1500, 160, 0.7);
+    const x0 = 140, y0 = 260, w = 1640, h = 500, fy = cabin(ctx, t, x0, y0, w, h);
+    const rows = Lt.cwin('e4', 'in the cabin', 0.6, null, 0.1);
+    for (let i = 0; i < 9; i++) { const a = clamp(rows * 1.5 - i * 0.07, 0, 1); if (a > 0) { ctx.save(); ctx.globalAlpha = a; seatRow(ctx, x0 + 260 + i * 130, fy, t, i); ctx.restore(); } }
+    // the hold: suitcases
+    for (let i = 0; i < 4; i++) suitcase(ctx, x0 + 420 + i * 260, y0 + h - 30, 0.42);
+    // the sharp things: shown big first, then they drop into a suitcase
+    const sp = Lt.win('e4', 0.1, 0.6, E.outBack), drop = Lt.cwin('e5', 'so sharp things', 1.4, E.inOut, 0.4);
+    if (sp > 0 && drop < 1) {
+      const x = lerp(960, x0 + 680, drop), y = lerp(380, y0 + h - 90, drop), k = lerp(1, 0.4, drop) * clamp(sp, 0, 1.2);
+      ctx.save(); ctx.globalAlpha = drop <= 0 ? 1 - clamp(rows * 2, 0, 1) : 1; ctx.fillStyle = 'rgba(255,255,255,0.0)'; scissors(ctx, x - 170 * k, y, 1.7 * k, -0.3); knife(ctx, x + 170 * k, y + 10 * k, 1.5 * k, -0.2); ctx.restore();
+    }
+    if (drop >= 1) { const g = Lt.cwin('e5', 'under the plane', 0.5, null, 0.2); tick(ctx, x0 + 680, y0 + h - 200, 0.7, g); }
+    const o = { size: 66, rot: -0.03 };
+    stk(ctx, 'easy to spot', 960, 150, Lt.cwin('e4', 'sharp things, like', 0.5, null, 1.6), Lt.cwin('e4', 'in the cabin', 0.25), Object.assign({ bg: XR.metal, color: P.white }, o));
+    stk(ctx, 'close together', 960, 150, Lt.cwin('e4', 'in the cabin', 0.5, null, 1.0), Lt.cwin('e4', 'and a sharp thing', 0.25), Object.assign({ bg: P.white }, o));
+    stk(ctx, 'could hurt someone', 960, 150, Lt.cwin('e4', 'and a sharp thing', 0.5, null, 0.6), Lt.win('e5', 0, 0.25), Object.assign({ bg: P.white }, o));
+    stk(ctx, 'in the big suitcase', 960, 150, Lt.cwin('e5', 'so sharp things', 0.5, null, 0.8), 0, Object.assign({ bg: CASE, color: P.white }, o));
+    L.pip(ctx, { x: 1840, y: 900, s: 0.42, t, mood: 'talk', armR: -0.6, armL: 0.6, lookX: -0.8, lookY: -0.4 });
+  }
+
+  // ======================= LIQUIDS (l1, l2, l3, l4) =======================
+  const LQ = [{ label: 'water', color: P.water, cap: P.blueDeep }, { label: 'juice', color: P.sunDeep, cap: P.green }, { label: 'shampoo', color: P.pink, cap: P.purple }];
+  function liquidScene(ctx, t, Lt) {
+    lab(ctx);
+    const smallPart = Lt.after('l3');
+    if (!smallPart) {
+      // top: the real bottles; bottom: the scanner picture
+      LQ.forEach((b, i) => { const a = Lt.cwin('l1', 'water, juice and', 0.5, E.outBack, 0.3 * i); if (a > 0) bottle(ctx, 560 + i * 400, 450, 1.1 * clamp(a, 0, 1.2), { label: b.label, color: b.color, cap: b.cap }); });
+      const xp = Lt.cwin('l1', 'on the x-ray picture', 0.6, null, 0.2);
+      xrPanel(ctx, 360, 520, 1200, 250, xp);
+      if (xp > 0) { ctx.save(); ctx.beginPath(); roundRect(ctx, 360, 520, 1200, 250, 18); ctx.clip(); LQ.forEach((b, i) => { const a = Lt.cwin('l1', 'water, juice and', 0.5, null, 0.3 * i); if (a > 0) { ctx.globalAlpha = clamp(a, 0, 1); bottle(ctx, 560 + i * 400, 750, 1.0, { xr: true }); } }); ctx.restore(); }
+      // a few liquids can be harmful or catch fire: a warning bottle joins; question marks over the pictures
+      const warn = Lt.cwin('l2', 'and a few liquids', 0.6, E.outBack, 0.3);
+      if (warn > 0) { bottle(ctx, 1700, 450, 1.0 * clamp(warn, 0, 1.2), { color: '#C9E86B', cap: P.greyDark }); L.questionMark(ctx, 1770, 230, 0.5 * clamp(warn, 0, 1), t, P.purple); }
+      const q = Lt.cwin('l2', "the scanner can't", 0.5, E.outBack, 0.2);
+      if (q > 0) LQ.forEach((b, i) => L.questionMark(ctx, 640 + i * 400, 600, 0.6 * q, t + i, P.purple));
+    } else {
+      // small bottles (100 ml) going into one clear bag; a cup for size
+      const zb = { x: 1000, y: 470, w: 440, h: 360 };
+      const bagA = Lt.cwin('l3', 'they all go', 0.5, E.outBack);
+      const sm = Lt.win('l3', 0.1, 0.6, E.outBack), into = Lt.cwin('l3', 'they all go', 1.2, E.inOut, 0.5);
+      if (bagA > 0) { ctx.save(); ctx.globalAlpha = clamp(bagA, 0, 1); ctx.fillStyle = 'rgba(200,230,255,0.35)'; roundRect(ctx, zb.x - zb.w / 2, zb.y - zb.h / 2, zb.w, zb.h, 24); ctx.fill(); ctx.strokeStyle = P.blueDeep; ctx.lineWidth = 6; ctx.stroke(); ctx.fillStyle = P.blue; ctx.fillRect(zb.x - zb.w / 2, zb.y - zb.h / 2, zb.w, 20); ctx.restore(); }
+      LQ.forEach((b, i) => { if (sm <= 0) return; const x = lerp(300 + i * 170, zb.x - 130 + i * 130, into), y = lerp(560, zb.y + 120, into) - Math.sin(PI * into) * 100; bottle(ctx, x, y, 1.8 * clamp(sm, 0, 1.2), { size: 'small', label: b.label, color: b.color, cap: b.cap }); });
+      if (sm > 0 && into <= 0) { ctx.save(); ctx.globalAlpha = clamp(sm, 0, 1); text(ctx, '100 ml', 520, 640, { size: 52, weight: 700, color: P.ink }); ctx.restore(); }
+      const cup = Lt.cwin('l3', 'one hundred millilitres', 0.6, E.outBack, 1.2) * (1 - Lt.cwin('l3', 'they all go', 0.3));
+      if (cup > 0) { ctx.save(); ctx.translate(1500, 600); ctx.scale(cup, cup); ctx.fillStyle = 'rgba(220,240,255,0.9)'; ctx.beginPath(); ctx.moveTo(-90, -220); ctx.lineTo(90, -220); ctx.lineTo(70, 0); ctx.lineTo(-70, 0); ctx.closePath(); ctx.fill(); ctx.save(); ctx.clip(); ctx.fillStyle = P.water; ctx.fillRect(-100, -92, 200, 100); ctx.restore(); ctx.strokeStyle = P.ink; ctx.lineWidth = 6; ctx.beginPath(); ctx.moveTo(-90, -220); ctx.lineTo(-70, 0); ctx.lineTo(70, 0); ctx.lineTo(90, -220); ctx.stroke(); text(ctx, 'less than half a cup', 0, 50, { size: 38, weight: 700, color: P.ink }); ctx.restore(); }
+      // l4: the officer checks every bottle through the clear bag
+      const ch = Lt.win('l4', 0.1, 0.6, E.out);
+      if (ch > 0) { officer(ctx, lerp(2000, 1560, ch), 820, 0.85, t, { flip: true, mood: 'happy', point: -0.9 }); }
+      tick(ctx, zb.x + 230, zb.y - 170, 0.8, Lt.cwin('l4', 'and the clear bag', 0.5, null, 0.6));
+    }
+    const o = { size: 64, rot: -0.03 };
+    stk(ctx, 'liquids: trickier', 960, 120, Lt.cwin('l1', 'liquids are trickier.', 0.5, null, 0.2), Lt.cwin('l1', 'water, juice and', 0.25, null, 0.6), Object.assign({ bg: P.white }, o));
+    stk(ctx, 'they all look alike!', 960, 120, Lt.cwin('l1', 'water, juice and', 0.5, null, 1.6), Lt.win('l2', 0, 0.25), Object.assign({ bg: XR.liquid, color: P.white }, o));
+    stk(ctx, 'some can be harmful', 960, 120, Lt.cwin('l2', 'and a few liquids', 0.5, null, 0.4), Lt.cwin('l2', 'or catch fire', 0.25, null, 0.5), Object.assign({ bg: P.sun }, o));
+    stk(ctx, 'or catch fire easily', 960, 120, Lt.cwin('l2', 'or catch fire', 0.5, null, 0.4), Lt.cwin('l2', "the scanner can't", 0.25), Object.assign({ bg: P.sun }, o));
+    stk(ctx, 'which is which?', 960, 120, Lt.cwin('l2', "the scanner can't", 0.5, null, 0.6), Lt.win('l3', 0, 0.25), Object.assign({ bg: P.purple, color: P.white }, o));
+    stk(ctx, 'small bottles: 100 ml', 960, 120, Lt.cwin('l3', 'so in the cabin', 0.5, null, 0.6), Lt.cwin('l3', 'they all go', 0.25, null, 0.2), Object.assign({ bg: P.green, color: P.white }, o));
+    stk(ctx, 'one small, clear bag', 960, 120, Lt.cwin('l3', 'they all go', 0.5, null, 0.6), Lt.win('l4', 0, 0.25), Object.assign({ bg: P.blue, color: P.white }, o));
+    stk(ctx, 'easier to keep safe', 960, 120, Lt.win('l4', 0.2, 0.5), Lt.cwin('l4', 'and the clear bag', 0.25, null, 0.3), Object.assign({ bg: P.green, color: P.white }, o));
+    stk(ctx, 'easy to check', 960, 120, Lt.cwin('l4', 'and the clear bag', 0.5, null, 0.6), 0, Object.assign({ bg: P.white }, o));
+    L.pip(ctx, { x: 200, y: 900, s: 0.45, t, mood: Lt.cafter('l1', 'water, juice and', 1.4) && !Lt.after('l3') ? 'wow' : 'talk', armR: -0.6, armL: 0.6, lookX: 0.8, lookY: -0.4 });
+  }
+
+  // ======================= WOW FACT: 3D SCANNERS (real) =======================
+  function ctScene(ctx, t, Lt) {
+    lab(ctx);
+    const a = Lt.cwin('real', 'some airports now', 0.6, E.outBack, 0.2);
+    if (a > 0) {
+      ctx.save(); ctx.translate(700, 480); ctx.scale(a, a);
+      circle(ctx, 0, 0, 260, '#D7DCE6', P.ink, 8); circle(ctx, 0, 0, 170, '#EEF4FF', P.ink, 6);
+      const ang = t * 2.2; for (let k = 0; k < 2; k++) { const aa = ang + k * PI; ctx.save(); ctx.rotate(aa); ctx.fillStyle = '#3C4058'; roundRect(ctx, -40, -250, 80, 60, 12); ctx.fill(); ctx.strokeStyle = P.ink; ctx.lineWidth = 5; ctx.stroke(); ctx.strokeStyle = RAY; ctx.lineWidth = 6; ctx.setLineDash([18, 12]); ctx.beginPath(); ctx.moveTo(0, -190); ctx.lineTo(0, 190); ctx.stroke(); ctx.restore(); }
+      bottle(ctx, 0, 100, 0.9, { size: 'big', label: 'water' });
+      ctx.restore();
+    }
+    // the 3D picture: a bottle seen from several sides
+    const p3 = Lt.cwin('real', 'some airports now', 0.6, null, 1.6);
+    if (p3 > 0) { xrPanel(ctx, 1120, 230, 640, 420, p3); if (p3 > 0.3) { ctx.save(); ctx.beginPath(); roundRect(ctx, 1120, 230, 640, 420, 18); ctx.clip(); for (let i = 0; i < 3; i++) { ctx.save(); ctx.translate(1260 + i * 180, 560); ctx.scale(Math.abs(Math.cos(t * 1.5 + i)) * 0.4 + 0.6, 1); bottle(ctx, 0, 0, 1.0, { xr: true }); ctx.restore(); } ctx.restore(); text(ctx, '3D picture', 1440, 200, { size: 38, weight: 700, color: P.ink }); } }
+    tick(ctx, 1700, 300, 0.8, Lt.cwin('real', 'so at some of them', 0.5, null, 0.3));
+    const o = { size: 66, rot: -0.03 };
+    stk(ctx, 'WOW!', 960, 110, Lt.cwin('real', 'wow fact!', 0.5), Lt.cwin('real', 'some airports now', 0.25), Object.assign({ bg: P.sun, size: 100 }, o));
+    stk(ctx, 'new 3D scanners', 960, 110, Lt.cwin('real', 'some airports now', 0.5, null, 0.6), Lt.cwin('real', 'they can check', 0.25), Object.assign({ bg: RAY, color: P.white }, o));
+    stk(ctx, 'they check liquids better', 960, 110, Lt.cwin('real', 'they can check', 0.5, null, 0.3), Lt.cwin('real', 'so at some of them', 0.25), Object.assign({ bg: P.white }, o));
+    stk(ctx, 'bigger bottles, at some airports', 960, 110, Lt.cwin('real', 'so at some of them', 0.5, null, 0.3), 0, Object.assign({ bg: P.green, color: P.white, size: 58 }, o));
+    L.pip(ctx, { x: 1840, y: 900, s: 0.42, t, mood: Lt.cafter('real', 'wow fact!') ? 'wow' : 'talk', armR: -0.6, armL: 0.6, lookX: -0.8, lookY: -0.4 });
+  }
+
+  // ======================= SAY IT, TRY AT HOME, OUTRO =======================
+  function sayScene(ctx, t, Lt) {
+    L.sky(ctx); L.cloud(ctx, 300, 160, 0.9); L.cloud(ctx, 1500, 120, 0.7); L.ground(ctx, 820);
+    plane(ctx, 1350 + Math.sin(t * 0.8) * 20, 330, 1.2, -0.08);
+    backpack(ctx, 900, 820, 0.7);
+    L.pip(ctx, { x: 520, y: 680, s: 1.2, t, mood: 'talk', armR: -1.2 + 0.2 * Math.sin(t * 8), armL: -1.2 - 0.2 * Math.sin(t * 8), lookX: 0.4, lookY: -0.3 });
+    L.sayItSticker(ctx, 'Safe bags make safe flights!', Lt.cwin('sayit', 'safe bags make', 0.8), t);
+  }
+  // a torch shining at a wall; the thing in the beam makes a glow or a shadow
+  function torch(ctx, x, y, s) { ctx.save(); ctx.translate(x, y); ctx.scale(s, s); ctx.fillStyle = P.red; roundRect(ctx, -140, -30, 140, 60, 16); ctx.fill(); ctx.strokeStyle = P.ink; ctx.lineWidth = 6; ctx.stroke(); ctx.fillStyle = '#C9CED8'; ctx.beginPath(); ctx.moveTo(0, -30); ctx.lineTo(50, -50); ctx.lineTo(50, 50); ctx.lineTo(0, 30); ctx.closePath(); ctx.fill(); ctx.stroke(); ctx.restore(); }
+  function tryScene(ctx, t, Lt) {
+    const dark = Lt.cwin('try1', 'and make the room', 0.8, null, 0.3);
+    ctx.fillStyle = '#FFF1D6'; ctx.fillRect(0, 0, W, H); ctx.fillStyle = '#E8C793'; ctx.fillRect(0, 760, W, H - 760);
+    if (dark > 0) { ctx.save(); ctx.globalAlpha = 0.72 * clamp(dark, 0, 1); ctx.fillStyle = '#1F2A48'; ctx.fillRect(0, 0, W, H); ctx.restore(); }
+    L.tryBanner(ctx, Lt.win('try1', 0, 0.6) * (1 - Lt.win('try2', 0, 0.4))); L.grownUpBadge(ctx, 180, 330, Lt.win('try1', 1.5, 0.6));
+    // the wall on the right
+    ctx.fillStyle = 'rgba(255,255,255,0.12)'; ctx.fillRect(1500, 160, 300, 580); ctx.strokeStyle = 'rgba(255,255,255,0.4)'; ctx.lineWidth = 4; ctx.strokeRect(1500, 160, 300, 580);
+    const tp = Lt.cwin('try1', 'ask a grown-up', 0.6, E.outBack, 0.6);
+    if (tp > 0) torch(ctx, 560, 450, 1.2 * clamp(tp, 0, 1.2));
+    const on = Lt.win('try2', 0.1, 0.4);
+    const which = Lt.cafter('try2', 'and a spoon') ? 2 : Lt.cafter('try2', 'a plastic bottle') ? 1 : Lt.cafter('try2', 'through a sheet') ? 0 : -1;
+    if (on > 0 && tp > 0) {
+      ctx.save(); ctx.globalAlpha = 0.55 * clamp(on, 0, 1); const g = ctx.createLinearGradient(620, 0, 1500, 0); g.addColorStop(0, 'rgba(255,240,160,0.9)'); g.addColorStop(1, 'rgba(255,240,160,0.35)'); ctx.fillStyle = g; ctx.beginPath(); ctx.moveTo(620, 400); ctx.lineTo(1500, 220); ctx.lineTo(1500, 680); ctx.lineTo(620, 500); ctx.closePath(); ctx.fill(); ctx.restore();
+      // the spot on the wall
+      ctx.save(); ctx.globalAlpha = clamp(on, 0, 1); ellipse(ctx, 1650, 450, 120, 200, which === 0 ? 'rgba(255,240,160,0.55)' : 'rgba(255,240,160,0.9)'); ctx.restore();
+      if (which === 2) { ctx.save(); ctx.globalAlpha = 0.85; ctx.fillStyle = '#1F2A48'; ctx.beginPath(); ctx.ellipse(1680, 440, 60, 40, 0, 0, TAU); ctx.fill(); ctx.fillRect(1560, 430, 120, 18); ctx.restore(); }
+    }
+    // the thing in the beam
+    if (which === 0) { ctx.fillStyle = 'rgba(255,255,255,0.9)'; ctx.strokeStyle = P.ink; ctx.lineWidth = 5; ctx.fillRect(1000, 300, 20, 300); ctx.strokeRect(1000, 300, 20, 300); }
+    if (which === 1) bottle(ctx, 1010, 560, 1.0, { label: 'water' });
+    if (which === 2) spoon(ctx, 1010, 440, 1.2, 0);
+    const lab2 = ['light glows through', 'light goes through', 'a dark shadow!'][which];
+    if (lab2) L.sticker(ctx, lab2, 1650, 120, 1, { bg: which === 2 ? XR.metal : P.sun, color: which === 2 ? P.white : P.ink, size: 46, rot: 0 });
+    L.pip(ctx, { x: 300, y: 620, s: 0.75, t, mood: Lt.cafter('try2', 'which ones', 0.4) ? 'wow' : 'talk', armR: -0.4, armL: 0.6, lookX: 0.9, lookY: -0.1 });
+    stk(ctx, 'Which ones let light through?', 960, 860 - 60, Lt.cwin('try2', 'which ones', 0.5, null, 0.4), 0, { bg: P.sun, size: 50, rot: -0.02 });
+  }
+  function outro(ctx, t, Lt, phrase) {
+    L.sky(ctx, { top: '#5FB8FF', bottom: '#CDEBFF' }); L.confetti(ctx, t, 21, 70); L.ground(ctx, 860);
+    L.pip(ctx, { x: 560, y: 720, s: 1.4, t, mood: Lt.cafter('bye', 'bye-bye') ? 'happy' : 'talk', armR: -1.1 + Math.sin(t * 8) * 0.35, armL: 0.6 });
+    const lp = Lt.win('bye', 0, 0.6, E.outBack); ctx.save(); ctx.translate(1380, 340); ctx.scale(lp, lp); L.logo(ctx, 0, 0, 1, t); ctx.restore();
+    const pp = Lt.cwin('bye', 'remember', 0.6, E.outBack, 0.3);
+    if (pp > 0) { ctx.save(); ctx.translate(1340, 640); ctx.scale(pp, pp); ctx.font = '700 60px Fredoka'; const k = Math.min(1, 980 / ctx.measureText(phrase).width), size = Math.floor(60 * k); ctx.font = '700 ' + size + 'px Fredoka'; const w = ctx.measureText(phrase).width + 90; ctx.fillStyle = P.white; roundRect(ctx, -w / 2, -60, w, 120, 40); ctx.fill(); ctx.strokeStyle = P.ink; ctx.lineWidth = 8; ctx.stroke(); text(ctx, phrase, 0, 4, { size, weight: 700, color: P.ink }); ctx.restore(); }
+    const bp = Lt.cwin('bye', 'bye-bye', 0.6, E.outBack); if (bp > 0) L.sticker(ctx, 'Bye-bye!', 1380, 790, bp, { bg: P.sun, rot: 0.05, size: 84 });
+  }
+
+  // ======================= TRY IT 1: PACK MY BAG =======================
+  // 7 things on the shelf; drag them into the cabin bag; Scan shows the X-ray picture and the officer's check.
+  const T1I = [
+    { k: 'teddy', ok: true, d: (c, x, y, s, xr) => teddy(c, x, y + 10, 0.55 * s, xr) },
+    { k: 'book', ok: true, d: (c, x, y, s, xr) => book(c, x, y, 0.55 * s, xr) },
+    { k: 'apple', ok: true, d: (c, x, y, s, xr) => apple(c, x, y, 0.6 * s, xr) },
+    { k: 'small', ok: true, d: (c, x, y, s, xr) => bottle(c, x, y + 50, 0.9 * s, { size: 'small', label: '100 ml', color: P.water, xr }) },
+    { k: 'big', ok: false, d: (c, x, y, s, xr) => bottle(c, x, y + 70, 0.6 * s, { label: 'water', color: P.water, xr }) },
+    { k: 'scissors', ok: false, d: (c, x, y, s, xr) => scissors(c, x + 10, y, 0.6 * s, -0.4, xr) },
+    { k: 'spoon', ok: true, d: (c, x, y, s, xr) => spoon(c, x, y, 0.6 * s, -0.4, xr) }
+  ];
+  const T1 = { bag: { x: 700, y: 520, w: 640, h: 420 }, shelfY: 190, scan: { x: 1500, y: 960, w: 380, h: 110 } };
+  const t1Home = i => ({ x: 150 + i * 170, y: T1.shelfY });
+  function t1Draw(ctx, s, t) {
+    ctx.fillStyle = '#E9EEF5'; ctx.fillRect(0, 0, W, H);
+    ctx.fillStyle = '#C9B79A'; ctx.fillRect(60, T1.shelfY + 70, 1200, 24); ctx.strokeStyle = P.ink; ctx.lineWidth = 5; ctx.strokeRect(60, T1.shelfY + 70, 1200, 24);
+    const b = T1.bag;
+    ctx.fillStyle = s.scanned ? XR.bg : 'rgba(78,168,255,0.25)'; roundRect(ctx, b.x - b.w / 2, b.y - b.h / 2, b.w, b.h, 50); ctx.fill(); ctx.strokeStyle = s.scanned ? '#2B2D42' : BAG; ctx.lineWidth = 10; ctx.stroke();
+    text(ctx, s.scanned ? 'the scanner picture' : 'my cabin bag', b.x, b.y + b.h / 2 + 46, { size: 40, weight: 700, color: P.ink });
+    // suitcase for things the officer moves
+    suitcase(ctx, 1560, 640, 0.75); text(ctx, 'big suitcase', 1560, 690, { size: 36, weight: 700, color: P.ink });
+    T1I.forEach((it, i) => { let p = s.pos[i]; if (s.drag === i) return; const sl = s.slide && s.slide[i]; if (sl) { const e = E.inOut(clamp(sl.p, 0, 1)); p = { x: lerp(sl.x0, p.x, e), y: lerp(sl.y0, p.y, e) - Math.sin(PI * e) * 120 }; } const inBag = s.where[i] === 'bag', inCase = s.where[i] === 'case'; it.d(ctx, p.x, p.y, 1, inBag && s.scanned); if (inBag && s.scanned && !it.ok) { ctx.save(); ctx.strokeStyle = P.red; ctx.lineWidth = 8; ctx.beginPath(); ctx.arc(p.x, p.y, 80, 0, TAU); ctx.stroke(); ctx.restore(); } if (inCase) { /* drawn small on the case */ } });
+    if (s.drag != null) T1I[s.drag].d(ctx, s.pos[s.drag].x, s.pos[s.drag].y, 1.1, false);
+    // officer and scan button
+    officer(ctx, 1240, 900, 0.7, t, { flip: true, mood: s.verdict ? 'talk' : 'happy', point: s.verdict ? -0.9 : -0.15 });
+    ctx.save(); ctx.translate(T1.scan.x, T1.scan.y); ctx.fillStyle = P.green; ctx.strokeStyle = P.ink; ctx.lineWidth = 7; roundRect(ctx, -T1.scan.w / 2, -T1.scan.h / 2, T1.scan.w, T1.scan.h, 30); ctx.fill(); ctx.stroke(); text(ctx, s.scanned ? 'Pack again' : 'Scan my bag', 0, 4, { size: 46, weight: 700, color: P.white, stroke: P.ink, strokeWidth: 8 }); ctx.restore();
+    if (s.verdict === 'clear') { tick(ctx, b.x + b.w / 2 - 30, b.y - b.h / 2 + 10, 0.9, 1); }
+    if (!s.touched) { const bob = Math.sin(t * 4) * 6; text(ctx, 'drag things into the bag', 700, 360 + bob, { size: 44, weight: 700, color: P.ink, stroke: P.white, strokeWidth: 9 }); L.arrow(ctx, 640, 300, 640, 420, P.sunDeep, 10); }
+    if (s.msg > 0) text(ctx, 'Pack something first!', b.x, b.y, { size: 44, weight: 700, color: P.red, stroke: P.white, strokeWidth: 8 });
+  }
+  // pack again: the officer moves the things behind the last verdict into the big suitcase (they slide there)
+  function t1Again(s) {
+    const k = s.verdict === 'sharp' ? 'scissors' : s.verdict === 'big' ? 'big' : null;
+    T1I.forEach((it, i) => { if (s.where[i] === 'bag' && it.k === k) { s.where[i] = 'case'; s.slide[i] = { x0: s.pos[i].x, y0: s.pos[i].y, p: 0 }; s.pos[i] = { x: 1480 + (it.k === 'big' ? 0 : 150), y: 540 }; } });
+    s.scanned = false; s.verdict = '';
+  }
+  function t1Scan(s) {
+    const inBag = T1I.map((it, i) => s.where[i] === 'bag' ? i : -1).filter(i => i >= 0);
+    if (!inBag.length) { s.msg = 2; return null; }
+    s.scanned = true;
+    if (inBag.some(i => T1I[i].k === 'scissors')) return 'sharp';
+    if (inBag.some(i => T1I[i].k === 'big')) return 'big';
+    return 'clear';
+  }
+
+  // ======================= TRY IT 2: X-RAY EYES =======================
+  const T2I = [
+    { k: 'teddy', g: 'soft', d: (c, x, y, xr) => teddy(c, x, y, 0.8, xr) },
+    { k: 'book', g: 'soft', d: (c, x, y, xr) => book(c, x, y, 0.8, xr) },
+    { k: 'scissors', g: 'metal', d: (c, x, y, xr) => scissors(c, x + 20, y, 0.9, -0.4, xr) },
+    { k: 'spoon', g: 'metal', d: (c, x, y, xr) => spoon(c, x, y, 0.9, -0.4, xr) },
+    { k: 'water', g: 'liquid', d: (c, x, y, xr) => bottle(c, x, y + 90, 0.85, { label: 'water', color: P.water, cap: P.blueDeep, xr }) },
+    { k: 'juice', g: 'liquid', d: (c, x, y, xr) => bottle(c, x, y + 90, 0.85, { label: 'juice', color: P.sunDeep, cap: P.green, xr }) },
+    { k: 'shampoo', g: 'liquid', d: (c, x, y, xr) => bottle(c, x, y + 90, 0.85, { label: 'shampoo', color: P.pink, cap: P.purple, xr }) }
+  ];
+  const t2Pos = i => ({ x: i < 4 ? 330 + i * 420 : 540 + (i - 4) * 420, y: i < 4 ? 330 : 700 });
+  function t2Draw(ctx, s, t) {
+    lab(ctx);
+    T2I.forEach((it, i) => { const p = t2Pos(i); ctx.fillStyle = s.xr[i] ? XR.bg : P.white; roundRect(ctx, p.x - 170, p.y - 150, 340, 300, 28); ctx.fill(); ctx.strokeStyle = s.xr[i] ? '#2B2D42' : P.ink; ctx.lineWidth = s.xr[i] ? 10 : 5; ctx.stroke(); ctx.save(); ctx.beginPath(); roundRect(ctx, p.x - 170, p.y - 150, 340, 300, 28); ctx.clip(); it.d(ctx, p.x, p.y, s.xr[i]); ctx.restore(); if (s.xr[i]) text(ctx, 'X-ray', p.x - 110, p.y - 120, { size: 28, weight: 700, color: P.purple }); });
+    if (!s.touched) { const bob = Math.sin(t * 4) * 6; text(ctx, 'tap a thing to see it with X-ray eyes', 960, 120 + bob, { size: 44, weight: 700, color: P.ink, stroke: P.white, strokeWidth: 9 }); }
+    L.pip(ctx, { x: 1800, y: 960, s: 0.42, t, mood: s.lastCue === 'alike' || s.lastCue === 'block' ? 'wow' : 'happy', armR: -0.6, armL: 0.6, lookX: -0.8, lookY: -0.4 });
+  }
+
+  L.episodes.ep21 = {
+    id: 'ep21', num: 21, title: "Why can't we take big bottles or sharp things on a plane?", short: 'Airport scanner', phrase: 'Safe bags make safe flights!',
+    thumb: {
+      big: 'X-RAY', small1: 'What does the', small2: 'see in my bag?', pip: { x: 560, y: 760 },
+      bg: (ctx, t) => {
+        ctx.fillStyle = '#E9EEF5'; ctx.fillRect(0, 0, W, H); ctx.fillStyle = '#C9D2DF'; ctx.fillRect(0, 760, W, H - 760);
+        xrPanel(ctx, 1100, 300, 680, 420, 1);
+        ctx.save(); ctx.beginPath(); roundRect(ctx, 1100, 300, 680, 420, 18); ctx.clip(); teddy(ctx, 1240, 560, 0.9, true); scissors(ctx, 1470, 420, 0.9, -0.4, true); bottle(ctx, 1660, 690, 1.0, { xr: true }); ctx.restore();
+        L.questionMark(ctx, 1040, 280, 1.0, 0.5, P.purple);
+      }
+    },
+    lines: [
+      { id: 'hello', text: "Hello, little scientists! I'm Curie. Welcome to the Little Scientists Club!", say: "Hello, little scientists! I'm *Curie*! Welcome... to the Little Scientists Club!", hold: 0.3 },
+      { id: 'q', text: "Today's big question: why can't we take big bottles or sharp things on a plane?", say: "Today's big question... Why can't we take big *bottles*, or sharp things, on a plane?", hold: 0.6 },
+      { id: 's1', text: "We're flying today! I packed my bag: my teddy, a big bottle of water, and my pointy scissors.", say: "We're *flying* today! I packed my bag... my *teddy*... a big bottle of water... and my pointy *scissors*.", hold: 0.6 },
+      { id: 's2', text: "At the airport, the security officer smiles. Sorry, Curie! The big bottle and the pointy scissors can't come in your cabin bag.", say: "At the airport, the *security* officer smiles. Sorry, Curie! The big bottle and the pointy scissors... can't come in your *cabin* bag.", hold: 0.6 },
+      { id: 'look', text: "Why not? Let's look inside the scanner.", say: "Why *not*? Let's look inside the *scanner*.", hold: 0.8 },
+      { id: 'e1', text: 'Every bag goes through an X-ray scanner. X-rays are a kind of invisible light that can pass through things.', say: 'Every bag goes through an *X-ray* scanner. X-rays are a kind of *invisible* light... that can pass *through* things.', hold: 0.6 },
+      { id: 'test', text: "Scientists test it! Let's send a teddy, a pair of scissors and a bottle of water through.", say: "{sfx:ding}Scientists *test* it! Let's send a *teddy*... a pair of *scissors*... and a bottle of *water*, through.", hold: 0.5 },
+      { id: 't1', text: 'The teddy looks pale: X-rays pass right through it. The scissor blades look dark: metal blocks most of the X-rays.', say: 'The teddy looks *pale*... X-rays pass right through it. The scissor blades look *dark*... metal *blocks* most of the X-rays.', hold: 0.8 },
+      { id: 'e4', text: 'Sharp things, like scissors and knives, are easy to spot. In the cabin, people sit close together, and a sharp thing could hurt someone.', say: '*Sharp* things, like scissors and knives, are easy to spot. In the cabin, people sit close *together*... and a sharp thing could *hurt* someone.', hold: 0.5 },
+      { id: 'e5', text: 'So sharp things travel in the big suitcase, under the plane.', say: 'So sharp things travel in the big *suitcase*... under the plane.', hold: 0.8 },
+      { id: 'l1', text: 'Liquids are trickier. On the X-ray picture, water, juice and shampoo all look alike.', say: '*Liquids* are trickier. On the X-ray picture... water, juice and shampoo all look *alike*.', hold: 0.5 },
+      { id: 'l2', text: "And a few liquids can be harmful, or catch fire easily. The scanner can't always tell which is which.", say: "And a *few* liquids can be harmful... or catch fire easily. The scanner can't always tell which is *which*.", hold: 0.6 },
+      { id: 'l3', text: 'So in the cabin, bottles must be small: 100 millilitres or less, less than half a cup. They all go in one small, clear bag.', say: 'So in the cabin, bottles must be *small*... one hundred millilitres or less, less than half a cup. They all go in one small, *clear* bag.', hold: 0.5 },
+      { id: 'l4', text: 'Small bottles are easier to keep safe, and the clear bag lets the officers check every bottle.', say: 'Small bottles are easier to keep *safe*... and the clear bag lets the officers check every bottle.', hold: 0.8 },
+      { id: 'real', text: 'Wow fact! Some airports now have new scanners that take 3D pictures. They can check liquids better, so at some of them, bigger bottles are allowed.', say: '{sfx:ding}*Wow* fact! Some airports now have new scanners that take three-D pictures. They can check liquids *better*... so at some of them, bigger bottles are allowed.', hold: 1.0 },
+      { id: 'sayit', text: 'Say it with me: Safe bags make safe flights!', say: 'Say it with me... {sfx:ding}Safe bags make safe *flights*! {pause 0.9} {slow}Safe bags... make safe flights!{/slow}', hold: 1.4 },
+      { id: 'try1', text: "Let's try it at home! Ask a grown-up for a torch, and make the room dark.", say: "{sfx:tada}Let's try it at home! Ask a grown-up for a *torch*... and make the room dark.", hold: 0.4 },
+      { id: 'try2', text: 'Shine it at a wall through a sheet of paper, a plastic bottle of water, and a spoon. Which ones let the light through?', say: 'Shine it at a wall... through a sheet of *paper*... a plastic bottle of *water*... and a *spoon*. {sfx:ding}Which ones let the light *through*?', hold: 1.6 },
+      { id: 'bye', text: 'Great job, little scientist! Remember: safe bags make safe flights! See you next time at the Little Scientists Club! Bye-bye!', say: '{sfx:tada}Great job, little scientist! Remember... safe bags make safe *flights*! See you next time, at the Little Scientists Club! {hi}Bye-bye!{/hi}', hold: 1.2 }
+    ],
+    sfx: [
+      { line: 's2', chunk: 'at the airport', offset: 0.3, name: 'whoosh', vol: 0.3 },
+      { line: 'look', chunk: "let's look inside", offset: 0.5, name: 'zoom' },
+      { line: 't1', chunk: 'the scissor blades', offset: 0.6, name: 'pop', vol: 0.4 },
+      { line: 'e5', chunk: 'so sharp things', offset: 1.2, name: 'pop', vol: 0.4 },
+      { line: 'l3', chunk: 'they all go', offset: 1.4, name: 'sparkle', vol: 0.5 }
+    ],
+    scenes: [
+      { from: 'hello', draw: (ctx, t, Lt) => L.scenes.intro(ctx, t, Lt) },
+      { from: 'q', draw: (ctx, t, Lt) => L.scenes.question(ctx, t, Lt, (c, tt) => { backpack(c, -110, 150, 0.85); scissors(c, 130, -70, 0.85, -0.4); bottle(c, 180, 160, 0.8, { label: 'water' }); }, { word: 'Why?' }) },
+      { from: 's1', draw: (ctx, t, Lt) => homeScene(ctx, t, Lt) },
+      { from: 's2', draw: (ctx, t, Lt) => airportScene(ctx, t, Lt) },
+      { from: 'e1', transition: 'cut', draw: (ctx, t, Lt) => insideScene(ctx, t, Lt) },
+      { from: 'e4', draw: (ctx, t, Lt) => sharpScene(ctx, t, Lt) },
+      { from: 'l1', draw: (ctx, t, Lt) => liquidScene(ctx, t, Lt) },
+      { from: 'real', draw: (ctx, t, Lt) => ctScene(ctx, t, Lt) },
+      { from: 'sayit', draw: (ctx, t, Lt) => sayScene(ctx, t, Lt) },
+      { from: 'try1', draw: (ctx, t, Lt) => tryScene(ctx, t, Lt) },
+      { from: 'bye', draw: (ctx, t, Lt) => outro(ctx, t, Lt, 'Safe bags make safe flights!') }
+    ],
+    interactives: [
+      {
+        title: 'Pack my bag',
+        hint: 'Drag things into your cabin bag, then tap "Scan my bag". What does the officer say?',
+        init: s => { s.slide = T1I.map(() => null); s.where = T1I.map(() => 'shelf'); s.pos = T1I.map((it, i) => t1Home(i)); s.drag = null; s.scanned = false; s.verdict = ''; s.msg = 0; s.touched = false; s.lastCue = ''; s.pend = null; },
+        update: (s, dt, cue) => { s.msg = Math.max(0, s.msg - dt); s.slide.forEach((sl, i) => { if (sl) { sl.p += dt * 1.6; if (sl.p >= 1) s.slide[i] = null; } }); if (s.pend) { const id = s.pend; s.pend = null; s.lastCue = id; cue(id); } },
+        draw: (ctx, s, t) => t1Draw(ctx, s, t),
+        pointer: (s, type, x, y) => {
+          const b = T1.bag, sc = T1.scan;
+          if (type === 'down') {
+            if (Math.abs(x - sc.x) < sc.w / 2 + 10 && Math.abs(y - sc.y) < sc.h / 2 + 15) {
+              s.touched = true;
+              if (s.scanned) { t1Again(s); return; }
+              const v = t1Scan(s); if (v) { s.verdict = v; s.pend = v; } if (L.sound) { try { L.sound.tone(v === 'clear' ? 880 : 440, 0.25, { type: 'triangle', vol: 0.2 }); } catch (e) { /* no sound */ } }
+              return;
+            }
+            if (s.scanned) { s.touched = true; t1Again(s); return; }
+            for (let i = T1I.length - 1; i >= 0; i--) { const p = s.pos[i]; if (Math.hypot(x - p.x, y - p.y) < 85) { s.drag = i; s.touched = true; s.where[i] = 'shelf'; return; } }
+          }
+          if (type === 'move' && s.drag != null) { s.pos[s.drag] = { x: clamp(x, 100, W - 100), y: clamp(y, 120, H - 100) }; }
+          if (type === 'up' && s.drag != null) {
+            const i = s.drag, p = s.pos[i]; s.drag = null;
+            if (Math.abs(p.x - b.x) < b.w / 2 && Math.abs(p.y - b.y) < b.h / 2) { s.where[i] = 'bag'; }
+            else if (Math.abs(p.x - 1560) < 170 && p.y > 400 && p.y < 700) { s.where[i] = 'case'; }
+            else { s.where[i] = 'shelf'; s.pos[i] = t1Home(i); }
+          }
+        },
+        cues: {
+          sharp: 'Scissors! Sharp things go in the big suitcase, under the plane.',
+          big: 'That bottle is too big for the cabin. Only small bottles!',
+          clear: 'All clear! Have a lovely flight!'
+        }
+      },
+      {
+        title: 'X-ray eyes',
+        hint: 'Tap each thing to see it the way the X-ray scanner does. Which look pale, which look dark, and which look the same?',
+        init: s => { s.liq = {}; s.xr = T2I.map(() => false); s.touched = false; s.lastCue = ''; s.pend = null; s.saw = {}; },
+        update: (s, dt, cue) => { if (s.pend) { const id = s.pend; s.pend = null; s.lastCue = id; cue(id); } },
+        draw: (ctx, s, t) => t2Draw(ctx, s, t),
+        pointer: (s, type, x, y) => {
+          if (type !== 'down') return;
+          for (let i = 0; i < T2I.length; i++) { const p = t2Pos(i); if (Math.abs(x - p.x) < 170 && Math.abs(y - p.y) < 150) {
+            s.touched = true; s.xr[i] = !s.xr[i];
+            if (s.xr[i]) { const g = T2I[i].g; if (g === 'liquid') s.liq[i] = true; const nLiq = Object.keys(s.liq).length;
+              const id = g === 'soft' ? 'pass' : g === 'metal' ? 'block' : nLiq >= 2 ? 'alike' : null;
+              if (id && !s.saw[id]) { s.saw[id] = true; s.pend = id; } }
+            if (L.sound) { try { L.sound.tone(s.xr[i] ? 700 : 400, 0.12, { type: 'triangle', vol: 0.2 }); } catch (e) { /* no sound */ } }
+            return; } }
+        },
+        cues: {
+          pass: 'Pale! X-rays pass through soft things.',
+          block: 'Dark! Metal blocks the X-rays.',
+          alike: 'Water, juice and shampoo all look the same to the scanner!'
+        }
+      }
+    ]
+  };
+})(typeof window !== 'undefined' ? window : globalThis);
