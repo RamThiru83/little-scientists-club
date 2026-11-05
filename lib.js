@@ -10372,3 +10372,1787 @@
     ]
   };
 })(typeof window !== 'undefined' ? window : globalThis);
+
+/* Episode 22 — Why do we burp?  (swallowed air and fizzy gas come back up)
+   Story: picnic; Curie sips fizzy lemonade through a straw, then one big gulp ... BURP! "Oops! Excuse me! That was a burp-a-saurus!"
+   Silly guess: a tiny frog in her tummy? No frog! -> look inside a tummy: when we eat and drink we swallow little bubbles of
+   air (gulping too fast swallows extra air); fizzy drinks are full of bubbles of gas; the bubbles float up
+   to the top of the stomach; the extra gas is pushed up out of the stomach, up the food tube (the esophagus) and out: a burp.
+   The noise: a tight ring at the top of the food tube; the gas squeezes through and the top of the tube wobbles, like the neck of a
+   balloon. Test: plain water vs fizzy water, a balloon on each bottle, swirl: only the fizzy one puffs up (the fizz is a
+   gas). Real life: babies get patted so the burp comes out and their tummies feel better; everybody burps; cover your
+   mouth and say excuse me. -> say it -> try at home (a grown-up blows up a balloon; stretch the neck, let the air squeak out).
+   Sources (checked 4 Nov 2026): KidsHealth (Nemours) "Why Do I Burp?" (a burp is gas; we swallow air when we eat and
+   drink; the fizz in fizzy drinks is carbon dioxide gas; eating or drinking fast and drinking through a straw send extra
+   air into the stomach; extra gas is forced out of the stomach up through the esophagus and out of the mouth; parents
+   burp babies so the extra gas doesn't make them uncomfortable; burp quietly, cover your mouth, say excuse me).
+   The Conversation, Curious Kids "Why do burps make noise?" (gas builds up behind a ring of muscle at the top of the
+   esophagus; forcing through it makes the upper esophagus and back of the throat vibrate).
+   Humour (Ram, 4 Nov 2026: "a bit of humour ... things that will make 5-6 year olds laugh"): the big picnic burp (bounce,
+   antenna flash, flying straw), "burp-a-saurus", the tiny frog guess, the balloon squeak, everybody burps, and a tiny
+   burp after "Bye-bye!". Kind, never gross, never mocking.
+   Try it 1 "Fill the tummy" (feed the tummy, bubbles gather, it burps); Try it 2 "Balloon on a bottle" (plain vs fizzy). */
+(function (global) {
+  const L = global.LSC; const LSC = L; const { W, H, P, E, seg, clamp, lerp, circle, ellipse, text, roundRect } = L;
+  L.episodes = L.episodes || {};
+  const PI = Math.PI, TAU = PI * 2;
+  const stk = (ctx, s, x, y, pIn, pOut, o) => L.sticker(ctx, s, x, y, pIn * (1 - (pOut || 0)), o);
+  const LEMON = '#FFE45C', FIZZ = 'rgba(255,255,255,0.85)', GAS = '#BFE7FF', TUBE = '#FF9BB0', TUBEDARK = '#D9667F', STOM = '#FFB3C1', SKINB = '#F5CFAE';
+  const SKIN = ['#F5CFAE', '#D9A57E', '#B97E57', '#8D5A3B'];
+
+  // ---------- props ----------
+  // a clear cup of fizzy lemonade with a straw; fill 0..1; tilt radians; o.straw false hides the straw
+  function cup(ctx, x, y, s, t, o) {
+    o = o || {}; const fill = o.fill == null ? 0.85 : o.fill;
+    ctx.save(); ctx.translate(x, y); ctx.rotate(o.tilt || 0); ctx.scale(s, s); ctx.lineJoin = 'round';
+    const body = () => { ctx.beginPath(); ctx.moveTo(-60, -170); ctx.lineTo(60, -170); ctx.lineTo(46, 0); ctx.lineTo(-46, 0); ctx.closePath(); };
+    body(); ctx.fillStyle = 'rgba(225,245,255,0.8)'; ctx.fill();
+    ctx.save(); body(); ctx.clip(); ctx.fillStyle = o.color || LEMON; ctx.fillRect(-80, -170 * fill, 160, 180);
+    if (o.fizz !== false) for (let i = 0; i < 9; i++) { const ph = (t * 0.7 + i * 0.37) % 1; const bx = -36 + ((i * 29) % 72), by = -6 - ph * 160 * fill; if (by > -170 * fill) circle(ctx, bx + Math.sin(t * 3 + i) * 4, by, 5 + (i % 3) * 2, FIZZ); }
+    ctx.restore();
+    if (o.straw !== false) { ctx.strokeStyle = P.ink; ctx.lineWidth = 18; ctx.lineCap = 'round'; ctx.beginPath(); if (o.toMouth) { ctx.moveTo(-10, -20); ctx.lineTo(-20, -215); ctx.lineTo(o.toMouth.x, o.toMouth.y); } else { ctx.moveTo(14, -20); ctx.lineTo(30, -230); ctx.lineTo(80, -270); } ctx.stroke(); ctx.strokeStyle = P.red; ctx.lineWidth = 10; ctx.stroke(); ctx.strokeStyle = P.white; ctx.lineWidth = 10; ctx.setLineDash([14, 16]); ctx.stroke(); ctx.setLineDash([]); }
+    body(); ctx.strokeStyle = P.ink; ctx.lineWidth = 6; ctx.stroke();
+    ctx.restore();
+  }
+  function sandwich(ctx, x, y, s) {
+    ctx.save(); ctx.translate(x, y); ctx.scale(s, s); ctx.lineJoin = 'round'; ctx.strokeStyle = P.ink; ctx.lineWidth = 6;
+    ctx.fillStyle = '#F4D9A0'; ctx.beginPath(); ctx.moveTo(-90, 10); ctx.lineTo(90, 10); ctx.lineTo(0, -90); ctx.closePath(); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = P.green; ctx.beginPath(); ctx.moveTo(-96, 18); ctx.quadraticCurveTo(-48, 34, 0, 18); ctx.quadraticCurveTo(48, 34, 96, 18); ctx.lineTo(90, 8); ctx.lineTo(-90, 8); ctx.closePath(); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = '#F4D9A0'; ctx.beginPath(); ctx.moveTo(-90, 26); ctx.lineTo(90, 26); ctx.lineTo(80, 44); ctx.lineTo(-80, 44); ctx.closePath(); ctx.fill(); ctx.stroke();
+    ctx.restore();
+  }
+  function glassWater(ctx, x, y, s) {
+    ctx.save(); ctx.translate(x, y); ctx.scale(s, s); ctx.lineJoin = 'round';
+    ctx.beginPath(); ctx.moveTo(-55, -150); ctx.lineTo(55, -150); ctx.lineTo(44, 0); ctx.lineTo(-44, 0); ctx.closePath(); ctx.fillStyle = 'rgba(225,245,255,0.8)'; ctx.fill();
+    ctx.save(); ctx.clip(); ctx.fillStyle = P.water; ctx.fillRect(-70, -110, 140, 120); ctx.restore();
+    ctx.strokeStyle = P.ink; ctx.lineWidth = 6; ctx.stroke(); ctx.restore();
+  }
+  // a bottle of water with a balloon on its neck; o.fizzy adds bubbles; o.puff 0..1 balloon size; o.label; o.wob rotation
+  function bottleBalloon(ctx, x, y, s, t, o) {
+    o = o || {}; ctx.save(); ctx.translate(x, y); ctx.rotate(o.wob || 0); ctx.scale(s, s); ctx.lineJoin = 'round';
+    const body = () => { ctx.beginPath(); ctx.moveTo(-22, -300); ctx.lineTo(-22, -260); ctx.quadraticCurveTo(-90, -230, -90, -180); ctx.lineTo(-90, -14); ctx.quadraticCurveTo(-90, 0, -76, 0); ctx.lineTo(76, 0); ctx.quadraticCurveTo(90, 0, 90, -14); ctx.lineTo(90, -180); ctx.quadraticCurveTo(90, -230, 22, -260); ctx.lineTo(22, -300); ctx.closePath(); };
+    body(); ctx.fillStyle = 'rgba(225,245,255,0.85)'; ctx.fill();
+    ctx.save(); body(); ctx.clip(); ctx.fillStyle = P.water; ctx.fillRect(-100, -200, 200, 210);
+    if (o.fizzy) for (let i = 0; i < 16; i++) { const ph = (t * (0.6 + 0.4 * (o.swirl || 0)) + i * 0.23) % 1; circle(ctx, -70 + ((i * 37) % 140) + Math.sin(t * 4 + i) * 4, -8 - ph * 190, 5 + (i % 3) * 2, FIZZ); }
+    ctx.restore(); body(); ctx.strokeStyle = P.ink; ctx.lineWidth = 7; ctx.stroke();
+    // balloon (neck over the bottle top)
+    if (o.noBalloon) { ctx.restore(); if (o.label) L.sticker(ctx, o.label, x, y + 46 * s, 1, { bg: o.fizzy ? P.sun : P.white, size: 44, rot: 0 }); return; }
+    const pf = clamp(o.puff || 0, 0, 1), bw = lerp(30, 120, pf), bh = lerp(40, 150, pf), col = o.balloon || P.red;
+    ctx.fillStyle = col; ctx.strokeStyle = P.ink; ctx.lineWidth = 6;
+    roundRect(ctx, -28, -322, 56, 34, 10); ctx.fill(); ctx.stroke();
+    ctx.beginPath(); ctx.ellipse(0, -322 - bh * 0.9, bw, bh, 0, 0, TAU); ctx.fill(); ctx.stroke();
+    if (pf < 0.2) { ctx.fillStyle = 'rgba(0,0,0,0.12)'; ctx.fillRect(-bw * 0.6, -322 - bh * 1.2, bw * 1.2, 8); }
+    ctx.fillStyle = 'rgba(255,255,255,0.45)'; ctx.beginPath(); ctx.ellipse(-bw * 0.4, -322 - bh * 1.25, bw * 0.18, bh * 0.25, -0.4, 0, TAU); ctx.fill();
+    ctx.restore();
+    if (o.label) L.sticker(ctx, o.label, x, y + 46 * s, 1, { bg: o.fizzy ? P.sun : P.white, size: 44, rot: 0 });
+  }
+  // a stretched balloon neck held by two hands, squeaking: q 0..1 wobble strength
+  function squeakBalloon(ctx, x, y, s, t, q) {
+    ctx.save(); ctx.translate(x, y); ctx.scale(s, s);
+    ctx.fillStyle = P.pink; ctx.strokeStyle = P.ink; ctx.lineWidth = 7;
+    ctx.beginPath(); ctx.ellipse(0, -150, 140, 170, 0, 0, TAU); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = 'rgba(255,255,255,0.45)'; ctx.beginPath(); ctx.ellipse(-55, -220, 26, 44, -0.4, 0, TAU); ctx.fill();
+    // the neck stretched sideways into a slit
+    const w = Math.sin(t * 40) * 6 * q;
+    ctx.fillStyle = P.pink; ctx.beginPath(); ctx.moveTo(-30, 10); ctx.quadraticCurveTo(-80, 40 + w, -150, 46); ctx.lineTo(150, 46); ctx.quadraticCurveTo(80, 40 - w, 30, 10); ctx.closePath(); ctx.fill(); ctx.stroke();
+    L.hand(ctx, -190, 80, 0.55, -1.2); L.hand(ctx, 190, 80, 0.55, 1.2);
+    if (q > 0) { ctx.strokeStyle = P.purple; ctx.lineWidth = 6; ctx.lineCap = 'round'; ctx.globalAlpha = clamp(q, 0, 1); for (let i = 0; i < 3; i++) { const r = 40 + i * 30 + ((t * 80) % 30); ctx.beginPath(); ctx.arc(0, 60, r, 0.25 * PI, 0.75 * PI); ctx.stroke(); } }
+    ctx.restore();
+  }
+  function frog(ctx, x, y, s, t) {
+    ctx.save(); ctx.translate(x, y + Math.abs(Math.sin(t * 5)) * -10); ctx.scale(s, s); ctx.lineJoin = 'round';
+    ellipse(ctx, 0, 0, 80, 56, P.green, P.ink, 6); circle(ctx, -38, -50, 26, P.green, P.ink, 6); circle(ctx, 38, -50, 26, P.green, P.ink, 6);
+    circle(ctx, -38, -52, 12, P.white, P.ink, 3); circle(ctx, 38, -52, 12, P.white, P.ink, 3); circle(ctx, -36, -50, 6, P.ink); circle(ctx, 40, -50, 6, P.ink);
+    ctx.strokeStyle = P.ink; ctx.lineWidth = 5; ctx.beginPath(); ctx.arc(0, -4, 40, 0.15 * PI, 0.85 * PI); ctx.stroke();
+    ellipse(ctx, -70, 40, 30, 14, P.green, P.ink, 5); ellipse(ctx, 70, 40, 30, 14, P.green, P.ink, 5);
+    ctx.restore();
+  }
+  function dino(ctx, x, y, s, t) { // a cute little dinosaur for "burp-a-saurus"
+    ctx.save(); ctx.translate(x, y); ctx.scale(s, s); ctx.lineJoin = 'round'; ctx.fillStyle = P.purple; ctx.strokeStyle = P.ink; ctx.lineWidth = 6;
+    ctx.beginPath(); ctx.moveTo(-130, 20); ctx.quadraticCurveTo(-60, -70, 20, -40); ctx.quadraticCurveTo(50, -120, 90, -130); ctx.quadraticCurveTo(140, -130, 140, -100); ctx.quadraticCurveTo(130, -80, 90, -84); ctx.quadraticCurveTo(80, -40, 70, 0); ctx.quadraticCurveTo(0, 40, -130, 20); ctx.closePath(); ctx.fill(); ctx.stroke();
+    for (const lx of [-30, 40]) { roundRect(ctx, lx - 14, 0, 28, 50, 10); ctx.fill(); ctx.stroke(); }
+    circle(ctx, 104, -110, 7, P.ink);
+    ctx.fillStyle = P.sun; for (let i = 0; i < 4; i++) { ctx.beginPath(); ctx.moveTo(-60 + i * 30, -34 + i * -4); ctx.lineTo(-50 + i * 30, -60 + i * -4); ctx.lineTo(-40 + i * 30, -36 + i * -4); ctx.closePath(); ctx.fill(); ctx.stroke(); }
+    // a burp cloud from its mouth
+    const b = 0.5 + 0.5 * Math.sin(t * 3); L.cloud(ctx, 200, -150, 0.28 + 0.04 * b, P.white, { outline: true });
+    ctx.restore();
+  }
+  // "BURP!" in a bouncy cloud; p 0..1 pop-in
+  function burpCloud(ctx, x, y, s, p, t) {
+    if (p <= 0) return; const k = E.outBack(clamp(p, 0, 1)) * s; ctx.save(); ctx.translate(x, y); ctx.rotate(Math.sin(t * 20) * 0.04 * clamp(2 - p * 1.5, 0, 1)); ctx.scale(k, k);
+    ctx.fillStyle = P.white; ctx.strokeStyle = P.ink; ctx.lineWidth = 7;
+    ctx.beginPath(); for (let i = 0; i < 20; i++) { const a = i / 20 * TAU; const r = i % 2 ? 150 : 205; ctx.lineTo(Math.cos(a) * r * 1.35, Math.sin(a) * r * 0.8); } ctx.closePath(); ctx.fill(); ctx.stroke();
+    text(ctx, 'BURP!', 0, 6, { size: 110, weight: 700, color: P.sunDeep, stroke: P.ink, strokeWidth: 12 });
+    ctx.restore();
+  }
+  function blanket(ctx) {
+    ctx.save(); ctx.fillStyle = P.red; ctx.beginPath(); ctx.moveTo(380, 860); ctx.lineTo(1600, 860); ctx.lineTo(1720, 1000); ctx.lineTo(260, 1000); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = P.white; for (let i = 0; i < 12; i++) { ctx.globalAlpha = 0.5; ctx.fillRect(400 + i * 110, 860, 50, 140); } ctx.restore();
+  }
+  function basket(ctx, x, y, s) { ctx.save(); ctx.translate(x, y); ctx.scale(s, s); ctx.fillStyle = P.brown; ctx.strokeStyle = P.ink; ctx.lineWidth = 6; roundRect(ctx, -120, -100, 240, 100, 20); ctx.fill(); ctx.stroke(); ctx.beginPath(); ctx.arc(0, -100, 100, PI, TAU); ctx.lineWidth = 12; ctx.stroke(); ctx.lineWidth = 3; for (let i = -100; i <= 100; i += 25) { ctx.beginPath(); ctx.moveTo(i, -96); ctx.lineTo(i, -4); ctx.stroke(); } ctx.restore(); }
+
+  // ---------- the tummy diagram (a side view of a child's head and body, inside view) ----------
+  // mouth M, the tight ring R at the top of the food tube, the tube down to the stomach S.
+  const TD = { hx: 820, hy: 240, M: { x: 940, y: 300 }, R: { x: 835, y: 400 }, S: { x: 860, y: 640, rx: 150, ry: 92 } };
+  const tubePath = [[940, 300], [880, 318], [840, 352], [835, 400], [828, 470], [820, 540], [800, 585]];
+  function tubePoint(u) { // u 0 (stomach) .. 1 (mouth)
+    const pts = tubePath.slice().reverse(), n = pts.length - 1, f = clamp(u, 0, 1) * n, i = Math.min(n - 1, Math.floor(f)), k = f - i;
+    return { x: lerp(pts[i][0], pts[i + 1][0], k), y: lerp(pts[i][1], pts[i + 1][1], k) };
+  }
+  // o: squeeze 0..1, gas 0..1 (bubbles at the top of the stomach), rise 0..1 (gas travelling up the tube), wob 0..1 (ring wobble), food items
+  function tummy(ctx, t, o, ox, oy, sc) {
+    o = o || {}; ctx.save(); ctx.translate(ox || 0, oy || 0); if (sc) ctx.scale(sc, sc);
+    // outline of a child: head + body
+    ctx.lineJoin = 'round'; ctx.strokeStyle = P.ink; ctx.lineWidth = 8;
+    ctx.fillStyle = 'rgba(245,207,174,0.55)';
+    ctx.beginPath(); ctx.moveTo(760, 420); ctx.quadraticCurveTo(600, 470, 600, 640); ctx.lineTo(600, 900); ctx.lineTo(1080, 900); ctx.lineTo(1080, 640); ctx.quadraticCurveTo(1080, 470, 900, 420); ctx.closePath(); ctx.fill(); ctx.stroke();
+    ctx.beginPath(); ctx.arc(TD.hx, TD.hy, 150, 0, TAU); ctx.fill(); ctx.stroke();
+    // nose, eye and smiling mouth on the right side of the face
+    ctx.fillStyle = 'rgba(245,207,174,1)'; ctx.beginPath(); ctx.moveTo(962, 214); ctx.quadraticCurveTo(1000, 250, 966, 262); ctx.stroke();
+    circle(ctx, 900, 196, 11, P.ink);
+    ctx.beginPath(); ctx.moveTo(925, 300); ctx.quadraticCurveTo(948, 306, 958, 292); ctx.lineWidth = 6; ctx.stroke(); ctx.lineWidth = 8;
+    // hair
+    ctx.fillStyle = '#5B3A29'; ctx.beginPath(); ctx.arc(TD.hx, TD.hy, 152, PI * 1.02, PI * 1.85); ctx.quadraticCurveTo(820, 150, 700, 200); ctx.closePath(); ctx.fill(); ctx.stroke();
+    // the food tube
+    ctx.strokeStyle = TUBEDARK; ctx.lineWidth = 46; ctx.lineCap = 'round'; ctx.beginPath(); tubePath.forEach(([x, y], i) => i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)); ctx.stroke();
+    ctx.strokeStyle = TUBE; ctx.lineWidth = 30; ctx.stroke();
+    // the tight ring at the top of the tube (wobbles)
+    const wb = (o.wob || 0) * Math.sin(t * 50) * 7;
+    ctx.strokeStyle = '#C2185B'; ctx.lineWidth = 10; ctx.beginPath(); ctx.ellipse(TD.R.x, TD.R.y, 32 + wb, 12, 0.1, 0, TAU); ctx.stroke();
+    if (o.wob > 0) { ctx.save(); ctx.globalAlpha = clamp(o.wob, 0, 1); ctx.strokeStyle = P.purple; ctx.lineWidth = 6; ctx.lineCap = 'round'; for (const sx of [-1, 1]) for (let i = 0; i < 3; i++) { const r = 50 + i * 22; ctx.beginPath(); ctx.arc(TD.R.x, TD.R.y, r, sx > 0 ? -0.5 : PI - 0.5 + 0, sx > 0 ? 0.5 : PI + 0.5); ctx.stroke(); } ctx.restore(); }
+    // the stomach (squeezes)
+    const q = clamp(o.squeeze || 0, 0, 1), sq = 1 - 0.18 * q * (0.6 + 0.4 * Math.sin(t * 12));
+    ctx.save(); ctx.translate(TD.S.x, TD.S.y); ctx.rotate(-0.25); ctx.scale(sq, 1 / Math.max(0.7, sq) * 0.95 + 0.05 * q);
+    ctx.fillStyle = STOM; ctx.strokeStyle = TUBEDARK; ctx.lineWidth = 9;
+    ctx.beginPath(); ctx.ellipse(0, 0, TD.S.rx, TD.S.ry, 0, 0, TAU); ctx.fill(); ctx.stroke();
+    // food at the bottom
+    ctx.save(); ctx.beginPath(); ctx.ellipse(0, 0, TD.S.rx - 6, TD.S.ry - 6, 0, 0, TAU); ctx.clip();
+    ctx.fillStyle = o.drink ? 'rgba(255,228,92,0.85)' : 'rgba(255,200,120,0.6)'; ctx.fillRect(-200, 30, 400, 120);
+    // gas bubbles collect at the top
+    const g = clamp(o.gas || 0, 0, 1);
+    if (g > 0) { const n = Math.round(4 + 12 * g); for (let i = 0; i < n; i++) { const a = -0.9 * PI + (i / Math.max(1, n - 1)) * 0.8 * PI; const rr = 0.55 + 0.35 * ((i * 37) % 10) / 10; const bx = Math.cos(a) * TD.S.rx * rr * 0.9, by = Math.sin(a) * TD.S.ry * rr * 0.9 + Math.sin(t * 3 + i) * 3; circle(ctx, bx, by, 10 + (i % 3) * 5, GAS, P.blueDeep, 3); } }
+    ctx.restore(); ctx.restore();
+    // bubbles travelling up the tube
+    const rise = o.rise || 0;
+    if (rise > 0 && rise < 1) for (let i = 0; i < 4; i++) { const u = rise * 1.3 - i * 0.1; if (u > 0 && u < 1) { const p = tubePoint(u); circle(ctx, p.x, p.y, 13, GAS, P.blueDeep, 3); } }
+    // swallowed bubbles travelling down
+    const down = o.down || 0;
+    if (down > 0 && down < 1) for (let i = 0; i < 4; i++) { const u = 1 - (down * 1.3 - i * 0.1); if (u > 0 && u < 1) { const p = tubePoint(u); circle(ctx, p.x, p.y, 11, GAS, P.blueDeep, 3); } }
+    ctx.restore();
+  }
+
+  // ======================= PICNIC (s1, s2, guess, look) =======================
+  function picnicScene(ctx, t, Lt) {
+    L.park(ctx, t, { sunX: 1700, house: false });
+    blanket(ctx); basket(ctx, 1420, 900, 1.0); sandwich(ctx, 1150, 900, 0.8);
+    // gulps: lemonade goes down on each gulp
+    const sip = Lt.cwin('s1', 'sip, sip', 2.2, E.inOut, 0.1);
+    const burpT = Lt.start('s2') + 0.05, bp = seg(t, burpT, burpT + 0.6, E.out);
+    const after = t >= burpT;
+    // Curie: squash and bounce on the burp, antenna flash, then a hand over her mouth on "excuse me"
+    const bounce = after ? Math.max(0, Math.sin((t - burpT) * 9) * Math.exp(-(t - burpT) * 3)) : 0;
+    const exc = Lt.cafter('s2', 'excuse me');
+    const mood = !after ? (Lt.cafter('s1', 'sip, sip', 1.3) ? 'wow' : Lt.cafter('s1', 'sip, sip', 0) ? 'happy' : 'talk') : (t < burpT + 0.9 ? 'wow' : Lt.cafter('guess') ? (Lt.cafter('guess', 'is there a tiny') ? 'think' : 'talk') : 'talk');
+    const cx = 600, cy = 640 - bounce * 120;
+    L.pip(ctx, { x: cx, y: cy, s: 1.4, t, mood, squash: !after ? 0.04 * Math.sin(t * 9) * (sip > 0 && sip < 1 ? 1 : 0) : -0.15 * bounce, bulb: after && t < burpT + 1.2 ? 0.5 + 0.5 * Math.sin((t - burpT) * 25) : (Lt.cafter('guess', 'is there a tiny') ? 0.6 : 0), armR: exc && !Lt.after('guess') ? -2.2 : (!after ? -0.3 : -0.8), armL: 0.7, lookX: 0.5, lookY: 0.1 });
+    // the cup: held at Curie's mouth while gulping; on the burp it flies up and lands on the blanket
+    const fill = lerp(0.85, 0.15, sip);
+    if (!after) cup(ctx, cx + 200, cy + 190, 0.8, t, { fill, tilt: 0, toMouth: { x: -205, y: -170 } });
+    else { const f = seg(t, burpT, burpT + 1.1, E.linear); const x = lerp(cx + 200, 1000, f), y = lerp(cy + 190, 930, f) - Math.sin(PI * f) * 360; cup(ctx, x, y, 0.8, t, { fill: 0.15, tilt: f < 1 ? Math.sin(f * 12) * 0.5 : 0 }); }
+    // burp cloud
+    burpCloud(ctx, 1200, 330, 1.15, bp * (1 - Lt.cwin('s2', 'oops!', 0.3, null, 0.4)), t);
+    // burp-a-saurus
+    const bs = Lt.cwin('s2', 'that was a', 0.6, E.outBack, 0.3) * (1 - Lt.win('guess', 0, 0.3));
+    if (bs > 0) { ctx.save(); ctx.globalAlpha = clamp(bs, 0, 1); dino(ctx, 1250, 520, 1.0 * clamp(bs, 0, 1.2), t); ctx.restore(); }
+    // the frog guess
+    const fb = Lt.cwin('guess', 'is there a tiny', 0.6, E.outBack) * (1 - Lt.cwin('look', 'no frog', 0.25, null, 0.1));
+    if (fb > 0) { L.thoughtBubble(ctx, 1170, 400, 520, 360, fb, 1); if (fb > 0.5) { ctx.save(); ctx.beginPath(); roundRect(ctx, 910, 220, 520, 360, 40); ctx.clip(); ellipse(ctx, 1170, 470, 170, 110, STOM, TUBEDARK, 7); frog(ctx, 1170, 470, 0.85, t); ctx.restore(); } }
+    const nf = Lt.cwin('look', 'no frog', 0.5, E.outBack);
+    if (nf > 0 && !Lt.cafter('look', "let's look inside")) { cross(ctx, 1170, 380, 1.1, nf); }
+    // zoom into the tummy
+    const zp = seg(t, Lt.chunk('look', "let's look inside") + 0.5, Lt.end('look') + 0.7, E.in);
+    if (zp > 0) { const fx = cx, fy = cy + 30, r = lerp(110, 2300, zp); ctx.save(); ctx.beginPath(); ctx.arc(fx, fy, r, 0, TAU); ctx.clip(); lab(ctx); ctx.restore(); if (zp < 1) L.magnifier(ctx, fx, fy, r, zp); }
+    const o = { size: 72, rot: -0.04 };
+    stk(ctx, 'Picnic time!', 1100, 140, Lt.win('s1', 0.1, 0.5), Lt.cwin('s1', "i'm sipping", 0.25), Object.assign({ bg: P.sun, size: 84 }, o));
+    stk(ctx, 'fizzy lemonade', 1100, 140, Lt.cwin('s1', "i'm sipping", 0.5), Lt.cwin('s1', 'sip, sip', 0.25), Object.assign({ bg: LEMON }, o));
+    stk(ctx, 'Sip, sip, sip...', 1100, 140, Lt.cwin('s1', 'sip, sip', 0.5), Lt.cwin('s1', 'sip, sip', 0.25, null, 1.2), Object.assign({ bg: P.white }, o));
+    stk(ctx, 'GULP!', 1100, 140, Lt.cwin('s1', 'sip, sip', 0.4, E.outBack, 1.3), Lt.win('s2', 0, 0.2), Object.assign({ bg: P.sun, size: 96 }, o));
+    stk(ctx, 'Excuse me!', 1100, 140, Lt.cwin('s2', 'excuse me', 0.5), Lt.cwin('s2', 'that was a', 0.25), Object.assign({ bg: P.pink }, o));
+    stk(ctx, 'a burp-a-saurus!', 1250, 300, Lt.cwin('s2', 'that was a', 0.5, null, 0.3), Lt.win('guess', 0, 0.3), Object.assign({ bg: P.purple, color: P.white }, o));
+    stk(ctx, 'a frog in my tummy?', 1170, 140, Lt.cwin('guess', 'is there a tiny', 0.5, null, 0.3), Lt.cwin('look', 'no frog', 0.25), Object.assign({ bg: P.green, color: P.white }, o));
+    stk(ctx, 'No frog!', 1170, 140, Lt.cwin('look', 'no frog', 0.5), Lt.cwin('look', "let's look inside", 0.25, null, 0.3), Object.assign({ bg: P.white, size: 84 }, o));
+  }
+  function cross(ctx, x, y, s, p) { if (p <= 0) return; const k = E.outBack(clamp(p, 0, 1)) * s; ctx.save(); ctx.translate(x, y); ctx.scale(k, k); circle(ctx, 0, 0, 50, P.red, P.ink, 6); ctx.strokeStyle = P.white; ctx.lineWidth = 13; ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(-19, -19); ctx.lineTo(19, 19); ctx.moveTo(19, -19); ctx.lineTo(-19, 19); ctx.stroke(); ctx.restore(); }
+  function tick(ctx, x, y, s, p) { if (p <= 0) return; const k = E.outBack(clamp(p, 0, 1)) * s; ctx.save(); ctx.translate(x, y); ctx.scale(k, k); circle(ctx, 0, 0, 50, P.green, P.ink, 6); ctx.strokeStyle = P.white; ctx.lineWidth = 13; ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.beginPath(); ctx.moveTo(-22, 2); ctx.lineTo(-5, 19); ctx.lineTo(24, -18); ctx.stroke(); ctx.restore(); }
+  function lab(ctx) { ctx.fillStyle = '#EEF4FF'; ctx.fillRect(0, 0, W, H); ctx.strokeStyle = 'rgba(78,168,255,0.10)'; ctx.lineWidth = 3; for (let x = 0; x <= W; x += 120) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke(); } for (let y = 0; y <= H; y += 120) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke(); } }
+
+  // ======================= INSIDE A TUMMY (e1 - e6) =======================
+  function insideScene(ctx, t, Lt) {
+    lab(ctx);
+    // e1: swallowed air (sandwich + bubbles go down); e2: fizzy drink adds lots; e3: bubbles gather at the top
+    const down1 = Lt.cwin('e1', 'we swallow', 1.6, null, 0.2);
+    const down2 = Lt.cwin('e1', 'gulping too fast', 1.6, null, 0.3), down3 = Lt.cwin('e2', 'fizzy drinks', 1.8, null, 0.4);
+    const gas = clamp(0.15 * Lt.cwin('e1', 'we swallow', 0.8, null, 1.6) + 0.2 * Lt.cwin('e1', 'gulping too fast', 0.8, null, 1.6) + 0.45 * Lt.cwin('e2', 'fizzy drinks', 0.8, null, 1.9) + 0.2 * Lt.cwin('e3', 'the bubbles float', 1.0), 0, 1);
+    const squeeze = 0, push = Lt.cwin('e4', 'then the extra gas', 0.5, null, 0.5) * (1 - Lt.cwin('e4', 'it rushes up', 0.4, null, 1.2));
+    const rise = Lt.cwin('e4', 'it rushes up', 1.8, E.inOut, 0.2);
+    const out = Lt.cafter('e4', 'it rushes up', 1.5);
+    const gasNow = out ? gas * (1 - Lt.cwin('e4', 'it rushes up', 1.2, null, 0.6)) : gas;
+    const wob = Lt.cwin('e6', 'and the top of the tube', 0.4) * (1 - Lt.cwin('e6', 'like the neck', 0.4, null, 2.2));
+    const dn = Math.max(down1 < 1 ? down1 : 0, down2 < 1 ? down2 : 0, down3 < 1 ? down3 : 0);
+    tummy(ctx, t, { gas: gasNow, squeeze, rise, wob, down: dn, drink: Lt.after('e2') }, -120, 0, 1);
+    if (push > 0) { ctx.save(); ctx.globalAlpha = clamp(push, 0, 1); const yy = Math.sin(t * 6) * 8; L.arrow(ctx, 640, 640 + yy, 670, 520 + yy, P.blueDeep, 12); L.arrow(ctx, 760, 620 + yy, 700, 510 + yy, P.blueDeep, 12); ctx.restore(); }
+    // the thing being swallowed, at the mouth
+    const atMouth = (p, draw) => { if (p <= 0 || p >= 1) return; ctx.save(); ctx.globalAlpha = 1 - seg(p, 0.6, 1); ctx.translate(TD.M.x - 120 + 120 * (1 - p), TD.M.y); draw(); ctx.restore(); };
+    atMouth(Lt.cwin('e1', 'when we eat', 1.4, null, 0.2), () => sandwich(ctx, 40, 10, 0.5));
+    atMouth(down3, () => cup(ctx, 60, 90, 0.5, t, { fill: 0.6 }));
+    // the burp out of the mouth
+    const bc = Lt.cwin('e4', "that's a burp", 0.4, null, 1.15) * (1 - Lt.win('e5', 0, 0.3));
+    burpCloud(ctx, 1150, 260, 0.6, bc, t);
+    // labels
+    const lbl = (s, x, y, a, c, al) => { if (a <= 0) return; ctx.save(); ctx.globalAlpha = clamp(a, 0, 1); text(ctx, s, x, y, { size: 38, weight: 700, color: c || P.ink, align: al || 'left', stroke: P.white, strokeWidth: 8 }); ctx.restore(); };
+    lbl('stomach', 990, 760, Lt.cwin('e3', 'the bubbles float', 0.5, null, 1.0), TUBEDARK);
+    lbl('air bubbles', 990, 545, Lt.cwin('e1', 'we swallow', 0.5, null, 0.8) * (1 - Lt.cwin('e4', 'and out of the mouth', 0.4)), P.blueDeep);
+    lbl('food tube', 360, 470, Lt.cwin('e4', 'it rushes up', 0.5, null, 0.6), TUBEDARK);
+    lbl('(esophagus)', 360, 515, Lt.cwin('e4', 'it rushes up', 0.5, null, 1.5), TUBEDARK);
+    lbl('tight ring', 360, 380, Lt.cwin('e5', "there's a tight ring", 0.5, null, 0.6), '#C2185B');
+    if (Lt.after('e5')) { const rp = Lt.cwin('e5', "there's a tight ring", 0.5, null, 0.6); if (rp > 0) { ctx.save(); ctx.globalAlpha = clamp(rp, 0, 1); L.arrow(ctx, 560, 395, 680, 400, '#C2185B', 8); ctx.restore(); } }
+    // e6: the balloon neck comparison on the right
+    const bal = Lt.cwin('e6', 'like the neck', 0.6, E.outBack, 0.2);
+    if (bal > 0) { ctx.save(); ctx.globalAlpha = clamp(bal, 0, 1); squeakBalloon(ctx, 1480, 560, 0.9 * clamp(bal, 0, 1.15), t, Lt.cwin('e6', 'like the neck', 0.3, null, 1.0) * (1 - Lt.win('test', 0, 0.2))); ctx.restore(); }
+    // Curie small in the corner
+    L.pip(ctx, { x: 1780, y: 920, s: 0.42, t, mood: Lt.cafter('e4', "that's a burp") && !Lt.after('e5') ? 'wow' : 'talk', armR: -0.6, armL: 0.6, lookX: -0.8, lookY: -0.4 });
+    const o = { size: 64, rot: -0.03 };
+    stk(ctx, 'we swallow air bubbles', 1300, 120, Lt.cwin('e1', 'we swallow', 0.5, null, 0.4), Lt.cwin('e1', 'gulping too fast', 0.25), Object.assign({ bg: GAS }, o));
+    stk(ctx, 'gulping too fast: extra air', 1300, 120, Lt.cwin('e1', 'gulping too fast', 0.5, null, 0.4), Lt.win('e2', 0, 0.25), Object.assign({ bg: P.white }, o));
+    stk(ctx, 'fizz = gas bubbles', 1300, 120, Lt.cwin('e2', 'fizzy drinks', 0.5, null, 0.6), Lt.win('e3', 0, 0.25), Object.assign({ bg: LEMON }, o));
+    stk(ctx, 'they float to the top', 1300, 120, Lt.cwin('e3', 'the bubbles float', 0.5, null, 0.6), Lt.win('e4', 0, 0.25), Object.assign({ bg: GAS }, o));
+    stk(ctx, 'PUSH! Up and out', 1300, 120, Lt.cwin('e4', 'then the extra gas', 0.5, null, 0.3), Lt.cwin('e4', 'it rushes up', 0.25), Object.assign({ bg: P.pink, size: 80 }, o));
+    stk(ctx, 'up the food tube', 1300, 120, Lt.cwin('e4', 'it rushes up', 0.5, null, 0.4), Lt.cwin('e4', "that's a burp", 0.25), Object.assign({ bg: TUBE }, o));
+    stk(ctx, 'Why the funny noise?', 1300, 120, Lt.cwin('e5', 'why the funny', 0.5), Lt.cwin('e6', 'the gas squeezes', 0.25), Object.assign({ bg: P.purple, color: P.white }, o));
+    stk(ctx, 'the tube top wobbles!', 1300, 120, Lt.cwin('e6', 'and the top of the tube', 0.5, null, 0.3), Lt.win('test', 0, 0.25), Object.assign({ bg: P.sun }, o));
+  }
+
+  // ======================= TEST: PLAIN vs FIZZY (test, t1) =======================
+  function testScene(ctx, t, Lt) {
+    lab(ctx); ctx.fillStyle = '#C9A26B'; ctx.fillRect(200, 760, 1520, 40); ctx.strokeStyle = P.ink; ctx.lineWidth = 6; ctx.strokeRect(200, 760, 1520, 40);
+    const a1 = Lt.cwin('test', 'one bottle of plain', 0.6, E.outBack, 0.2), a2 = Lt.cwin('test', 'one bottle of fizzy', 0.6, E.outBack, 0.2);
+    const bal = Lt.cwin('test', 'and a balloon', 0.6, null, 0.3);
+    const sw = Lt.cwin('t1', 'swirl', 2.0, null, 0.1);
+    const swirling = sw > 0 && sw < 1;
+    const wob = swirling ? Math.sin(t * 9) * 0.12 : 0;
+    const puff = 0.42 * Lt.cwin('t1', 'the fizzy one', 1.6, E.out, 0.2);
+    if (a1 > 0) bottleBalloon(ctx, 620, 760, 1.15 * clamp(a1, 0, 1.15), t, { label: 'plain water', wob, puff: 0, balloon: P.blue, noBalloon: bal <= 0 });
+    if (a2 > 0) bottleBalloon(ctx, 1300, 760, 1.15 * clamp(a2, 0, 1.15), t, { label: 'fizzy water', fizzy: true, wob: -wob, puff, swirl: swirling ? 1 : 0, balloon: P.red, noBalloon: bal <= 0 });
+    cross(ctx, 820, 260, 0.8, Lt.cwin('t1', 'balloon stays', 0.5, null, 0.5));
+    tick(ctx, 1520, 200, 0.8, Lt.cwin('t1', 'the fizzy one', 0.5, null, 1.2));
+    L.pip(ctx, { x: 960, y: 640, s: 0.6, t, mood: Lt.cafter('t1', 'the fizzy one', 1.0) ? 'wow' : 'talk', armR: -0.6, armL: 0.6, lookX: Lt.cafter('t1', 'the fizzy one') ? 0.8 : -0.8, lookY: -0.2 });
+    const o = { size: 64, rot: -0.03 };
+    stk(ctx, 'TEST!', 960, 120, Lt.cwin('test', 'scientists test it', 0.5), Lt.cwin('test', 'one bottle of plain', 0.25), Object.assign({ bg: P.blue, color: P.white, size: 96 }, o));
+    stk(ctx, 'a balloon on each', 960, 120, Lt.cwin('test', 'and a balloon', 0.5, null, 0.3), Lt.win('t1', 0, 0.25), Object.assign({ bg: P.white }, o));
+    stk(ctx, 'Swirl, swirl!', 960, 120, Lt.win('t1', 0.1, 0.5), Lt.cwin('t1', 'balloon stays', 0.25), Object.assign({ bg: P.sun }, o));
+    stk(ctx, 'plain: stays flat', 960, 120, Lt.cwin('t1', 'balloon stays', 0.5), Lt.cwin('t1', 'the fizzy one', 0.25), Object.assign({ bg: P.white }, o));
+    stk(ctx, 'fizzy: puffs up a little!', 960, 120, Lt.cwin('t1', 'the fizzy one', 0.5, null, 0.6), Lt.cwin('t1', 'the fizz really', 0.25), Object.assign({ bg: P.red, color: P.white }, o));
+    stk(ctx, 'the fizz is a gas!', 960, 120, Lt.cwin('t1', 'the fizz really', 0.5), 0, Object.assign({ bg: GAS, size: 72 }, o));
+  }
+
+  // ======================= REAL LIFE (r1 babies, r2 everybody burps) =======================
+  function grownUpBaby(ctx, x, y, s, t, pat) {
+    ctx.save(); ctx.translate(x, y); ctx.scale(s, s); ctx.lineJoin = 'round'; ctx.lineCap = 'round'; ctx.strokeStyle = P.ink; ctx.lineWidth = 6;
+    // grown-up: body, head
+    ctx.fillStyle = P.green; ctx.beginPath(); ctx.moveTo(-90, 0); ctx.lineTo(-70, -230); ctx.quadraticCurveTo(0, -260, 70, -230); ctx.lineTo(90, 0); ctx.closePath(); ctx.fill(); ctx.stroke();
+    circle(ctx, 0, -300, 70, SKIN[1], P.ink, 6); circle(ctx, -22, -306, 7, P.ink); circle(ctx, 24, -306, 7, P.ink); ctx.beginPath(); ctx.arc(0, -290, 20, 0.2 * PI, 0.8 * PI); ctx.stroke();
+    ctx.fillStyle = '#3A2A20'; ctx.beginPath(); ctx.arc(0, -310, 72, PI, TAU); ctx.fill();
+    // baby on the shoulder, with a blanket
+    ctx.save(); ctx.translate(80, -250); ctx.rotate(0.2);
+    ctx.fillStyle = '#BFE3FF'; roundRect(ctx, -50, -10, 100, 150, 40); ctx.fill(); ctx.stroke();
+    circle(ctx, 0, -40, 48, SKIN[0], P.ink, 6); ctx.beginPath(); ctx.arc(-14, -44, 8, 0.1 * PI, 0.9 * PI); ctx.stroke(); ctx.beginPath(); ctx.arc(14, -44, 8, 0.1 * PI, 0.9 * PI); ctx.stroke();
+    ctx.beginPath(); ctx.arc(0, -24, 10, 0.1 * PI, 0.9 * PI); ctx.stroke();
+    ctx.restore();
+    // patting hand
+    L.hand(ctx, 120, -180 + Math.abs(Math.sin(t * 6)) * pat * -24, 0.45, -0.3);
+    ctx.restore();
+  }
+  function realScene(ctx, t, Lt) {
+    L.park(ctx, t, { sunX: 1700, house: false, tree: false });
+    const part2 = Lt.after('r2');
+    if (!part2) {
+      grownUpBaby(ctx, 760, 820, 1.25, t, Lt.cwin('r1', 'grown-ups pat', 0.4));
+      const sb = Lt.cwin('r1', "so the baby's tummy", 0.6, E.outBack, 0.6);
+      if (sb > 0) { ctx.save(); ctx.translate(1180, 300); ctx.scale(sb, sb); L.cloud(ctx, 0, 0, 0.55, P.white, { outline: true }); text(ctx, 'burp!', 0, 10, { size: 52, weight: 700, color: P.sunDeep, stroke: P.ink, strokeWidth: 8 }); ctx.restore(); }
+      const o = { size: 64, rot: -0.03 };
+      stk(ctx, 'babies burp too', 1350, 520, Lt.win('r1', 0.2, 0.5), Lt.cwin('r1', 'grown-ups pat', 0.25), Object.assign({ bg: P.white }, o));
+      stk(ctx, 'pat, pat, pat', 1350, 520, Lt.cwin('r1', 'grown-ups pat', 0.5), Lt.cwin('r1', "so the baby's tummy", 0.25, null, 0.4), Object.assign({ bg: P.sun }, o));
+      stk(ctx, 'a happy tummy', 1350, 520, Lt.cwin('r1', "so the baby's tummy", 0.5, null, 0.4), Lt.win('r2', 0, 0.25), Object.assign({ bg: P.green, color: P.white }, o));
+    } else {
+      // everybody burps: a row of friends, each with a little burp cloud in turn; then Curie covers her mouth
+      const ev = Lt.cwin('r2', 'everybody burps', 1.1, null, 0.1);
+      const friends = [[420, SKIN[3], P.blue], [760, SKIN[0], P.purple], [1100, SKIN[2], P.sunDeep]];
+      friends.forEach(([x, sk, coat], i) => {
+        const pi = seg(ev, i * 0.25, i * 0.25 + 0.4);
+        ctx.save(); ctx.translate(x, 820 - Math.sin(PI * clamp(pi, 0, 1)) * 30); ctx.scale(0.95, 0.95);
+        ctx.fillStyle = coat; ctx.strokeStyle = P.ink; ctx.lineWidth = 6; ctx.beginPath(); ctx.moveTo(-70, 0); ctx.lineTo(-56, -180); ctx.quadraticCurveTo(0, -200, 56, -180); ctx.lineTo(70, 0); ctx.closePath(); ctx.fill(); ctx.stroke();
+        circle(ctx, 0, -240, 60, sk, P.ink, 6); circle(ctx, -18, -246, 6, P.ink); circle(ctx, 20, -246, 6, P.ink);
+        if (pi > 0 && seg(ev, i * 0.25, i * 0.25 + 0.48) < 1) ellipse(ctx, 0, -214, 12, 14, '#7A2E3B', P.ink, 4); else { ctx.beginPath(); ctx.arc(0, -228, 16, 0.2 * PI, 0.8 * PI); ctx.stroke(); }
+        ctx.restore();
+        if (pi > 0) { const k = E.outBack(clamp(pi, 0, 1)) * (1 - seg(ev, i * 0.25 + 0.3, i * 0.25 + 0.48)); if (k > 0) { ctx.save(); ctx.translate(x + 60, 470); ctx.scale(k, k); L.cloud(ctx, 0, 0, 0.32, P.white, { outline: true }); text(ctx, 'burp!', 0, 6, { size: 34, weight: 700, color: P.sunDeep, stroke: P.ink, strokeWidth: 6 }); ctx.restore(); } }
+      });
+      const cov = Lt.cafter('r2', 'cover your mouth');
+      L.pip(ctx, { x: 1480, y: 700, s: 1.0, t, mood: cov ? 'happy' : 'talk', armR: cov ? -2.3 : -0.4, armL: 0.6, lookX: -0.4 });
+      const o = { size: 66, rot: -0.03 };
+      stk(ctx, 'burps are normal', 960, 130, Lt.win('r2', 0.1, 0.5), Lt.cwin('r2', 'everybody burps', 0.25), Object.assign({ bg: P.white }, o));
+      stk(ctx, 'Everybody burps!', 960, 130, Lt.cwin('r2', 'everybody burps', 0.5), Lt.cwin('r2', 'slow sips', 0.25), Object.assign({ bg: P.sun, size: 80 }, o));
+      stk(ctx, 'slow sips = fewer burps', 960, 130, Lt.cwin('r2', 'slow sips', 0.5), Lt.cwin('r2', 'cover your mouth', 0.25), Object.assign({ bg: P.white }, o));
+      stk(ctx, 'cover your mouth', 960, 130, Lt.cwin('r2', 'cover your mouth', 0.5, null, 0.3), Lt.cwin('r2', 'excuse me', 0.25), Object.assign({ bg: P.white }, o));
+      stk(ctx, '"Excuse me!"', 960, 130, Lt.cwin('r2', 'excuse me', 0.5), 0, Object.assign({ bg: P.pink, size: 80 }, o));
+    }
+  }
+
+  // ======================= SAY IT, TRY AT HOME, OUTRO =======================
+  function sayScene(ctx, t, Lt) {
+    L.park(ctx, t, { sunX: 1700, house: false }); blanket(ctx); basket(ctx, 1420, 900, 1.0);
+    cup(ctx, 1150, 920, 0.7, t, { fill: 0.5 });
+    for (let i = 0; i < 6; i++) { const ph = (t * 0.35 + i / 6) % 1; circle(ctx, 1120 + Math.sin(t * 2 + i) * 30 + i * 12, 700 - ph * 520, 10 + (i % 3) * 6, 'rgba(191,231,255,0.8)', P.blueDeep, 3); }
+    L.pip(ctx, { x: 560, y: 680, s: 1.2, t, mood: 'talk', armR: -1.2 + 0.2 * Math.sin(t * 8), armL: -1.2 - 0.2 * Math.sin(t * 8), lookX: 0.4, lookY: -0.3 });
+    L.sayItSticker(ctx, 'Air goes in, burps come out!', Lt.cwin('sayit', 'air goes in', 0.8), t);
+  }
+  function tryScene(ctx, t, Lt) {
+    ctx.fillStyle = '#FFF1D6'; ctx.fillRect(0, 0, W, H); ctx.fillStyle = '#E8C793'; ctx.fillRect(0, 760, W, H - 760);
+    L.tryBanner(ctx, Lt.win('try1', 0, 0.6) * (1 - Lt.win('try2', 0, 0.4))); L.grownUpBadge(ctx, 180, 330, Lt.win('try1', 1.5, 0.6));
+    // blowing up the balloon (try1), then stretching the neck and squeaking (try2)
+    const blow = Lt.cwin('try1', 'blow up a', 1.6, E.out, 0.3);
+    const stretch = Lt.cwin('try2', 'stretch its neck', 0.8, E.inOut);
+    const sq = Lt.cwin('try2', 'and let the air', 0.4, null, 0.4) * (1 - Lt.win('bye', 0, 0.3));
+    if (stretch <= 0) {
+      if (blow > 0) { ctx.save(); ctx.translate(1100, 560); const r = lerp(30, 150, blow); ctx.fillStyle = P.pink; ctx.strokeStyle = P.ink; ctx.lineWidth = 7; ctx.beginPath(); ctx.ellipse(0, -r, r * 0.85, r, 0, 0, TAU); ctx.fill(); ctx.stroke(); roundRect(ctx, -16, -6, 32, 40, 8); ctx.fill(); ctx.stroke(); ctx.restore(); L.hand(ctx, 1100, 660, 0.6, 0); }
+    } else {
+      squeakBalloon(ctx, 1100, 520, 1.0, t, sq);
+      if (sq > 0) { const n = Lt.cwin('try2', 'and let the air', 0.4, null, 0.6); if (n > 0) { ctx.save(); ctx.globalAlpha = clamp(n, 0, 1); text(ctx, 'squeeeak!', 1100, 720, { size: 60, weight: 700, color: P.purple, stroke: P.white, strokeWidth: 10 }); ctx.restore(); } }
+    }
+    L.pip(ctx, { x: 520, y: 640, s: 0.8, t, mood: Lt.cafter('try2', 'can you hear') ? 'wow' : 'talk', armR: Lt.cafter('try2', 'can you hear') ? -1.9 : -0.4, armL: 0.6, lookX: 0.9, lookY: -0.1 });
+    stk(ctx, 'like a burp!', 1100, 120, Lt.cwin('try2', 'can you hear', 0.5, null, 0.6), 0, { bg: P.sun, size: 60, rot: -0.03 });
+    stk(ctx, 'balloons: only with a grown-up', 1100, 860 - 60, Lt.cwin('try1', 'blow up a', 0.5, null, 1.4), Lt.win('try2', 0, 0.3), { bg: P.white, size: 40, rot: 0 });
+  }
+  function outro(ctx, t, Lt, phrase) {
+    L.sky(ctx, { top: '#5FB8FF', bottom: '#CDEBFF' }); L.confetti(ctx, t, 22, 70); L.ground(ctx, 860);
+    const bb = Lt.cafter('bye', 'bye-bye', 0.95);  // the tiny burp after "Bye-bye!"
+    const tb = bb ? seg(t, Lt.chunk('bye', 'bye-bye') + 0.95, Lt.chunk('bye', 'bye-bye') + 1.5) : 0;
+    L.pip(ctx, { x: 560, y: 720 - Math.sin(PI * tb) * 40, s: 1.4, t, mood: bb ? (tb < 1 ? 'wow' : 'happy') : (Lt.cafter('bye', 'bye-bye') ? 'happy' : 'talk'), armR: bb ? -2.3 : -1.1 + Math.sin(t * 8) * 0.35, armL: 0.6, bulb: bb && tb < 1 ? 0.8 : 0 });
+    const lp = Lt.win('bye', 0, 0.6, E.outBack); ctx.save(); ctx.translate(1380, 340); ctx.scale(lp, lp); L.logo(ctx, 0, 0, 1, t); ctx.restore();
+    const pp = Lt.cwin('bye', 'remember', 0.6, E.outBack, 0.3);
+    if (pp > 0) { ctx.save(); ctx.translate(1340, 640); ctx.scale(pp, pp); ctx.font = '700 60px Fredoka'; const k = Math.min(1, 980 / ctx.measureText(phrase).width), size = Math.floor(60 * k); ctx.font = '700 ' + size + 'px Fredoka'; const w = ctx.measureText(phrase).width + 90; ctx.fillStyle = P.white; roundRect(ctx, -w / 2, -60, w, 120, 40); ctx.fill(); ctx.strokeStyle = P.ink; ctx.lineWidth = 8; ctx.stroke(); text(ctx, phrase, 0, 4, { size, weight: 700, color: P.ink }); ctx.restore(); }
+    const bp = Lt.cwin('bye', 'bye-bye', 0.6, E.outBack); if (bp > 0 && !bb) L.sticker(ctx, 'Bye-bye!', 1380, 790, bp, { bg: P.sun, rot: 0.05, size: 84 });
+    if (bb) { L.sticker(ctx, 'Oops! Excuse me!', 1380, 790, seg(tb, 0, 0.5), { bg: P.pink, rot: -0.04, size: 72 }); const k = seg(tb, 0, 0.4, E.outBack) * (1 - seg(tb, 0.7, 1)); if (k > 0) { ctx.save(); ctx.translate(850, 430); ctx.scale(k, k); L.cloud(ctx, 0, 0, 0.6, P.white, { outline: true }); text(ctx, 'burp', 0, 8, { size: 60, weight: 700, color: P.sunDeep, stroke: P.ink, strokeWidth: 6 }); ctx.restore(); } }
+  }
+
+  // ======================= TRY IT 1: FILL THE TUMMY =======================
+  // drag food and drinks to the mouth; each adds air bubbles (fizzy adds lots); when the stomach is full of gas, the gas is pushed up and out: BURP!
+  const F1 = [
+    { k: 'sandwich', gas: 0.2, home: { x: 260, y: 300 }, d: (c, x, y, s) => sandwich(c, x, y + 30, 0.7 * s) },
+    { k: 'water', gas: 0.2, home: { x: 260, y: 560 }, d: (c, x, y, s) => glassWater(c, x, y + 80, 0.75 * s) },
+    { k: 'fizzy', gas: 0.5, home: { x: 260, y: 820 }, d: (c, x, y, s, t) => cup(c, x, y + 90, 0.6 * s, t, { fill: 0.75 }) }
+  ];
+  const MOUTH1 = { x: 940 - 120 + 360, y: 300 };   // the tummy is drawn shifted right by +240 in Try it 1
+  function t1Draw(ctx, s, t) {
+    lab(ctx);
+    ctx.fillStyle = '#FFF7E6'; roundRect(ctx, 100, 140, 320, 840, 30); ctx.fill(); ctx.strokeStyle = P.ink; ctx.lineWidth = 6; ctx.stroke();
+    tummy(ctx, t, { gas: s.gas, squeeze: 0, rise: s.burp > 0 ? 1 - s.burp : 0, down: s.down, wob: s.burp > 0.3 ? 1 : 0, drink: s.drank }, 240, 0, 1);
+    F1.forEach((it, i) => { if (s.drag === i) return; it.d(ctx, it.home.x, it.home.y, 1, t); });
+    if (s.drag != null) F1[s.drag].d(ctx, s.dx, s.dy, 1.05, t);
+    // gas meter
+    ctx.fillStyle = P.white; roundRect(ctx, 1620, 200, 90, 560, 30); ctx.fill(); ctx.strokeStyle = P.ink; ctx.lineWidth = 6; ctx.stroke();
+    ctx.fillStyle = GAS; const h = 520 * clamp(s.gas, 0, 1); roundRect(ctx, 1640, 740 - h, 50, h, 20); ctx.fill();
+    text(ctx, 'gas', 1665, 800, { size: 40, weight: 700, color: P.blueDeep });
+    if (s.burp > 0) burpCloud(ctx, 1380, 200, 0.75, clamp(2 * (1 - s.burp), 0, 1), t);
+    if (!s.touched) { const bob = Math.sin(t * 4) * 6; text(ctx, 'drag food and drinks to the mouth', 960, 90 + bob, { size: 44, weight: 700, color: P.ink, stroke: P.white, strokeWidth: 9 }); L.arrow(ctx, 450, 300, 1110, 300, P.sunDeep, 10); }
+  }
+  // ======================= TRY IT 2: BALLOON ON A BOTTLE =======================
+  const B2 = [{ k: 'plain', x: 620, fizzy: false, col: P.blue }, { k: 'fizzy', x: 1300, fizzy: true, col: P.red }];
+  function t2Draw(ctx, s, t) {
+    lab(ctx); ctx.fillStyle = '#C9A26B'; ctx.fillRect(200, 860, 1520, 40); ctx.strokeStyle = P.ink; ctx.lineWidth = 6; ctx.strokeRect(200, 860, 1520, 40);
+    B2.forEach((b, i) => { const sw = s.swirl[i] > 0; bottleBalloon(ctx, b.x, 860, 1.2, t, { label: b.fizzy ? 'fizzy water' : 'plain water', fizzy: b.fizzy, wob: sw ? Math.sin(t * 10) * 0.12 * s.swirl[i] : 0, puff: s.puff[i], swirl: sw ? 1 : 0, balloon: b.col }); });
+    L.pip(ctx, { x: 960, y: 760, s: 0.55, t, mood: s.lastCue === 'puff' || s.lastCue === 'full' ? 'wow' : 'happy', armR: -0.6, armL: 0.6, lookX: s.lastTap === 1 ? 0.8 : s.lastTap === 0 ? -0.8 : 0, lookY: -0.3 });
+    if (!s.touched) { const bob = Math.sin(t * 4) * 6; text(ctx, 'tap a bottle to swirl it', 960, 120 + bob, { size: 46, weight: 700, color: P.ink, stroke: P.white, strokeWidth: 9 }); }
+  }
+
+  L.episodes.ep22 = {
+    id: 'ep22', num: 22, title: 'Why do we burp?', short: 'Burping', phrase: 'Air goes in, burps come out!',
+    thumb: {
+      big: 'BURP', small1: 'Why do we', small2: 'Oops! Excuse me!', pip: { x: 560, y: 760 },
+      bg: (ctx, t) => { L.park(ctx, 0.5, { sunX: 1750, house: false, tree: false }); blanket(ctx); cup(ctx, 1500, 900, 1.0, 0.5, { fill: 0.6 }); burpCloud(ctx, 1380, 440, 0.9, 1, 0); }
+    },
+    lines: [
+      { id: 'hello', text: "Hello, little scientists! I'm Curie. Welcome to the Little Scientists Club!", say: "Hello, little scientists! I'm *Curie*! Welcome... to the Little Scientists Club!", hold: 0.3 },
+      { id: 'q', text: "Today's big question: why do we burp?", say: "Today's big question... Why do we *burp*?", hold: 0.6 },
+      { id: 's1', text: "Picnic time! I'm sipping fizzy lemonade through a straw. Sip, sip, sip... GULP!", say: "*Picnic* time! I'm sipping fizzy lemonade... through a *straw*. Sip, sip, sip... *gulp*!", hold: 0.3 },
+      { id: 's2', text: 'Oops! Excuse me! That was a burp-a-saurus!', say: '{pause 1.3}Oops! Excuse me! That was a *burp*-a-saurus!', hold: 0.5 },
+      { id: 'guess', text: 'Where did that come from? Is there a tiny frog in my tummy?', say: 'Where did *that* come from? Is there a tiny *frog*... in my tummy?', hold: 0.6 },
+      { id: 'look', text: "No frog! Let's look inside a tummy.", say: "*No* frog! Let's look inside a *tummy*.", hold: 0.8 },
+      { id: 'e1', text: 'When we eat and drink, we swallow little bubbles of air. Gulping too fast swallows extra air.', say: 'When we eat and drink... we swallow little *bubbles* of air. Gulping too fast... swallows *extra* air.', hold: 0.4 },
+      { id: 'e2', text: 'And fizzy drinks are full of bubbles of gas.', say: 'And fizzy drinks... are *full* of bubbles of gas.', hold: 0.5 },
+      { id: 'e3', text: 'The bubbles float up to the top of the stomach, the bag where our food goes.', say: 'The bubbles float *up*, to the top of the *stomach*... the bag where our food goes.', hold: 0.4 },
+      { id: 'e4', text: "Then the extra gas is pushed up, out of the stomach. It rushes up the food tube, the esophagus, and out of the mouth. That's a burp!", say: "Then the extra gas is *pushed* up, out of the stomach. It rushes up the food tube, the esophagus... and out of the mouth! {pause 1.0} That's a *burp*!", hold: 1.2 },
+      { id: 'e5', text: "But why the funny noise? At the top of the food tube, there's a tight ring.", say: "But why the funny *noise*? At the top of the food tube... there's a tight *ring*.", hold: 0.3 },
+      { id: 'e6', text: 'The gas squeezes through, and the top of the tube wobbles, like the neck of a balloon!', say: 'The gas squeezes through... and the top of the tube *wobbles*... like the neck of a balloon!', hold: 1.4 },
+      { id: 'test', text: "Scientists test it! One bottle of plain water, one bottle of fizzy water, and a balloon on each.", say: "{sfx:ding}Scientists *test* it! One bottle of plain water... one bottle of fizzy water... and a balloon on each.", hold: 0.4 },
+      { id: 't1', text: 'Swirl, swirl! The plain water balloon stays flat. The fizzy one puffs up a little! The fizz really is a gas.', say: 'Swirl, swirl! The plain water balloon stays *flat*. The fizzy one... puffs up a *little*! The fizz really is a *gas*.', hold: 0.8 },
+      { id: 'r1', text: "Babies burp too! Grown-ups pat a baby's back to help the burp come out, so the baby's tummy feels better.", say: "Babies burp too! Grown-ups pat a baby's back, to help the burp come *out*... so the baby's tummy feels better.", hold: 0.5 },
+      { id: 'r2', text: 'Burps are normal. Everybody burps! Slow sips mean fewer burps. And when you burp, cover your mouth and say: excuse me!', say: 'Burps are *normal*. Everybody burps! Slow sips mean *fewer* burps. And when you burp... cover your mouth, and say, excuse me!', hold: 0.8 },
+      { id: 'sayit', text: 'Say it with me: Air goes in, burps come out!', say: 'Say it with me... {sfx:ding}Air goes in, burps come *out*! {pause 0.9} {slow}Air goes in... burps come out!{/slow}', hold: 1.4 },
+      { id: 'try1', text: "Let's try it at home! Ask a grown-up to blow up a balloon.", say: "{sfx:tada}Let's try it at home! Ask a grown-up... to blow up a *balloon*.", hold: 0.4 },
+      { id: 'try2', text: 'Stretch its neck and let the air squeak out slowly. Can you hear the wobble, just like a burp?', say: 'Stretch its neck... and let the air *squeak* out, slowly. {pause 1.0} Can you hear the wobble... just like a *burp*?', hold: 1.6 },
+      { id: 'bye', text: 'Great job, little scientist! Remember: air goes in, burps come out! See you next time at the Little Scientists Club! Bye-bye!', say: '{sfx:tada}Great job, little scientist! Remember... air goes in, burps come *out*! See you next time, at the Little Scientists Club! {hi}Bye-bye!{/hi}', hold: 1.6 }
+    ],
+    sfx: [
+      { line: 's2', offset: 0.05, name: 'burp', vol: 0.9 },
+      { line: 's2', chunk: 'that was a', offset: 1.4, name: 'boing', vol: 0.4 },
+      { line: 'guess', chunk: 'in my tummy', offset: 0.6, name: 'boing', vol: 0.35 },
+      { line: 'look', chunk: "let's look inside", offset: 0.6, name: 'zoom' },
+      { line: 'e1', chunk: 'we swallow', offset: 0.4, name: 'bubble', vol: 0.3 },
+      { line: 'e2', chunk: 'are full', offset: 0.6, name: 'bubble', vol: 0.4 },
+      { line: 'e4', chunk: "that's a burp", offset: 1.15, name: 'burp', vol: 0.7 },
+      { line: 'e6', chunk: 'like the neck', offset: 1.95, name: 'squeak', vol: 0.5 },
+      { line: 't1', chunk: 'swirl', offset: 0.2, name: 'swish', vol: 0.35 },
+      { line: 't1', chunk: 'the fizzy one', offset: 0.5, name: 'slide_up', vol: 0.4 },
+      { line: 'r2', chunk: 'everybody burps', offset: 1.0, name: 'honk', vol: 0.25 },
+      { line: 'try2', chunk: 'and let the air', offset: 2.95, name: 'squeak', vol: 0.5 },
+      { line: 'bye', chunk: 'bye-bye', offset: 0.95, name: 'burp', vol: 0.45 }
+    ],
+    scenes: [
+      { from: 'hello', draw: (ctx, t, Lt) => L.scenes.intro(ctx, t, Lt) },
+      { from: 'q', draw: (ctx, t, Lt) => L.scenes.question(ctx, t, Lt, (c, tt) => { cup(c, -40, 180, 0.9, tt, { fill: 0.7 }); burpCloud(c, 120, -60, 0.45, 1, tt); }, { word: 'Why?' }) },
+      { from: 's1', draw: (ctx, t, Lt) => picnicScene(ctx, t, Lt) },
+      { from: 'e1', transition: 'cut', draw: (ctx, t, Lt) => insideScene(ctx, t, Lt) },
+      { from: 'test', draw: (ctx, t, Lt) => testScene(ctx, t, Lt) },
+      { from: 'r1', draw: (ctx, t, Lt) => realScene(ctx, t, Lt) },
+      { from: 'sayit', draw: (ctx, t, Lt) => sayScene(ctx, t, Lt) },
+      { from: 'try1', draw: (ctx, t, Lt) => tryScene(ctx, t, Lt) },
+      { from: 'bye', draw: (ctx, t, Lt) => outro(ctx, t, Lt, 'Air goes in, burps come out!') }
+    ],
+    interactives: [
+      {
+        title: 'Fill the tummy',
+        hint: 'Drag the sandwich, the water and the fizzy drink to the mouth. Watch the air bubbles gather. What happens when the tummy is full of gas?',
+        init: s => { s.gas = 0; s.down = 0; s.burp = 0; s.drag = null; s.dx = 0; s.dy = 0; s.touched = false; s.drank = false; s.pend = null; s.lastCue = ''; s.saw = {}; s.burps = 0; },
+        update: (s, dt, cue) => {
+          if (s.down > 0) { s.down += dt * 0.8; if (s.down >= 1) s.down = 0; }
+          if (s.burp > 0) { s.burp -= dt * 0.6; if (s.burp <= 0) s.burp = 0; }
+          if (s.gas >= 1 && s.burp <= 0 && s.down === 0) { s.gas = 0; s.burp = 1; s.burps++; s.pend = 'burp'; if (L.sound) { try { L.sound.tone(110, 0.55, { type: 'sawtooth', vol: 0.25, glide: 70 }); } catch (e) { /* no sound */ } } }
+          if (s.pend) { const id = s.pend; s.pend = null; s.lastCue = id; cue(id); }
+        },
+        draw: (ctx, s, t) => t1Draw(ctx, s, t),
+        pointer: (s, type, x, y) => {
+          if (type === 'down') { for (let i = 0; i < F1.length; i++) { const h = F1[i].home; if (Math.hypot(x - h.x, y - h.y) < 110) { s.drag = i; s.dx = x; s.dy = y; s.touched = true; return; } } }
+          if (type === 'move' && s.drag != null) { s.dx = clamp(x, 100, W - 100); s.dy = clamp(y, 100, H - 100); }
+          if (type === 'up' && s.drag != null) {
+            const it = F1[s.drag]; s.drag = null;
+            if (Math.hypot(s.dx - MOUTH1.x, s.dy - MOUTH1.y) < 220 && s.burp <= 0) {
+              s.gas = Math.min(1, s.gas + it.gas); s.down = 0.01; if (it.k !== 'sandwich') s.drank = true;
+              const id = it.k === 'fizzy' ? 'fizz' : 'bubbles'; if (!s.saw[id]) { s.saw[id] = true; s.pend = id; }
+              if (L.sound) { try { L.sound.tone(it.k === 'fizzy' ? 900 : 500, 0.12, { type: 'triangle', vol: 0.2 }); } catch (e) { /* no sound */ } }
+            }
+          }
+        },
+        cues: {
+          bubbles: 'Gulp! Some little air bubbles went down too.',
+          fizz: 'Fizzy drinks fill the tummy with gas bubbles!',
+          burp: 'Oops! Out comes a burp. Excuse me!'
+        }
+      },
+      {
+        title: 'Balloon on a bottle',
+        hint: 'Tap each bottle to swirl it. Which balloon puffs up a little: the plain water or the fizzy water?',
+        init: s => { s.swirl = [0, 0]; s.puff = [0, 0]; s.touched = false; s.pend = null; s.lastCue = ''; s.saw = {}; s.lastTap = -1; },
+        update: (s, dt, cue) => {
+          for (let i = 0; i < 2; i++) { if (s.swirl[i] > 0) { s.swirl[i] = Math.max(0, s.swirl[i] - dt * 0.7); if (B2[i].fizzy) s.puff[i] = Math.min(0.5, s.puff[i] + dt * 0.18); } }
+          if (s.puff[1] >= 0.5 && !s.saw.full) { s.saw.full = true; s.pend = 'full'; }
+          if (s.pend) { const id = s.pend; s.pend = null; s.lastCue = id; cue(id); }
+        },
+        draw: (ctx, s, t) => t2Draw(ctx, s, t),
+        pointer: (s, type, x, y) => {
+          if (type !== 'down') return;
+          for (let i = 0; i < 2; i++) { const b = B2[i]; if (Math.abs(x - b.x) < 170 && y > 300 && y < 960) {
+            s.touched = true; s.lastTap = i; s.swirl[i] = 1;
+            const id = b.fizzy ? 'puff' : 'flat'; if (!s.saw[id]) { s.saw[id] = true; s.pend = id; }
+            if (L.sound) { try { L.sound.noise(0.4, 0.15, { lp: 3000, hp: 500 }); } catch (e) { /* no sound */ } }
+            return; } }
+        },
+        cues: {
+          flat: 'Plain water has no fizz, so its balloon stays flat.',
+          puff: 'Fizzy water! Its gas puffs up the balloon a little.',
+          full: 'See? The fizz is a gas. In a tummy, it comes out as a burp.'
+        }
+      }
+    ]
+  };
+})(typeof window !== 'undefined' ? window : globalThis);
+
+/* Episode 23 — Why does popcorn pop?  (steam, pressure, the popcorn kernel)
+   Story: movie night. A grown-up makes popcorn in a pan while Curie watches from a safe spot. Pop, pop! One flake jumps
+   out and bonks Curie on the head (it stays there like a hat), she catches another in her mouth. Silly guess: tiny
+   jumping beans on tiny trampolines? Hmm, maybe not! -> look inside a kernel: a hard shell, soft starch (its food store)
+   and a tiny drop of water. Heat turns the water into steam; steam needs much more room and pushes on the shell; the
+   strong shell holds it in, so the push (pressure) gets bigger; at about 180 degrees the shell bursts, the starch puffs
+   out into white fluff and sets; the puff pushes on the pan like a tiny leg and the popcorn jumps.
+   Test: a kernel with a crack in its shell next to a good one: the good one pops, the cracked one hisses (the steam
+   leaks out) and never pops. Wow fact: the oldest popcorn ever found is about 6,700 years old (Peru). Popping needs a hot
+   pan: a grown-up job. Try at home (no heat): blow into a paper bag, twist it shut, clap it: pop!
+   Sources (checked 4 Nov 2026): Science Buddies, "Explore the POP in popcorn" (about 14% water; the hard hull traps the
+   steam; pops at about 180 C; the starch gelatinises and puffs out; a cracked hull or too little water: no pop; the
+   sound comes from the escaping steam); E. Virot and A. Ponomarenko, "Popcorn: critical temperature, jump and sound",
+   J. R. Soc. Interface (2015), via Science News Explores "How popcorn got its pop" (the starch "leg" makes it jump);
+   Guinness World Records, "Earliest popcorn" (about 6,700 years old, Paredones and Huaca Prieta, Peru).
+   Humour (Ram, 4 Nov 2026: make 5-6 year olds laugh): the bonk and the popcorn hat, the catch (munch), the jumping-bean
+   guess, "Pop-tastic!", slide whistles for the jump and the no-pop.
+   Try it 1 "Heat a kernel" (drag the heat up and watch steam, pressure and the pop);
+   Try it 2 "Which will pop?" (a good kernel, a cracked one and a dried-out one). */
+(function (global) {
+  const L = global.LSC; const LSC = L; const { W, H, P, E, seg, clamp, lerp, circle, ellipse, text, roundRect } = L;
+  L.episodes = L.episodes || {};
+  const PI = Math.PI, TAU = PI * 2;
+  const stk = (ctx, s, x, y, pIn, pOut, o) => L.sticker(ctx, s, x, y, pIn * (1 - (pOut || 0)), o);
+  const SHELL = '#F2A93B', SHELL_D = '#B5651D', STARCH = '#FFF3C4', FLUFF = '#FFFDF4', STEAM = 'rgba(255,255,255,0.92)';
+  const SKIN = ['#F5CFAE', '#D9A57E', '#B97E57', '#8D5A3B'];
+
+  // ---------- props ----------
+  // kernel outline (point at the bottom, where it grew on the cob), centred on (0,0), about 520 x 630 at s = 1
+  function kPath(ctx, k) {
+    k = k || 1; ctx.beginPath(); ctx.moveTo(0, -330 * k);
+    ctx.bezierCurveTo(200 * k, -330 * k, 270 * k, -180 * k, 260 * k, -40 * k); ctx.bezierCurveTo(250 * k, 120 * k, 90 * k, 260 * k, 0, 300 * k);
+    ctx.bezierCurveTo(-90 * k, 260 * k, -250 * k, 120 * k, -260 * k, -40 * k); ctx.bezierCurveTo(-270 * k, -180 * k, -200 * k, -330 * k, 0, -330 * k); ctx.closePath();
+  }
+  // a whole kernel (outside view). o: crack (0..1), dry (shrivelled, pale), glow (heat 0..1), shake
+  function kernel(ctx, x, y, s, o) {
+    o = o || {}; ctx.save(); ctx.translate(x, y); if (o.shake) ctx.translate(Math.sin(o.t * 47) * o.shake * 6, Math.cos(o.t * 41) * o.shake * 4); ctx.scale(s, s);
+    if (o.glow > 0) { ctx.save(); ctx.globalAlpha = 0.5 * o.glow; ctx.fillStyle = '#FF7A3D'; ctx.beginPath(); ctx.ellipse(0, 0, 330, 380, 0, 0, TAU); ctx.fill(); ctx.restore(); }
+    kPath(ctx); ctx.fillStyle = o.dry ? '#E8C27A' : SHELL; ctx.fill(); ctx.lineWidth = 22; ctx.strokeStyle = SHELL_D; ctx.lineJoin = 'round'; ctx.stroke();
+    // the white tip cap where it grew on the cob, and a shine
+    ctx.fillStyle = '#FFF1D0'; ctx.beginPath(); ctx.moveTo(-60, 230); ctx.quadraticCurveTo(0, 200, 60, 230); ctx.lineTo(0, 300); ctx.closePath(); ctx.fill(); ctx.lineWidth = 10; ctx.stroke();
+    ctx.fillStyle = 'rgba(255,255,255,0.45)'; ctx.beginPath(); ctx.ellipse(-110, -170, 50, 90, -0.5, 0, TAU); ctx.fill();
+    if (o.dry) { ctx.strokeStyle = 'rgba(150,90,30,0.7)'; ctx.lineWidth = 12; ctx.lineCap = 'round'; for (const xx of [-120, -30, 60, 140]) { ctx.beginPath(); for (let k = 0; k <= 8; k++) { const yy = -200 + k * 45, xw = xx + (k % 2 ? 14 : -14); k ? ctx.lineTo(xw, yy) : ctx.moveTo(xw, yy); } ctx.stroke(); } }
+    if (o.crack > 0) { ctx.strokeStyle = P.ink; ctx.lineWidth = 16; ctx.lineCap = 'round'; ctx.lineJoin = 'round'; const c = clamp(o.crack, 0, 1); const pts = [[120, -260], [60, -170], [130, -100], [50, -20], [110, 50]]; ctx.beginPath(); ctx.moveTo(pts[0][0], pts[0][1]); for (let i = 1; i < pts.length; i++) { if ((i - 1) / (pts.length - 1) > c) break; ctx.lineTo(pts[i][0], pts[i][1]); } ctx.stroke(); }
+    ctx.restore();
+  }
+  // a popped flake: a fluffy white cloud with a few bits of shell; s = 1 is about 140 px across
+  function flake(ctx, x, y, s, rot) {
+    ctx.save(); ctx.translate(x, y); ctx.rotate(rot || 0); ctx.scale(s, s); ctx.lineJoin = 'round';
+    const B = [[0, 0, 42], [-40, -18, 30], [38, -22, 32], [-22, 32, 28], [30, 30, 27], [2, -46, 26], [-52, 20, 22], [54, 8, 22]];
+    for (const [bx, by, r] of B) circle(ctx, bx, by, r + 5, P.ink);
+    for (const [bx, by, r] of B) circle(ctx, bx, by, r, FLUFF);
+    ctx.fillStyle = 'rgba(255,214,140,0.55)'; for (const [bx, by, r] of B.slice(1, 5)) { ctx.beginPath(); ctx.arc(bx + r * 0.2, by + r * 0.25, r * 0.5, 0, TAU); ctx.fill(); }
+    ctx.fillStyle = SHELL; ctx.strokeStyle = SHELL_D; ctx.lineWidth = 4; ctx.beginPath(); ctx.moveTo(-10, 34); ctx.quadraticCurveTo(4, 56, 22, 40); ctx.quadraticCurveTo(8, 34, -10, 34); ctx.fill(); ctx.stroke();
+    ctx.restore();
+  }
+  // the inside of a kernel (cut-away), centred on (x, y). o: water 0..1 (drop size), steam 0..1, push 0..1 (arrows), shake
+  function cutKernel(ctx, x, y, s, t, o) {
+    o = o || {}; ctx.save(); ctx.translate(x, y); const sh = o.shake || 0; if (sh) ctx.translate(Math.sin(t * 53) * sh * 7, Math.cos(t * 47) * sh * 5); ctx.scale(s, s);
+    kPath(ctx); ctx.fillStyle = STARCH; ctx.fill();
+    // starch grains (little rounded cells)
+    ctx.save(); kPath(ctx, 0.93); ctx.clip(); ctx.strokeStyle = 'rgba(214,180,90,0.35)'; ctx.lineWidth = 5; for (let gy = -300; gy < 300; gy += 70) for (let gx = -260; gx < 260; gx += 80) { ctx.beginPath(); ctx.ellipse(gx + (gy / 70 % 2 ? 40 : 0), gy, 34, 26, 0, 0, TAU); ctx.stroke(); }
+    // steam: puffs that grow and fill the kernel
+    const st = clamp(o.steam || 0, 0, 1);
+    if (st > 0) { const r = L.rng(7); for (let i = 0; i < 16; i++) { const ang = r() * TAU, d = r() * 210 * st, rr = (26 + r() * 30) * (0.3 + st * 1.1); const bx = Math.cos(ang) * d, by = Math.sin(ang) * d * 1.1 + Math.sin(t * 3 + i) * 6; ctx.fillStyle = STEAM; ctx.beginPath(); ctx.arc(bx, by, rr, 0, TAU); ctx.fill(); ctx.strokeStyle = 'rgba(150,170,200,0.7)'; ctx.lineWidth = 4; ctx.stroke(); } }
+    ctx.restore();
+    // the drop of water
+    const wd = clamp(o.water == null ? 1 : o.water, 0, 1);
+    if (wd > 0) { ctx.save(); ctx.scale(wd, wd); ctx.fillStyle = P.water; ctx.strokeStyle = P.waterDeep; ctx.lineWidth = 7; ctx.beginPath(); ctx.moveTo(0, -70); ctx.quadraticCurveTo(48, -6, 40, 26); ctx.arc(0, 26, 40, 0, PI); ctx.quadraticCurveTo(-48, -6, 0, -70); ctx.closePath(); ctx.fill(); ctx.stroke(); ctx.fillStyle = 'rgba(255,255,255,0.7)'; ctx.beginPath(); ctx.ellipse(-14, 12, 9, 15, -0.3, 0, TAU); ctx.fill(); ctx.restore(); }
+    // the hard shell
+    kPath(ctx); ctx.lineWidth = 34; ctx.strokeStyle = SHELL; ctx.lineJoin = 'round'; ctx.stroke(); kPath(ctx, 1.03); ctx.lineWidth = 8; ctx.strokeStyle = SHELL_D; ctx.stroke();
+    const cr = clamp(o.crack || 0, 0, 1);
+    if (cr > 0) { ctx.save(); ctx.strokeStyle = P.ink; ctx.lineWidth = 12; ctx.lineCap = 'round'; ctx.lineJoin = 'round'; for (const pts of [[[150, -270], [110, -210], [170, -160], [130, -100]], [[-160, -230], [-110, -180], [-170, -130]]]) { ctx.beginPath(); ctx.moveTo(pts[0][0], pts[0][1]); for (let i = 1; i < pts.length; i++) { if ((i - 1) / (pts.length - 1) > cr) break; ctx.lineTo(pts[i][0], pts[i][1]); } ctx.stroke(); } ctx.restore(); }
+    // pushing arrows
+    const pu = clamp(o.push || 0, 0, 1);
+    if (pu > 0) { for (let i = 0; i < 8; i++) { const a = i / 8 * TAU + 0.2, len = 60 + 50 * pu + Math.sin(t * 6 + i) * 8; const r0 = 150, cx = Math.cos(a), cy = Math.sin(a) * 1.15; ctx.save(); ctx.globalAlpha = clamp(pu * 2, 0, 1); L.arrow(ctx, cx * r0, cy * r0, cx * (r0 + len), cy * (r0 + len), P.red, 14); ctx.restore(); } }
+    ctx.restore();
+  }
+  // a pan (side view), rim at (x, y); w wide. o.heat 0..1 shows a glow and heat waves under it
+  function pan(ctx, x, y, w, t, o) {
+    o = o || {}; const h = 70;
+    if (o.heat > 0) { ctx.save(); ctx.globalAlpha = clamp(o.heat, 0, 1); ctx.fillStyle = 'rgba(255,110,60,0.55)'; ctx.beginPath(); ctx.ellipse(x, y + h + 26, w * 0.45, 26, 0, 0, TAU); ctx.fill(); ctx.restore(); }
+    ctx.save(); ctx.fillStyle = '#5A6072'; ctx.strokeStyle = P.ink; ctx.lineWidth = 7; ctx.lineJoin = 'round';
+    ctx.beginPath(); ctx.moveTo(x - w / 2, y); ctx.lineTo(x - w / 2 + 26, y + h); ctx.lineTo(x + w / 2 - 26, y + h); ctx.lineTo(x + w / 2, y); ctx.closePath(); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = '#3E4354'; roundRect(ctx, x + w / 2 - 6, y + 14, w * 0.42, 22, 11); ctx.fill(); ctx.stroke();
+    ctx.restore();
+  }
+  // a grown-up (as in ep21's person()); (x, y) between the feet, about 330 * s tall
+  function person(ctx, x, y, s, t, o) {
+    o = o || {}; const bob = Math.sin(t * 2.2 + x * 0.013) * 3;
+    ctx.save(); ctx.translate(x, y + bob); ctx.scale(s * (o.flip ? -1 : 1), s); ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+    ellipse(ctx, -24, -8, 24, 11, P.ink); ellipse(ctx, 24, -8, 24, 11, P.ink);
+    ctx.fillStyle = '#2E3140'; ctx.fillRect(-34, -70, 22, 62); ctx.fillRect(12, -70, 22, 62);
+    const coat = o.coat || P.green; ctx.fillStyle = coat; ctx.strokeStyle = P.ink; ctx.lineWidth = 6;
+    ctx.beginPath(); ctx.moveTo(-58, -60); ctx.lineTo(-46, -168); ctx.quadraticCurveTo(0, -186, 46, -168); ctx.lineTo(58, -60); ctx.quadraticCurveTo(0, -48, -58, -60); ctx.closePath(); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = P.white; roundRect(ctx, -34, -150, 68, 86, 12); ctx.fill(); ctx.stroke();   // apron
+    const arm = (sx, ang, mitt) => { ctx.save(); ctx.translate(sx * 44, -158); ctx.rotate(sx * ang); ctx.fillStyle = coat; roundRect(ctx, -13, 0, 26, 96, 13); ctx.fill(); ctx.stroke(); if (mitt) { ctx.fillStyle = P.red; roundRect(ctx, -20, 86, 40, 38, 14); ctx.fill(); ctx.stroke(); } else circle(ctx, 0, 100, 14, o.skin || SKIN[1], P.ink, 4); ctx.restore(); };
+    arm(-1, o.armL != null ? o.armL : 0.15, o.mitt); arm(1, o.point != null ? o.point : -0.15, o.mitt);
+    circle(ctx, 0, -222, 52, o.skin || SKIN[1], P.ink, 6);
+    ctx.fillStyle = '#4A3226'; ctx.beginPath(); ctx.arc(0, -232, 54, PI * 1.05, TAU * 0.99); ctx.closePath(); ctx.fill();
+    for (const sx of [-1, 1]) circle(ctx, sx * 18, -222, 7, P.ink);
+    ctx.strokeStyle = P.ink; ctx.lineWidth = 5;
+    if (o.mood === 'talk' && Math.sin(t * 14) > 0) ellipse(ctx, 0, -194, 11, 8, P.ink); else { ctx.beginPath(); ctx.arc(0, -202, 15, 0.2 * PI, 0.8 * PI); ctx.stroke(); }
+    ctx.restore();
+  }
+  // a flight along an arc: 0..1 -> {x, y}
+  const arc = (x0, y0, x1, y1, hgt, p) => ({ x: lerp(x0, x1, p), y: lerp(y0, y1, p) - Math.sin(PI * p) * hgt });
+  function lab(ctx) { ctx.fillStyle = '#FFF6E2'; ctx.fillRect(0, 0, W, H); ctx.strokeStyle = 'rgba(242,169,59,0.10)'; ctx.lineWidth = 3; for (let x = 0; x <= W; x += 120) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke(); } for (let y = 0; y <= H; y += 120) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke(); } }
+  function kitchenBg(ctx, t) {
+    ctx.fillStyle = '#FFE9C7'; ctx.fillRect(0, 0, W, H);
+    ctx.fillStyle = '#F5D7A8'; for (let x = 0; x < W; x += 96) for (let y = 0; y < 560; y += 96) { if (((x + y) / 96) % 2 === 0) ctx.fillRect(x, y, 96, 96); }
+    // window: night sky (movie night)
+    ctx.fillStyle = '#2B3A6B'; roundRect(ctx, 120, 90, 420, 300, 20); ctx.fill(); ctx.strokeStyle = P.ink; ctx.lineWidth = 8; ctx.stroke(); ctx.beginPath(); ctx.moveTo(330, 90); ctx.lineTo(330, 390); ctx.stroke();
+    for (const [sx, sy] of [[180, 150], [270, 260], [420, 140], [490, 300], [380, 220]]) L.star(ctx, sx, sy, 12 + 3 * Math.sin(t * 2 + sx), P.sun, 0);
+    circle(ctx, 460, 190, 38, '#FFF4C2', P.ink, 4);
+    // counter and the stove
+    ctx.fillStyle = '#C98F5B'; ctx.fillRect(820, 610, 1100, 300); ctx.strokeStyle = P.ink; ctx.lineWidth = 7; ctx.strokeRect(820, 610, 1110, 300);
+    ctx.fillStyle = '#E7E9EF'; ctx.fillRect(800, 580, 1140, 36); ctx.strokeRect(800, 580, 1140, 36);
+    ctx.fillStyle = '#3E4354'; roundRect(ctx, 1080, 560, 340, 26, 10); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = '#E8C793'; ctx.fillRect(0, 900, W, H - 900);
+  }
+  const PANX = 1250, PANY = 470;
+  // Curie's head top for a scale-s Curie at (x, y)
+  const headTop = (x, y, s) => ({ x: x, y: y - 100 * s });
+
+  // ======================= KITCHEN: s1, s2, s3, guess, look =======================
+  const CU = { x: 430, y: 700, s: 1.05 };
+  // a glass lid on the pan (rim at x, y); rattle 0..1 makes it jiggle while the popcorn pops
+  function lid(ctx, x, y, w, t, rattle) {
+    const dy = rattle > 0 ? -Math.abs(Math.sin(t * 23)) * 7 * rattle : 0;
+    ctx.save(); ctx.translate(x, y + dy); ctx.fillStyle = 'rgba(200,230,255,0.35)'; ctx.strokeStyle = P.ink; ctx.lineWidth = 6;
+    ctx.beginPath(); ctx.moveTo(-w / 2, 0); ctx.quadraticCurveTo(-w / 2, -150, 0, -150); ctx.quadraticCurveTo(w / 2, -150, w / 2, 0); ctx.closePath(); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = '#3E4354'; roundRect(ctx, -24, -176, 48, 30, 10); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = 'rgba(255,255,255,0.55)'; ctx.beginPath(); ctx.ellipse(-w * 0.27, -88, 14, 42, -0.5, 0, TAU); ctx.fill();
+    ctx.restore();
+  }
+  const domeClip = (ctx, x, y, w) => { ctx.beginPath(); ctx.moveTo(x - w / 2, y + 4); ctx.quadraticCurveTo(x - w / 2, y - 150, x, y - 150); ctx.quadraticCurveTo(x + w / 2, y - 150, x + w / 2, y + 4); ctx.closePath(); ctx.clip(); };
+  function kitchenScene(ctx, t, Lt) {
+    kitchenBg(ctx, t);
+    const heat = Lt.win('s1', 0.4, 1.0) * (1 - Lt.win('s3', 0, 0.8));
+    pan(ctx, PANX, PANY, 380, t, { heat });
+    if (heat > 0.05) L.heatWaves(ctx, PANX, PANY + 140, t, 3, 50, 'rgba(255,110,60,' + (0.6 * heat).toFixed(2) + ')');
+    // popcorn pops INSIDE the covered pan (s2); the lid stays on and jiggles
+    const popping = t > Lt.start('s2') && t < Lt.end('s2') + 0.4;
+    const heap = seg(t, Lt.start('s2'), Lt.end('s2'), E.out), give = Lt.win('s3', 0.1, 1.0, E.inOut);
+    ctx.save(); domeClip(ctx, PANX, PANY, 360);
+    if (give < 1) for (let i = 0; i < Math.floor(heap * 9); i++) flake(ctx, PANX - 120 + (i % 5) * 60, PANY - 6 - Math.floor(i / 5) * 34, 0.5, i * 0.7);
+    if (popping) { const r = L.rng(23), p0 = Lt.start('s2'); for (let k = 0; k < 30; k++) { const t0 = p0 + k * 0.3 + r() * 0.15, dx = (r() - 0.5) * 220, hh = 60 + r() * 50; const q = (t - t0) / 0.6; if (q > 0 && q < 1) { const pt = arc(PANX + dx * 0.5, PANY - 20, PANX + dx * 0.7, PANY - 20, hh, q); flake(ctx, pt.x, pt.y, 0.42, q * 6 + k); } } }
+    ctx.restore();
+    lid(ctx, PANX, PANY, 360, t, popping ? 1 : 0);
+    // the grown-up at the stove
+    person(ctx, 1620, 900, 1.15, t, { flip: true, mood: Lt.after('s3') && !Lt.cafter('s3', 'toss one up') ? 'talk' : 'happy', point: -0.9, mitt: true });
+    // safe spot mat
+    ctx.fillStyle = 'rgba(91,194,107,0.35)'; ctx.beginPath(); ctx.ellipse(CU.x, CU.y + 110, 220, 40, 0, 0, TAU); ctx.fill(); ctx.strokeStyle = P.green; ctx.lineWidth = 6; ctx.setLineDash([16, 10]); ctx.stroke(); ctx.setLineDash([]);
+    // s3: a bowl of cooled popcorn comes to Curie
+    const BW = { x: CU.x + 250, y: CU.y + 80 };
+    if (give > 0) bowl(ctx, lerp(PANX - 60, BW.x, give), lerp(PANY + 30, BW.y, give) - Math.sin(PI * give) * 120, 0.42);
+    const head = headTop(CU.x, CU.y, CU.s), hand = { x: CU.x + 150, y: CU.y - 20 };
+    // toss 1: up... and down onto her head (bonk), where it stays as a hat
+    const l1 = Lt.chunk('s3', 'toss one up') + 0.3, hit = Lt.chunk('s3', 'oops') - 0.45;
+    const bump = t > hit ? clamp(1 - (t - hit) / 0.45, 0, 1) : 0;
+    const squash = bump * 0.12 * Math.sin((t - hit) * 30);
+    // toss 2 (s4): into her mouth
+    const l2 = Lt.chunk('s4', 'one more try') + 0.5, c2 = Lt.chunk('s4', 'got it') + 0.05;
+    const munching = t > Lt.chunk('s4', 'yummy') && t < Lt.chunk('s4', 'yummy') + 1.1;
+    const flying = (t > l1 && t < hit) || (t > l2 && t < c2);
+    const mood = munching ? 'happy' : flying ? 'wow' : bump > 0 ? 'wow' : Lt.after('guess') && !Lt.cafter('look', "let's look inside") ? 'think' : Lt.cafter('s2', 'pop, pop, pop') && !Lt.after('s3') ? 'wow' : 'talk';
+    const throwing = (t > l1 - 0.3 && t < l1 + 0.2) || (t > l2 - 0.3 && t < l2 + 0.2);
+    L.pip(ctx, { x: CU.x, y: CU.y + (munching ? Math.abs(Math.sin(t * 12)) * 4 : 0), s: CU.s, t, mood, squash, armR: throwing ? -1.3 : -0.4, armL: bump > 0 ? -1.2 : 0.6, lookX: flying ? 0.3 : 0.8, lookY: flying ? -0.9 : 0 });
+    if (t > l1) {
+      if (t < hit) { const q = clamp((t - l1) / (hit - l1), 0, 1); const pt = arc(hand.x, hand.y, head.x + 10, head.y - 40, 430, q); flake(ctx, pt.x, pt.y, 0.6, q * 9); }
+      else { const b = clamp((t - hit) / 0.5, 0, 1); const hx = lerp(head.x + 10, head.x - 6, b), hy = head.y - 30 - Math.sin(PI * b) * 60 * (1 - b * 0.4); flake(ctx, hx, hy, 0.6, lerp(0.8, -0.15, b)); }
+      if (bump > 0) for (let i = 0; i < 4; i++) { const a2 = t * 6 + i * TAU / 4; L.star(ctx, head.x + Math.cos(a2) * 120, head.y - 60 + Math.sin(a2) * 30, 18, P.sun, a2); }
+    }
+    if (t > l2 && t < c2 + 0.05) { const q = clamp((t - l2) / (c2 - l2), 0, 1); const pt = arc(hand.x, hand.y, CU.x + 5, CU.y + 40, 380, q); if (q < 0.97) flake(ctx, pt.x, pt.y, 0.45, q * 7); }
+    // the silly guess: tiny jumping beans on tiny trampolines, inside a kernel
+    const gb = Lt.cwin('guess', 'are there tiny', 0.5) * (1 - Lt.cwin('look', 'hmm, maybe not', 0.35, null, 0.5));
+    if (gb > 0) {
+      L.thoughtBubble(ctx, 930, 280, 600, 380, gb, -1);
+      if (gb > 0.6) {
+        ctx.save(); ctx.translate(930, 262); ctx.globalAlpha = clamp((gb - 0.6) / 0.4, 0, 1);
+        ctx.save(); ctx.scale(1.25, 0.9); kPath(ctx, 0.48); ctx.fillStyle = STARCH; ctx.fill(); ctx.lineWidth = 16; ctx.strokeStyle = SHELL; ctx.stroke(); ctx.lineWidth = 5; ctx.strokeStyle = SHELL_D; ctx.stroke(); ctx.restore();
+        for (let i = 0; i < 3; i++) {
+          const bx = -100 + i * 100, ph = t * 6 + i * 2.1, jy = -Math.abs(Math.sin(ph)) * 90;
+          ctx.strokeStyle = P.ink; ctx.lineWidth = 5; ctx.beginPath(); ctx.moveTo(bx - 38, 118); ctx.quadraticCurveTo(bx, 118 + (jy > -10 ? 16 : 0), bx + 38, 118); ctx.stroke(); ctx.beginPath(); ctx.moveTo(bx - 32, 118); ctx.lineTo(bx - 38, 140); ctx.moveTo(bx + 32, 118); ctx.lineTo(bx + 38, 140); ctx.stroke();
+          const by = 82 + jy; ctx.strokeStyle = '#7A3E1D'; ctx.lineWidth = 5; ctx.beginPath(); ctx.moveTo(bx - 20, by); ctx.lineTo(bx - 36, by - 20 + Math.sin(ph * 2) * 8); ctx.moveTo(bx + 20, by); ctx.lineTo(bx + 36, by - 20 - Math.sin(ph * 2) * 8); ctx.stroke();
+          ellipse(ctx, bx, by, 22, 30, '#A0522D', P.ink, 4); circle(ctx, bx - 8, by - 8, 5, P.white); circle(ctx, bx + 8, by - 8, 5, P.white); circle(ctx, bx - 8, by - 7, 2.5, P.ink); circle(ctx, bx + 8, by - 7, 2.5, P.ink); ctx.strokeStyle = P.white; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(bx, by + 4, 8, 0.1 * PI, 0.9 * PI); ctx.stroke();
+        }
+        ctx.restore();
+      }
+    }
+    // stickers
+    const o = { size: 70, rot: -0.04 };
+    stk(ctx, 'Movie night!', 960, 200, Lt.win('s1', 0.1, 0.5), Lt.cwin('s1', 'a grown-up is making', 0.25), Object.assign({ bg: P.purple, color: P.white, size: 80 }, o));
+    stk(ctx, 'a lid on the pan', PANX, 230, Lt.cwin('s1', 'a grown-up is making', 0.5, null, 1.4), Lt.win('s2', 0, 0.25), Object.assign({ bg: P.white, size: 56 }, o));
+    stk(ctx, 'a safe spot', CU.x + 30, 445, Lt.cwin('s1', 'and i\'m watching', 0.5, null, 0.6), Lt.win('s2', 0, 0.25), Object.assign({ bg: P.green, color: P.white, size: 56 }, o));
+    stk(ctx, 'POP! POP!', PANX, 200, Lt.win('s2', 0.1, 0.4), Lt.cwin('s2', 'and the lid keeps', 0.25), Object.assign({ bg: P.sun, size: 96 }, o));
+    stk(ctx, 'the lid keeps it in', PANX, 200, Lt.cwin('s2', 'and the lid keeps', 0.5), Lt.win('s3', 0, 0.25), Object.assign({ bg: P.white, size: 56 }, o));
+    stk(ctx, 'cooled down', 900, 260, Lt.cwin('s3', "now it's cooled", 0.5, null, 0.4), Lt.cwin('s3', 'toss one up', 0.25), Object.assign({ bg: P.blue, color: P.white, size: 60 }, o));
+    stk(ctx, 'BONK!', head.x + 230, head.y - 170, bump > 0 ? 1 : 0, 0, Object.assign({ bg: P.white, size: 80, rot: 0.12 }, o));
+    stk(ctx, 'a popcorn hat!', head.x + 250, head.y - 220, Lt.cwin('s3', 'it bonked me', 0.5, null, 0.5), Lt.win('s4', 0, 0.25), Object.assign({ bg: P.pink, size: 56 }, o));
+    stk(ctx, 'Pop-tastic!', 960, 300, Lt.cwin('s4', 'pop-tastic', 0.5), Lt.win('guess', 0, 0.25), Object.assign({ bg: P.sun, size: 96, rot: 0.06 }, o));
+    stk(ctx, 'Hmm, maybe not!', 960, 300, Lt.cwin('look', 'hmm, maybe not', 0.5), Lt.cwin('look', "let's look inside", 0.25), Object.assign({ bg: P.white, size: 76 }, o));
+    if (Lt.after('guess') && !Lt.cafter('look', 'hmm')) { const q = Lt.cwin('guess', 'but why do they', 0.5, E.outBack); if (q > 0) L.questionMark(ctx, 1250, 230, q, t, P.purple); }
+    // zoom into a kernel
+    const zk = Lt.cwin('look', "let's look inside", 0.6, E.outBack, 0.1);
+    const zp = seg(t, Lt.chunk('look', "it's called a") - 0.2, Lt.end('look') + 0.7, E.in);
+    if (zk > 0 && zp < 1) kernel(ctx, 960, 500, 0.4 * clamp(zk, 0, 1.2), {});
+    if (zp > 0) { const r = lerp(150, 2300, zp); ctx.save(); ctx.beginPath(); ctx.arc(960, 500, r, 0, TAU); ctx.clip(); lab(ctx); kernel(ctx, 960, 480, lerp(0.4, 0.62, zp), {}); ctx.restore(); if (zp < 1) L.magnifier(ctx, 960, 500, r, zp); }
+    stk(ctx, 'a KERNEL', 960, 150, Lt.cwin('look', "it's called a", 0.5, null, 0.3), 0, Object.assign({ bg: SHELL, size: 84 }, o));
+  }
+
+  // ======================= INSIDE THE KERNEL: e1-e5 =======================
+  const K = { x: 960, y: 470, s: 0.6 };
+  function thermo(ctx, x, y, v, label) {
+    ctx.save(); ctx.fillStyle = P.white; ctx.strokeStyle = P.ink; ctx.lineWidth = 7; roundRect(ctx, x - 30, y - 300, 60, 300, 30); ctx.fill(); ctx.stroke(); circle(ctx, x, y + 20, 50, P.red, P.ink, 7);
+    ctx.fillStyle = P.red; const hh = 260 * clamp(v, 0, 1); roundRect(ctx, x - 16, y - hh, 32, hh + 20, 16); ctx.fill();
+    if (label) text(ctx, label, x, y - 340, { size: 44, weight: 700, color: P.ink });
+    ctx.restore();
+  }
+  function meter(ctx, x, y, v, t) {
+    ctx.save(); ctx.translate(x, y); circle(ctx, 0, 0, 120, P.white, P.ink, 8);
+    for (let i = 0; i <= 6; i++) { const a = PI * (0.8 + 1.4 * i / 6); ctx.strokeStyle = i >= 5 ? P.red : P.ink; ctx.lineWidth = 7; ctx.beginPath(); ctx.moveTo(Math.cos(a) * 92, Math.sin(a) * 92); ctx.lineTo(Math.cos(a) * 108, Math.sin(a) * 108); ctx.stroke(); }
+    const a = PI * (0.8 + 1.4 * clamp(v, 0, 1)) + (v > 0.85 ? Math.sin(t * 40) * 0.04 : 0); ctx.strokeStyle = P.red; ctx.lineWidth = 10; ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(Math.cos(a) * 88, Math.sin(a) * 88); ctx.stroke(); circle(ctx, 0, 0, 14, P.ink);
+    text(ctx, 'push', 0, 60, { size: 34, weight: 700, color: P.ink });
+    ctx.restore();
+  }
+  function kernelScene(ctx, t, Lt) {
+    lab(ctx);
+    const heat = Lt.cwin('e2', 'when the pan gets hot', 0.8);
+    pan(ctx, K.x, 700, 560, t, { heat });
+    if (heat > 0 && !Lt.after('e5')) L.heatWaves(ctx, K.x, 840, t, 4, 30, 'rgba(255,110,60,0.6)');
+    const burst = Lt.cwin('e4', 'pop', 0.4, E.out) * 0.45 + Lt.cwin('e4', 'the soft starch puffs', 1.2, E.out) * 0.55;
+    if (burst <= 0) {
+      // e1: labels; e2: water -> steam; e3: push grows
+      const steam = Lt.cwin('e2', 'the water turns into', 1.0) * 0.45 + Lt.cwin('e2', 'steam needs much', 1.2) * 0.45 + Lt.cwin('e3', 'and bigger', 1.0) * 0.1;
+      const water = 1 - Lt.cwin('e2', 'the water turns into', 1.2);
+      const push = Lt.cwin('e3', 'the steam pushes', 0.6) * 0.5 + Lt.cwin('e3', 'the push gets bigger', 0.6) * 0.2 + Lt.cwin('e3', 'and bigger', 0.6) * 0.3;
+      const shake = Lt.cwin('e3', 'the push gets bigger', 0.6) * 0.4 + Lt.cwin('e3', 'and bigger', 0.6) * 0.3 + Lt.cwin('e4', "when it's very hot", 1.0) * 0.3;
+      cutKernel(ctx, K.x, K.y, K.s, t, { water, steam, push, shake, crack: Lt.cwin('e4', 'the shell cracks', 0.6) });
+      const wh = Lt.cwin('e4', 'and the steam whooshes', 0.4);
+      if (wh > 0) { ctx.save(); ctx.strokeStyle = 'rgba(140,160,195,0.9)'; ctx.lineWidth = 16; ctx.lineCap = 'round'; for (const [x0, y0, dx, dy] of [[K.x + 80, K.y - 150, 1, -1], [K.x - 90, K.y - 120, -1, -1]]) for (let j = 0; j < 3; j++) { const ph = (t * 2.2 + j / 3) % 1; ctx.globalAlpha = (1 - ph) * clamp(wh, 0, 1); ctx.beginPath(); ctx.moveTo(x0 + dx * ph * 160, y0 + dy * ph * 160); ctx.lineTo(x0 + dx * (ph * 160 + 70), y0 + dy * (ph * 160 + 70)); ctx.stroke(); } ctx.restore(); }
+    } else {
+      // e4: the burst: four petals of shell fly open and the white fluff puffs out; e5: the jump
+      const jumpP = Lt.cwin('e5', 'and boing', 1.1, null, 0.1), leg = Lt.cwin('e5', 'the puff pushes', 0.8);
+      const jy = -Math.sin(PI * clamp(jumpP, 0, 1)) * 200, rot = jumpP * TAU;
+      ctx.save(); ctx.translate(K.x, K.y + jy); ctx.rotate(rot);
+      for (let i = 0; i < 4; i++) { const a = i / 4 * TAU + PI / 4, d = 120 + 140 * burst; ctx.save(); ctx.translate(Math.cos(a) * d * K.s, Math.sin(a) * d * K.s); ctx.rotate(a + PI / 2 + burst * 1.2); ctx.fillStyle = SHELL; ctx.strokeStyle = SHELL_D; ctx.lineWidth = 6; ctx.beginPath(); ctx.moveTo(-60, 0); ctx.quadraticCurveTo(0, -38, 60, 0); ctx.quadraticCurveTo(0, -14, -60, 0); ctx.fill(); ctx.stroke(); ctx.restore(); }
+      flake(ctx, 0, 0, lerp(0.8, 2.6, burst), 0);
+      if (leg > 0 && jumpP < 0.05) { ctx.fillStyle = FLUFF; ctx.strokeStyle = P.ink; ctx.lineWidth = 6; roundRect(ctx, -30, 90, 60, 70 * leg, 28); ctx.fill(); ctx.stroke(); }
+      ctx.restore();
+      if (burst < 0.5) { ctx.save(); ctx.globalAlpha = 1 - burst * 2; for (let i = 0; i < 12; i++) { const a = i / 12 * TAU; ctx.strokeStyle = P.sunDeep; ctx.lineWidth = 12; ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(K.x + Math.cos(a) * 260, K.y + Math.sin(a) * 260); ctx.lineTo(K.x + Math.cos(a) * 360, K.y + Math.sin(a) * 360); ctx.stroke(); } ctx.restore(); }
+    }
+    // thermometer (e4) and pressure meter (e3)
+    const tm = Lt.cwin('e4', "when it's very hot", 0.5) * (1 - Lt.win('e5', 0, 0.4));
+    if (tm > 0) { ctx.save(); ctx.globalAlpha = clamp(tm, 0, 1); thermo(ctx, 330, 600, Lt.cwin('e4', "when it's very hot", 2.0), '180 °C'); ctx.restore(); }
+    const mt = Lt.cwin('e3', 'the steam pushes', 0.5) * (1 - Lt.cwin('e4', 'pop', 0.4));
+    if (mt > 0) { ctx.save(); ctx.globalAlpha = clamp(mt, 0, 1); meter(ctx, 1560, 470, Lt.cwin('e3', 'the steam pushes', 0.6) * 0.35 + Lt.cwin('e3', 'the push gets bigger', 0.6) * 0.2 + Lt.cwin('e3', 'and bigger', 0.6) * 0.3 + Lt.cwin('e4', "when it's very hot", 1.5) * 0.15, t); ctx.restore(); }
+    const o = { size: 64, rot: -0.03 };
+    stk(ctx, 'hard shell', 1420, 200, Lt.cwin('e1', 'a kernel has a hard', 0.5, null, 0.4), Lt.win('e2', 0, 0.25), Object.assign({ bg: SHELL }, o));
+    stk(ctx, 'soft starch', 1420, 380, Lt.cwin('e1', 'soft starch inside', 0.5, null, 0.3), Lt.win('e2', 0, 0.25), Object.assign({ bg: STARCH }, o));
+    stk(ctx, 'a drop of water', 480, 470, Lt.cwin('e1', 'and a tiny drop', 0.5, null, 0.3), Lt.win('e2', 0, 0.25), Object.assign({ bg: P.water, color: P.white }, o));
+    if (Lt.cafter('e1', 'a kernel has a hard', 0.4) && !Lt.after('e2')) { L.arrow(ctx, 1260, 220, 1130, 290, P.ink, 8); }
+    if (Lt.cafter('e1', 'soft starch inside', 0.4) && !Lt.after('e2')) { L.arrow(ctx, 1240, 390, 1060, 400, P.ink, 8); }
+    if (Lt.cafter('e1', 'and a tiny drop', 0.4) && !Lt.after('e2')) { L.arrow(ctx, 720, 470, 920, 470, P.ink, 8); }
+    stk(ctx, 'water -> STEAM', 960, 110, Lt.cwin('e2', 'the water turns into', 0.5, null, 0.4), Lt.cwin('e2', 'steam needs much', 0.25), Object.assign({ bg: P.white, size: 72 }, o));
+    stk(ctx, 'steam needs more room!', 960, 110, Lt.cwin('e2', 'steam needs much', 0.5, null, 0.3), Lt.win('e3', 0, 0.25), Object.assign({ bg: P.white }, o));
+    stk(ctx, 'push!', 960, 110, Lt.cwin('e3', 'the steam pushes', 0.5, null, 0.3), Lt.cwin('e3', 'but the shell is strong', 0.25), Object.assign({ bg: P.red, color: P.white, size: 80 }, o));
+    stk(ctx, 'the shell holds it in', 960, 110, Lt.cwin('e3', 'but the shell is strong', 0.5), Lt.cwin('e3', 'the push gets bigger', 0.25), Object.assign({ bg: SHELL }, o));
+    stk(ctx, 'bigger... bigger... BIGGER!', 960, 110, Lt.cwin('e3', 'the push gets bigger', 0.5), Lt.cwin('e3', 'scientists call', 0.25), Object.assign({ bg: P.sun }, o));
+    stk(ctx, 'PRESSURE = a big push', 960, 110, Lt.cwin('e3', 'scientists call', 0.5, null, 0.6), Lt.win('e4', 0, 0.25), Object.assign({ bg: P.red, color: P.white }, o));
+    stk(ctx, 'hotter than boiling water!', 960, 110, Lt.cwin('e4', "when it's very hot", 0.5), Lt.cwin('e4', 'the shell cracks', 0.25), Object.assign({ bg: P.sunDeep }, o));
+    stk(ctx, 'the shell cracks', 960, 110, Lt.cwin('e4', 'the shell cracks', 0.5), Lt.cwin('e4', 'and the steam whooshes', 0.25), Object.assign({ bg: SHELL }, o));
+    stk(ctx, 'whoosh... POP!', 960, 110, Lt.cwin('e4', 'and the steam whooshes', 0.5), Lt.cwin('e4', 'the soft starch puffs', 0.25), Object.assign({ bg: P.sun, size: 96, rot: 0.05 }, o));
+    stk(ctx, 'white fluff', 960, 110, Lt.cwin('e4', 'the soft starch puffs', 0.5), Lt.win('e5', 0, 0.25), Object.assign({ bg: FLUFF, size: 80 }, o));
+    stk(ctx, 'like a tiny leg', 960, 110, Lt.cwin('e5', 'the puff pushes', 0.5, null, 0.6), Lt.cwin('e5', 'and boing', 0.25), Object.assign({ bg: P.white }, o));
+    stk(ctx, 'BOING!', 1500, 260, Lt.cwin('e5', 'and boing', 0.5, null, 0.1), 0, Object.assign({ bg: P.pink, size: 90, rot: 0.08 }, o));
+    L.pip(ctx, { x: 190, y: 735, s: 0.45, t, mood: Lt.cafter('e4', 'pop') || Lt.cafter('e5', 'and boing') ? 'wow' : 'talk', armR: -0.6, armL: 0.6, lookX: 0.8, lookY: -0.4 });
+  }
+
+  // ======================= TEST: a good kernel and a cracked one =======================
+  function hotplate(ctx, x, y, w, glow, t) {
+    ctx.fillStyle = '#9AA1B3'; roundRect(ctx, x - w / 2, y, w, 70, 18); ctx.fill(); ctx.strokeStyle = P.ink; ctx.lineWidth = 7; ctx.stroke();
+    ctx.save(); ctx.globalAlpha = clamp(glow, 0, 1); ctx.strokeStyle = '#FF6A3D'; ctx.lineWidth = 10; for (const cx of [x - w / 4, x + w / 4]) { ctx.beginPath(); ctx.ellipse(cx, y + 14, 120, 12, 0, 0, TAU); ctx.stroke(); } ctx.restore();
+  }
+  function testScene(ctx, t, Lt) {
+    lab(ctx);
+    const glow = Lt.cwin('test', "let's heat it", 0.8);
+    hotplate(ctx, 960, 640, 1000, glow, t);
+    if (glow > 0) { L.heatWaves(ctx, 710, 640, t, 2, 40, 'rgba(255,110,60,0.5)'); L.heatWaves(ctx, 1210, 640, t, 2, 40, 'rgba(255,110,60,0.5)'); }
+    const ap = Lt.win('test', 0.2, 0.6, E.outBack), cr = Lt.cwin('test', "here's a kernel with", 1.0, null, 0.6);
+    // good one (left)
+    const pop = Lt.cwin('t1', 'the good one', 0.6, E.out);
+    if (ap > 0) {
+      if (pop <= 0) kernel(ctx, 710, 470, 0.42 * clamp(ap, 0, 1.2), { glow: glow * 0.6, shake: glow * 0.5, t });
+      else { const jy = -Math.sin(PI * clamp(pop * 1.3, 0, 1)) * 120; flake(ctx, 710, 500 + jy, lerp(0.8, 1.9, pop), pop * 3); }
+    }
+    // cracked one (right)
+    const ck = Lt.cwin('test', "here's a kernel with", 0.6, E.outBack);
+    if (ck > 0) kernel(ctx, 1210, 470, 0.42 * clamp(ck, 0, 1.2), { crack: cr, glow: glow * 0.6, t });
+    const hiss = Lt.cwin('t1', 'the cracked one', 0.6);
+    if (hiss > 0) { ctx.save(); ctx.globalAlpha = clamp(hiss, 0, 1); ctx.strokeStyle = 'rgba(140,160,195,0.85)'; ctx.lineWidth = 14; ctx.lineCap = 'round'; for (let i = 0; i < 3; i++) { const ph = (t * 0.9 + i / 3) % 1, x0 = 1255 + i * 8, y0 = 380 - ph * 220; ctx.globalAlpha = clamp(hiss, 0, 1) * (1 - ph); ctx.beginPath(); for (let k = 0; k <= 12; k++) { const yy = y0 - k * 8, xx = x0 + Math.sin(k * 0.6 + t * 4 + i) * 16; k ? ctx.lineTo(xx, yy) : ctx.moveTo(xx, yy); } ctx.stroke(); } ctx.restore(); }
+    const o = { size: 60, rot: -0.03 };
+    stk(ctx, 'TEST!', 960, 120, Lt.cwin('test', 'scientists test it', 0.5), Lt.cwin('test', "here's a kernel with", 0.25), Object.assign({ bg: P.blue, color: P.white, size: 96 }, o));
+    stk(ctx, 'good kernel', 710, 760 - 0, Lt.cwin('test', "let's heat it", 0.5, null, 0.6), 0, Object.assign({ bg: P.green, color: P.white }, o));
+    stk(ctx, 'cracked shell', 1210, 760 - 0, Lt.cwin('test', "here's a kernel with", 0.5, null, 0.5), 0, Object.assign({ bg: P.white }, o));
+    stk(ctx, 'it pops!', 600, 160, Lt.cwin('t1', 'the good one', 0.5, null, 0.4), 0, Object.assign({ bg: P.sun, size: 64 }, o));
+    stk(ctx, 'hiss: steam leaks out', 1300, 160, Lt.cwin('t1', 'the steam leaks', 0.5), Lt.cwin('t1', 'no pop', 0.25), Object.assign({ bg: P.white, size: 50 }, o));
+    stk(ctx, 'no pop!', 1300, 160, Lt.cwin('t1', 'no pop', 0.5), 0, Object.assign({ bg: P.red, color: P.white, size: 70 }, o));
+    L.pip(ctx, { x: 960, y: 420, s: 0.55, t, mood: Lt.cafter('t1', 'no pop') ? 'sad' : Lt.cafter('t1', 'the good one') ? 'wow' : 'talk', armR: -0.6, armL: -0.6, lookX: Lt.cafter('t1', 'the cracked one') ? 0.9 : Lt.after('t1') ? -0.9 : 0, lookY: 0.4 });
+  }
+
+  // ======================= WOW FACT: ancient popcorn =======================
+  function wowScene(ctx, t, Lt) {
+    ctx.fillStyle = '#F7E3C3'; ctx.fillRect(0, 0, W, H); ctx.fillStyle = '#D9B98A'; ctx.fillRect(0, 760, W, H - 760);
+    // museum case
+    const a = Lt.cwin('real', 'the oldest popcorn', 0.7, E.outBack, 0.1);
+    if (a > 0) {
+      ctx.save(); ctx.translate(1020, 760); ctx.scale(a, a);
+      ctx.fillStyle = '#8A5A3C'; roundRect(ctx, -300, -40, 600, 60, 10); ctx.fill(); ctx.strokeStyle = P.ink; ctx.lineWidth = 7; ctx.stroke();
+      ctx.fillStyle = 'rgba(200,235,255,0.45)'; roundRect(ctx, -260, -440, 520, 400, 16); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = '#5B4636'; ctx.beginPath(); ctx.ellipse(0, -60, 200, 22, 0, 0, TAU); ctx.fill();
+      // a small old cob and old popped kernels (brownish)
+      ctx.save(); ctx.translate(-90, -120); ctx.rotate(-0.3); ctx.fillStyle = '#B98A4E'; roundRect(ctx, -40, -120, 80, 200, 40); ctx.fill(); ctx.lineWidth = 5; ctx.stroke(); for (let r = 0; r < 6; r++) for (let c = 0; c < 2; c++) circle(ctx, -14 + c * 28, -90 + r * 30, 11, '#8C6233', P.ink, 3); ctx.restore();
+      for (let i = 0; i < 4; i++) { ctx.save(); ctx.translate(40 + i * 50, -90 - (i % 2) * 30); ctx.scale(0.45, 0.45); ctx.globalAlpha = 0.95; flake(ctx, 0, 0, 1, i); ctx.globalCompositeOperation = 'source-atop'; ctx.fillStyle = 'rgba(140,98,51,0.55)'; ctx.fillRect(-120, -120, 240, 240); ctx.restore(); }
+      ctx.restore();
+    }
+    // the big number, counting up
+    const n = Lt.cwin('real', 'six thousand', 1.4, E.out);
+    if (n > 0) { const v = Math.round(6700 * n / 100) * 100; text(ctx, v.toLocaleString('en-US'), 1020, 200, { size: 120, weight: 700, color: P.sunDeep, stroke: P.ink, strokeWidth: 14 }); text(ctx, 'years old!', 1020, 300, { size: 60, weight: 700, color: P.ink }); }
+    const o = { size: 64, rot: -0.03 };
+    stk(ctx, 'WOW!', 380, 160, Lt.cwin('real', 'wow fact', 0.5), 0, Object.assign({ bg: P.sun, size: 100 }, o));
+    stk(ctx, 'Peru', 1600, 520, Lt.cwin('real', 'people in peru', 0.5, null, 0.3), 0, Object.assign({ bg: P.green, color: P.white, size: 72 }, o));
+    stk(ctx, 'long, long ago', 1600, 640, Lt.cwin('real', 'long, long ago', 0.5), 0, Object.assign({ bg: P.white, size: 56 }, o));
+    L.pip(ctx, { x: 420, y: 640, s: 0.95, t, mood: Lt.cafter('real', 'six thousand') ? 'wow' : 'talk', armR: -0.9, armL: 0.6, lookX: 0.8 });
+    flake(ctx, 420, 640 - 108, 0.5, -0.15);
+  }
+
+  // ======================= SAFETY: a grown-up job =======================
+  function safeScene(ctx, t, Lt) {
+    kitchenBg(ctx, t);
+    pan(ctx, PANX, PANY, 380, t, { heat: 1 }); L.heatWaves(ctx, PANX, PANY + 140, t, 3, 50, 'rgba(255,110,60,0.6)');
+    for (let i = 0; i < 9; i++) flake(ctx, PANX - 120 + (i % 5) * 60, PANY - 6 - Math.floor(i / 5) * 34, 0.5, i * 0.7);
+    lid(ctx, PANX, PANY, 360, t, 0);
+    person(ctx, 1620, 900, 1.15, t, { flip: true, mood: 'happy', point: -0.9, mitt: true });
+    ctx.fillStyle = 'rgba(91,194,107,0.35)'; ctx.beginPath(); ctx.ellipse(CU.x, CU.y + 110, 220, 40, 0, 0, TAU); ctx.fill(); ctx.strokeStyle = P.green; ctx.lineWidth = 6; ctx.setLineDash([16, 10]); ctx.stroke(); ctx.setLineDash([]);
+    L.pip(ctx, { x: CU.x, y: CU.y, s: CU.s, t, mood: 'talk', armR: Lt.cafter('safe', 'so popping popcorn') ? -1.3 : -0.4, armL: 0.6, lookX: 0.8 });
+    flake(ctx, CU.x - 6, CU.y - 100 * CU.s - 30, 0.6, -0.15);
+    const o = { size: 66, rot: -0.03 };
+    stk(ctx, 'HOT pan!', 1250, 300, Lt.cwin('safe', 'popping needs a very', 0.5, null, 0.4), Lt.cwin('safe', 'so popping popcorn', 0.25), Object.assign({ bg: P.red, color: P.white, size: 80 }, o));
+    stk(ctx, 'a job for grown-ups', 1150, 300, Lt.cwin('safe', 'so popping popcorn', 0.5, null, 0.6), 0, Object.assign({ bg: P.green, color: P.white }, o));
+  }
+
+  // ======================= SAY IT, TRY AT HOME, OUTRO =======================
+  function bowl(ctx, x, y, s) {
+    ctx.save(); ctx.translate(x, y); ctx.scale(s, s);
+    for (let i = 0; i < 14; i++) flake(ctx, -150 + (i % 5) * 75 + (i > 9 ? 35 : 0), -40 - Math.floor(i / 5) * 50, 0.7, i);
+    ctx.fillStyle = P.red; ctx.strokeStyle = P.ink; ctx.lineWidth = 8; ctx.beginPath(); ctx.moveTo(-220, -40); ctx.lineTo(220, -40); ctx.quadraticCurveTo(200, 140, 0, 140); ctx.quadraticCurveTo(-200, 140, -220, -40); ctx.closePath(); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = P.white; for (let i = -2; i <= 2; i++) { ctx.fillRect(i * 70 - 14, -30, 28, 110); }
+    ctx.restore();
+  }
+  function sayScene(ctx, t, Lt) {
+    kitchenBg(ctx, t);
+    bowl(ctx, 1350, 700, 1.0);
+    L.pip(ctx, { x: 560, y: 680, s: 1.2, t, mood: 'talk', armR: -1.2 + 0.2 * Math.sin(t * 8), armL: -1.2 - 0.2 * Math.sin(t * 8), lookX: 0.4, lookY: -0.3 });
+    flake(ctx, 554, 680 - 120 - 30, 0.65, -0.15 + Math.sin(t * 8) * 0.08);
+    L.sayItSticker(ctx, 'Steam inside makes it pop!', Lt.cwin('sayit', 'steam inside makes', 0.8), t);
+  }
+  // a paper bag: o.air 0..1 (puffed), o.twist 0..1, o.burst 0..1
+  function paperBag(ctx, x, y, s, t, o) {
+    o = o || {}; ctx.save(); ctx.translate(x, y); ctx.scale(s, s); ctx.lineJoin = 'round';
+    const a = clamp(o.air || 0, 0, 1), w = lerp(170, 240, a), h = 300;
+    if (o.burst > 0) {
+      ctx.fillStyle = '#C9A06A'; ctx.strokeStyle = P.ink; ctx.lineWidth = 8;
+      for (let i = 0; i < 4; i++) { const sx = i % 2 ? 1 : -1, d = 60 * o.burst; ctx.save(); ctx.translate(sx * (40 + d), -i * 50 - 60); ctx.rotate(sx * 0.3 * o.burst); roundRect(ctx, -70, -60, 140, 120, 14); ctx.fill(); ctx.stroke(); ctx.restore(); }
+      ctx.strokeStyle = P.sunDeep; ctx.lineWidth = 14; ctx.lineCap = 'round'; for (let i = 0; i < 10; i++) { const an = i / 10 * TAU, r0 = 200 + 80 * o.burst; ctx.globalAlpha = 1 - o.burst * 0.6; ctx.beginPath(); ctx.moveTo(Math.cos(an) * r0, -150 + Math.sin(an) * r0); ctx.lineTo(Math.cos(an) * (r0 + 90), -150 + Math.sin(an) * (r0 + 90)); ctx.stroke(); }
+      ctx.restore(); return;
+    }
+    ctx.fillStyle = '#C9A06A'; ctx.strokeStyle = P.ink; ctx.lineWidth = 8;
+    ctx.beginPath(); ctx.moveTo(-w / 2, 0); ctx.quadraticCurveTo(-w / 2 - 20 * a, -h / 2, -w / 2 + 10, -h); ctx.lineTo(w / 2 - 10, -h); ctx.quadraticCurveTo(w / 2 + 20 * a, -h / 2, w / 2, 0); ctx.closePath(); ctx.fill(); ctx.stroke();
+    ctx.strokeStyle = 'rgba(120,80,40,0.5)'; ctx.lineWidth = 5; ctx.beginPath(); ctx.moveTo(-w / 2 + 30, -20); ctx.lineTo(-w / 2 + 40, -h + 20); ctx.stroke();
+    const tw = clamp(o.twist || 0, 0, 1);
+    if (tw > 0) { ctx.fillStyle = '#B88E58'; ctx.strokeStyle = P.ink; ctx.lineWidth = 7; ctx.beginPath(); ctx.moveTo(-w / 2 + 10, -h); ctx.lineTo(-20, -h - 60 * tw); ctx.lineTo(-30, -h - 110 * tw); ctx.lineTo(30, -h - 110 * tw); ctx.lineTo(20, -h - 60 * tw); ctx.lineTo(w / 2 - 10, -h); ctx.closePath(); ctx.fill(); ctx.stroke(); for (let i = 0; i < 3; i++) { ctx.beginPath(); ctx.moveTo(-22, -h - 50 * tw - i * 16); ctx.lineTo(22, -h - 56 * tw - i * 16); ctx.stroke(); } }
+    ctx.restore();
+  }
+  function tryScene(ctx, t, Lt) {
+    ctx.fillStyle = '#FFF1D6'; ctx.fillRect(0, 0, W, H); ctx.fillStyle = '#C98F5B'; ctx.fillRect(0, 720, W, H - 720); ctx.strokeStyle = P.ink; ctx.lineWidth = 7; ctx.beginPath(); ctx.moveTo(0, 720); ctx.lineTo(W, 720); ctx.stroke();
+    L.tryBanner(ctx, Lt.win('try1', 0, 0.6) * (1 - Lt.win('try2', 0, 0.4))); L.grownUpBadge(ctx, 180, 330, Lt.win('try1', 1.5, 0.6));
+    const bp = Lt.cwin('try1', 'ask a grown-up', 0.6, E.outBack, 0.5);
+    const air = Lt.cwin('try2', 'blow it full', 1.2), twist = Lt.cwin('try2', 'twist it shut', 0.8), clap = Lt.cwin('try2', 'and clap it', 0.6, E.in, 0.1), burst = Lt.cwin('try2', 'pop', 0.6, E.out);
+    if (bp > 0) paperBag(ctx, 1100, 700, 1.0 * clamp(bp, 0, 1.2), t, { air, twist, burst: burst > 0 && Lt.cafter('try2', 'pop') ? burst : 0 });
+    // breath puffs while blowing
+    if (air > 0 && air < 1) { for (let i = 0; i < 3; i++) { const ph = (t * 1.5 + i / 3) % 1; ctx.save(); ctx.globalAlpha = 1 - ph; circle(ctx, lerp(820, 1000, ph), 460 + i * 10, 14 + ph * 10, 'rgba(180,220,255,0.9)'); ctx.restore(); } }
+    // hands clapping onto the bag; inside, the squeezed air pushes out on the paper
+    if (clap > 0 && burst <= 0) { const d = lerp(320, 150, clap); L.hand(ctx, 1100 - d, 560, 0.9, PI / 2); L.hand(ctx, 1100 + d, 560, 0.9, -PI / 2); }
+    const sq = Lt.cwin('try2', 'the squeezed air', 0.5);
+    if ((clap > 0.5 && burst <= 0) || sq > 0) { ctx.save(); ctx.globalAlpha = sq > 0 ? clamp(sq, 0, 1) : 1; for (let i = 0; i < 6; i++) { const an = i / 6 * TAU + 0.3, r0 = sq > 0 ? 90 + 60 * ((t * 0.8) % 1) : 40; L.arrow(ctx, 1100 + Math.cos(an) * r0, 550 + Math.sin(an) * r0, 1100 + Math.cos(an) * (r0 + 80), 550 + Math.sin(an) * (r0 + 80), P.blue, 12); } ctx.restore(); }
+    L.pip(ctx, { x: 560, y: 600, s: 0.8, t, mood: Lt.cafter('try2', 'pop') ? 'wow' : 'talk', armR: -0.4, armL: 0.6, lookX: 0.9, lookY: -0.1 });
+    const o = { size: 44, rot: -0.03 };
+    stk(ctx, 'a PAPER bag', 1560, 300, Lt.cwin('try1', 'ask a grown-up', 0.5, null, 1.0), Lt.win('try2', 0, 0.25), Object.assign({ bg: P.white, size: 60 }, o));
+    stk(ctx, 'never plastic!', 1560, 410, Lt.cwin('try1', 'never a plastic', 0.5), Lt.win('try2', 0, 0.25), Object.assign({ bg: P.red, color: P.white, size: 60 }, o));
+    stk(ctx, '1. blow: a few breaths, rest', 1440, 240, Lt.cwin('try2', 'blow it full', 0.5), 0, Object.assign({ bg: P.white }, o));
+    stk(ctx, '2. twist it shut', 1440, 330, Lt.cwin('try2', 'twist it shut', 0.5), 0, Object.assign({ bg: P.white }, o));
+    stk(ctx, '3. away from faces', 1440, 420, Lt.cwin('try2', 'hold it away', 0.5), 0, Object.assign({ bg: P.white }, o));
+    stk(ctx, '4. clap!', 1440, 510, Lt.cwin('try2', 'and clap it', 0.5), 0, Object.assign({ bg: P.white }, o));
+    stk(ctx, "POP! It's loud!", 800, 260, Lt.cwin('try2', 'pop', 0.4), Lt.cwin('try2', 'what burst the bag', 0.25), Object.assign({ bg: P.sun, size: 80, rot: 0.06 }, o));
+    stk(ctx, 'What burst it?', 800, 260, Lt.cwin('try2', 'what burst the bag', 0.5), Lt.cwin('try2', 'the squeezed air', 0.25), Object.assign({ bg: P.sun, size: 64 }, o));
+    stk(ctx, 'the squeezed air, pushing out!', 740, 260, Lt.cwin('try2', 'the squeezed air', 0.5), 0, Object.assign({ bg: P.blue, color: P.white, size: 54 }, o));
+  }
+  function outro(ctx, t, Lt, phrase) {
+    L.sky(ctx, { top: '#5FB8FF', bottom: '#CDEBFF' }); L.ground(ctx, 860);
+    // popcorn confetti
+    const r = L.rng(23); for (let i = 0; i < 26; i++) { const x0 = r() * W, sp = 90 + r() * 120, ph = r() * 10; const y = ((t * sp + ph * 100) % (H + 100)) - 60; flake(ctx, x0 + Math.sin(t * 2 + ph) * 30, y, 0.35, t * 2 + ph); }
+    L.pip(ctx, { x: 560, y: 720, s: 1.4, t, mood: Lt.cafter('bye', 'bye-bye') ? 'happy' : 'talk', armR: -1.1 + Math.sin(t * 8) * 0.35, armL: 0.6 });
+    flake(ctx, 552, 720 - 140 - 34, 0.72, -0.15);
+    const lp = Lt.win('bye', 0, 0.6, E.outBack); ctx.save(); ctx.translate(1380, 340); ctx.scale(lp, lp); L.logo(ctx, 0, 0, 1, t); ctx.restore();
+    const pp = Lt.cwin('bye', 'remember', 0.6, E.outBack, 0.3);
+    if (pp > 0) { ctx.save(); ctx.translate(1340, 640); ctx.scale(pp, pp); ctx.font = '700 60px Fredoka'; const k = Math.min(1, 980 / ctx.measureText(phrase).width), size = Math.floor(60 * k); ctx.font = '700 ' + size + 'px Fredoka'; const w = ctx.measureText(phrase).width + 90; ctx.fillStyle = P.white; roundRect(ctx, -w / 2, -60, w, 120, 40); ctx.fill(); ctx.strokeStyle = P.ink; ctx.lineWidth = 8; ctx.stroke(); text(ctx, phrase, 0, 4, { size, weight: 700, color: P.ink }); ctx.restore(); }
+    const bp = Lt.cwin('bye', 'bye-bye', 0.6, E.outBack); if (bp > 0) L.sticker(ctx, 'Bye-bye!', 1380, 790, bp, { bg: P.sun, rot: 0.05, size: 84 });
+  }
+
+  // ======================= TRY IT 1: HEAT A KERNEL =======================
+  // drag the red knob up the heat bar: above 100 degrees the water turns to steam, the push grows, at 180 it pops
+  const T1 = { kx: 820, ky: 470, ks: 0.6, bx: 1560, by0: 820, by1: 220 };
+  const t1Temp = s => Math.round(20 + s.h * 180);
+  function t1Draw(ctx, s, t) {
+    lab(ctx);
+    pan(ctx, T1.kx, 700, 560, t, { heat: s.h });
+    if (s.h > 0.1) L.heatWaves(ctx, T1.kx, 840, t, 4, 30 * s.h + 10, 'rgba(255,110,60,0.6)');
+    if (!s.popped) cutKernel(ctx, T1.kx, T1.ky, T1.ks, t, { water: 1 - s.steam * 0.9, steam: s.steam, push: s.steam, shake: s.steam > 0.5 ? (s.steam - 0.5) * 1.2 : 0 });
+    else { const p = clamp(s.pt / 0.6, 0, 1), jy = -Math.sin(PI * clamp(s.pt / 1.0, 0, 1)) * 260; flake(ctx, T1.kx, T1.ky + jy, lerp(0.8, 2.4, E.out(p)), s.pt * 4); if (p < 1) { ctx.save(); ctx.globalAlpha = 1 - p; for (let i = 0; i < 12; i++) { const a = i / 12 * TAU; ctx.strokeStyle = P.sunDeep; ctx.lineWidth = 12; ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(T1.kx + Math.cos(a) * 260, T1.ky + Math.sin(a) * 260); ctx.lineTo(T1.kx + Math.cos(a) * 360, T1.ky + Math.sin(a) * 360); ctx.stroke(); } ctx.restore(); } text(ctx, 'tap the popcorn for a new kernel', T1.kx, 140, { size: 40, weight: 700, color: P.ink, stroke: P.white, strokeWidth: 8 }); }
+    // the heat bar
+    const by = lerp(T1.by0, T1.by1, s.h);
+    ctx.fillStyle = P.white; ctx.strokeStyle = P.ink; ctx.lineWidth = 7; roundRect(ctx, T1.bx - 34, T1.by1 - 40, 68, T1.by0 - T1.by1 + 80, 34); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = '#FF7A3D'; roundRect(ctx, T1.bx - 20, by, 40, T1.by0 + 30 - by, 20); ctx.fill();
+    // 100 and 180 marks
+    for (const [v, lab2] of [[100, '100 °C'], [180, '180 °C']]) { const yy = lerp(T1.by0, T1.by1, (v - 20) / 180); ctx.strokeStyle = P.ink; ctx.lineWidth = 5; ctx.beginPath(); ctx.moveTo(T1.bx + 40, yy); ctx.lineTo(T1.bx + 70, yy); ctx.stroke(); text(ctx, lab2, T1.bx + 130, yy, { size: 34, weight: 700, color: P.ink }); }
+    circle(ctx, T1.bx, by, 56, P.red, P.ink, 8); text(ctx, 'HEAT', T1.bx, by + 2, { size: 26, weight: 700, color: P.white });
+    text(ctx, t1Temp(s) + ' °C', T1.bx, T1.by0 + 120, { size: 52, weight: 700, color: P.ink });
+    if (!s.popped) meter(ctx, 1260, 220, s.steam, t);
+    if (!s.touched) { const bob = Math.sin(t * 4) * 6; text(ctx, 'drag the heat up', T1.bx - 330, 960 + bob, { size: 44, weight: 700, color: P.ink, stroke: P.white, strokeWidth: 9 }); L.arrow(ctx, T1.bx - 110, 900, T1.bx - 110, 700, P.sunDeep, 10); }
+    if (s.steam > 0.05 && !s.popped) L.sticker(ctx, 'steam!', 380, 300, 1, { bg: P.white, size: 56, rot: -0.04 });
+    if (s.popped) L.sticker(ctx, 'POP!', 380, 300, 1, { bg: P.sun, size: 100, rot: 0.05 });
+    L.pip(ctx, { x: 240, y: 880, s: 0.5, t, mood: s.popped ? 'wow' : s.steam > 0.3 ? 'think' : 'happy', armR: -0.6, armL: 0.6, lookX: 0.8, lookY: -0.4 });
+  }
+
+  // ======================= TRY IT 2: WHICH WILL POP? =======================
+  const T2K = [{ k: 'good', label: 'good kernel' }, { k: 'cracked', label: 'cracked shell' }, { k: 'dry', label: 'dried out' }];
+  const t2X = i => 400 + i * 560;
+  function t2Draw(ctx, s, t) {
+    lab(ctx);
+    T2K.forEach((it, i) => {
+      const x = t2X(i), y = 560, st = s.k[i];
+      hotplate(ctx, x, 640, 420, st.heat, t);
+      if (st.heat > 0.1) L.heatWaves(ctx, x, 640, t, 2, 40, 'rgba(255,110,60,0.5)');
+      if (it.k === 'good' && st.done) { const jy = -Math.sin(PI * clamp(st.dt / 0.9, 0, 1)) * 160; flake(ctx, x, y - 60 + jy, lerp(0.7, 1.3, clamp(st.dt / 0.5, 0, 1)), st.dt * 3); }
+      else kernel(ctx, x, y - 40, 0.28, { crack: it.k === 'cracked' ? 1 : 0, dry: it.k === 'dry', glow: st.heat * 0.7, shake: it.k === 'good' ? st.heat * 0.6 : 0, t });
+      if (it.k === 'cracked' && st.heat > 0.3) { ctx.save(); ctx.strokeStyle = 'rgba(140,160,195,0.85)'; ctx.lineWidth = 12; ctx.lineCap = 'round'; for (let j = 0; j < 3; j++) { const ph = (t * 0.9 + j / 3) % 1, x0 = x + 28 + j * 6, y0 = y - 110 - ph * 220; ctx.globalAlpha = (1 - ph) * clamp(st.heat, 0, 1); ctx.beginPath(); for (let q = 0; q <= 10; q++) { const yy = y0 - q * 8, xx = x0 + Math.sin(q * 0.6 + t * 4 + j) * 14; q ? ctx.lineTo(xx, yy) : ctx.moveTo(xx, yy); } ctx.stroke(); } ctx.restore(); }
+      L.sticker(ctx, it.label, x, 230, 1, { bg: it.k === 'good' ? P.green : P.white, color: it.k === 'good' ? P.white : P.ink, size: 50, rot: -0.02 });
+      if (st.done) { const lab3 = it.k === 'good' ? 'POP!' : it.k === 'cracked' ? 'hiss... no pop' : 'nothing!'; L.sticker(ctx, lab3, x, 830 - 20, 1, { bg: it.k === 'good' ? P.sun : P.white, size: 50, rot: 0.03 }); }
+    });
+    if (!s.touched) { const bob = Math.sin(t * 4) * 6; text(ctx, 'tap a kernel to heat it', 960, 110 + bob, { size: 46, weight: 700, color: P.ink, stroke: P.white, strokeWidth: 9 }); }
+  }
+
+  L.episodes.ep23 = {
+    id: 'ep23', num: 23, title: 'Why does popcorn pop?', short: 'Popcorn', phrase: 'Steam inside makes it pop!',
+    thumb: {
+      big: 'POP!', small1: 'Why does popcorn', small2: '', pip: { x: 520, y: 780 },
+      bg: (ctx, t) => {
+        kitchenBg(ctx, 0); bowl(ctx, 1420, 700, 1.25);
+        const r = L.rng(5); for (let i = 0; i < 7; i++) flake(ctx, 1180 + r() * 500, 120 + r() * 330, 0.8 + r() * 0.3, r() * 6);
+        kernel(ctx, 900, 300, 0.32, {}); for (let i = 0; i < 8; i++) { const a = i / 8 * TAU; ctx.strokeStyle = P.sunDeep; ctx.lineWidth = 12; ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(900 + Math.cos(a) * 140, 300 + Math.sin(a) * 140); ctx.lineTo(900 + Math.cos(a) * 200, 300 + Math.sin(a) * 200); ctx.stroke(); }
+        flake(ctx, 514, 780 - 140 - 30, 0.72, -0.15);
+      }
+    },
+    lines: [
+      { id: 'hello', text: "Hello, little scientists! I'm Curie. Welcome to the Little Scientists Club!", say: "Hello, little scientists! I'm *Curie*! Welcome... to the Little Scientists Club!", hold: 0.3 },
+      { id: 'q', text: "Today's big question: why does popcorn pop?", say: "Today's big question... Why does popcorn *pop*?", hold: 0.6 },
+      { id: 's1', text: 'It\'s movie night! A grown-up is making popcorn in a pan with a lid, and I\'m watching from a safe spot.', say: 'It\'s movie *night*! A grown-up is making *popcorn*, in a pan with a lid... and I\'m watching from a safe spot.', hold: 0.4 },
+      { id: 's2', text: 'Pop! Pop, pop, pop! The popcorn jumps around inside the pan, and the lid keeps it in.', say: '{sfx:popcorn}Pop! Pop, pop, *pop*! The popcorn jumps around inside the pan... and the lid keeps it *in*.', hold: 0.6 },
+      { id: 's3', text: 'Now it\'s cooled down. I\'ll toss one up and catch it! Oops! It bonked me on the head!', say: 'Now it\'s cooled *down*. I\'ll toss one up... and *catch* it! {pause 0.5} Oops! It bonked me on the *head*!', hold: 0.5 },
+      { id: 's4', text: 'One more try. Got it! Yummy! Pop-tastic!', say: 'One more *try*... Got it! Yummy! {pause 0.6} *Pop*-tastic!', hold: 0.5 },
+      { id: 'guess', text: 'But why do they jump? Are there tiny jumping beans inside, bouncing on tiny trampolines?', say: 'But why do they *jump*? Are there tiny jumping *beans* inside... bouncing on tiny *trampolines*?', hold: 0.6 },
+      { id: 'look', text: "Hmm, maybe not! Let's look inside a popcorn seed. It's called a kernel.", say: "Hmm, maybe *not*! Let's look inside a popcorn seed... It's called a *kernel*.", hold: 0.8 },
+      { id: 'e1', text: 'A kernel has a hard shell, soft starch inside, its food store, and a tiny drop of water.', say: 'A kernel has a hard *shell*... soft *starch* inside, its food store... and a tiny drop of *water*.', hold: 0.5 },
+      { id: 'e2', text: 'When the pan gets hot, the water turns into steam. Steam needs much more room than water!', say: 'When the pan gets *hot*... the water turns into *steam*. Steam needs much more *room* than water!', hold: 0.5 },
+      { id: 'e3', text: 'The steam pushes on the shell, but the shell is strong. The push gets bigger, and bigger, and bigger! Scientists call this push pressure.', say: 'The steam *pushes* on the shell... but the shell is strong. The push gets bigger... and bigger, and *bigger*! Scientists call this push... *pressure*.', hold: 0.5 },
+      { id: 'e4', text: 'When it\'s very hot, much hotter than boiling water, the shell cracks and the steam whooshes out: Pop! The soft starch puffs out into white fluff, and sets.', say: 'When it\'s very *hot*, much hotter than boiling water... the shell *cracks*... and the steam *whooshes* out. *Pop*! The soft starch puffs out into white *fluff*, and sets.', hold: 0.5 },
+      { id: 'e5', text: 'The puff pushes on the pan like a tiny leg, and boing! The popcorn jumps!', say: 'The puff pushes on the pan like a tiny *leg*... {sfx:slide_up}and *boing*! The popcorn *jumps*!', hold: 0.8 },
+      { id: 'test', text: "Scientists test it! Here's a kernel with a crack in its shell. Let's heat it next to a good one.", say: "{sfx:ding}Scientists *test* it! Here's a kernel with a *crack* in its shell. Let's heat it... next to a good one.", hold: 0.5 },
+      { id: 't1', text: 'The good one pops! The cracked one just hisses: the steam leaks out of the crack, so the push never gets big. No pop!', say: 'The good one *pops*! The cracked one just *hisses*... the steam leaks out of the crack, so the push never gets big. No *pop*!', hold: 0.8 },
+      { id: 'real', text: 'Wow fact! The oldest popcorn found so far is about 6,700 years old. People in Peru were popping corn long, long ago!', say: '{sfx:ding}*Wow* fact! The oldest popcorn found so far... is about six thousand, seven hundred years old! {pause 0.7} People in Peru were popping corn... long, long ago!', hold: 0.6 },
+      { id: 'safe', text: 'Popping needs a very hot pan, so popping popcorn is a job for grown-ups.', say: 'Popping needs a very *hot* pan... so popping popcorn is a job for *grown-ups*.', hold: 0.8 },
+      { id: 'sayit', text: 'Say it with me: Steam inside makes it pop!', say: 'Say it with me... {sfx:ding}Steam inside makes it *pop*! {pause 0.9} {slow}Steam inside... makes it pop!{/slow}', hold: 1.4 },
+      { id: 'try1', text: 'Let\'s try it at home! Ask a grown-up for a paper bag. Never a plastic one!', say: '{sfx:tada}Let\'s try it at home! Ask a grown-up for a *paper* bag... never a plastic one!', hold: 0.4 },
+      { id: 'try2', text: 'Blow it full of air, a few big breaths, then rest. Twist it shut, hold it away from faces, and clap it. Pop! What burst the bag? The squeezed air pushing out!', say: 'Blow it full of *air*, a few big breaths... then rest. Twist it *shut*... hold it away from faces... and clap it! *Pop*! {pause 0.3} What burst the *bag*? {w}The squeezed air... pushing out!{/w}', hold: 1.6 },
+      { id: 'bye', text: 'Great job, little scientist! Remember: steam inside makes it pop! See you next time at the Little Scientists Club! Bye-bye!', say: '{sfx:tada}Great job, little scientist! Remember... steam inside makes it *pop*! See you next time, at the Little Scientists Club! {hi}Bye-bye!{/hi}', hold: 1.2 }
+    ],
+    sfx: [
+      { line: 's3', chunk: 'oops', offset: -0.45, name: 'boing' },
+      { line: 's3', chunk: 'toss one up', offset: 0.98, name: 'slide_up', vol: 0.6 },
+      { line: 's4', chunk: 'yummy', offset: 0.65, name: 'munch' },
+      { line: 'e4', chunk: 'pop', offset: 0.35, name: 'pop' },
+      { line: 't1', chunk: 'no pop', offset: 0.8, name: 'slide_down' },
+      { line: 'try2', chunk: 'pop', offset: 0.35, name: 'pop' },
+      { line: 'guess', chunk: 'bouncing on', offset: 0.4, name: 'boing', vol: 0.5 },
+      { line: 'look', chunk: 'hmm, maybe not', offset: 0.2, name: 'pop', vol: 0.5 },
+      { line: 'look', chunk: "it's called a", offset: 0.2, name: 'zoom' },
+      { line: 'e2', chunk: 'the water turns into', offset: 0.6, name: 'bubble', vol: 0.5 },
+      { line: 't1', chunk: 'the cracked one', offset: 1.8, name: 'whoosh', vol: 0.35 },
+      { line: 'real', chunk: 'people in peru', offset: -0.7, name: 'sparkle', vol: 0.5 }
+    ],
+    scenes: [
+      { from: 'hello', draw: (ctx, t, Lt) => L.scenes.intro(ctx, t, Lt) },
+      { from: 'q', draw: (ctx, t, Lt) => L.scenes.question(ctx, t, Lt, (c, tt) => { kernel(c, -120, 60, 0.3, {}); L.arrow(c, -40, 60, 40, 60, P.ink, 10); flake(c, 140, 50, 1.0, Math.sin(tt * 3) * 0.2); }, { word: 'Why?' }) },
+      { from: 's1', draw: (ctx, t, Lt) => kitchenScene(ctx, t, Lt) },
+      { from: 'e1', transition: 'cut', draw: (ctx, t, Lt) => kernelScene(ctx, t, Lt) },
+      { from: 'test', draw: (ctx, t, Lt) => testScene(ctx, t, Lt) },
+      { from: 'real', draw: (ctx, t, Lt) => wowScene(ctx, t, Lt) },
+      { from: 'safe', draw: (ctx, t, Lt) => safeScene(ctx, t, Lt) },
+      { from: 'sayit', draw: (ctx, t, Lt) => sayScene(ctx, t, Lt) },
+      { from: 'try1', draw: (ctx, t, Lt) => tryScene(ctx, t, Lt) },
+      { from: 'bye', draw: (ctx, t, Lt) => outro(ctx, t, Lt, 'Steam inside makes it pop!') }
+    ],
+    interactives: [
+      {
+        title: 'Heat a kernel',
+        hint: 'Drag the red HEAT knob up. Watch the water turn to steam and the push grow. What happens at about 180 °C?',
+        init: s => { s.h = 0; s.steam = 0; s.popped = false; s.pt = 0; s.drag = false; s.touched = false; s.lastCue = ''; s.pend = null; s.saidSteam = false; },
+        update: (s, dt, cue) => {
+          const temp = t1Temp(s);
+          if (!s.popped) {
+            const target = temp < 100 ? 0 : clamp((temp - 100) / 80, 0, 1);
+            s.steam += clamp(target - s.steam, -dt * 0.8, dt * 0.6);
+            if (s.steam > 0.08 && !s.saidSteam) { s.saidSteam = true; s.pend = 'steam'; }
+            if (temp >= 180 && s.steam >= 0.95) { s.popped = true; s.pt = 0; s.pend = 'pop'; if (L.sound) { try { L.sound.noise(0.08, 0.5, { lp: 6000, hp: 800 }); L.sound.tone(500, 0.35, { type: 'sine', vol: 0.2, glide: 1400 }); } catch (e) { /* no sound */ } } }
+          } else s.pt += dt;
+          if (s.pend) { const id = s.pend; s.pend = null; s.lastCue = id; cue(id); }
+        },
+        draw: (ctx, s, t) => t1Draw(ctx, s, t),
+        pointer: (s, type, x, y) => {
+          const by = lerp(T1.by0, T1.by1, s.h);
+          if (type === 'down') {
+            if (Math.hypot(x - T1.bx, y - by) < 95 || (Math.abs(x - T1.bx) < 90 && y > T1.by1 - 60 && y < T1.by0 + 60)) { s.drag = true; s.touched = true; s.h = clamp((T1.by0 - y) / (T1.by0 - T1.by1), 0, 1); return; }
+            if (s.popped && Math.hypot(x - T1.kx, y - T1.ky) < 320) { s.popped = false; s.steam = 0; s.h = 0; s.pt = 0; s.saidSteam = false; return; }
+          }
+          if (type === 'move' && s.drag) s.h = clamp((T1.by0 - y) / (T1.by0 - T1.by1), 0, 1);
+          if (type === 'up') s.drag = false;
+        },
+        cues: {
+          steam: 'The water is turning into steam!',
+          pop: 'Pop! The steam burst the shell. Pop-tastic!'
+        }
+      },
+      {
+        title: 'Which will pop?',
+        hint: 'Tap each kernel to heat it: a good one, one with a cracked shell, and a dried-out one. Which one pops?',
+        init: s => { s.k = T2K.map(() => ({ heat: 0, on: false, done: false, dt: 0 })); s.touched = false; s.lastCue = ''; s.pend = null; },
+        update: (s, dt, cue) => {
+          s.k.forEach((st, i) => {
+            if (st.on && !st.done) { st.heat = Math.min(1, st.heat + dt / 1.6); if (st.heat >= 1) { st.done = true; st.dt = 0; const k = T2K[i].k; s.pend = k === 'good' ? 'yes' : k === 'cracked' ? 'leak' : 'dry'; if (L.sound) { try { if (k === 'good') L.sound.noise(0.08, 0.5, { lp: 6000, hp: 800 }); else if (k === 'cracked') L.sound.noise(0.9, 0.15, { lp: 7000, hp: 2500 }); } catch (e) { /* no sound */ } } } }
+            if (st.done) st.dt += dt;
+          });
+          if (s.pend) { const id = s.pend; s.pend = null; s.lastCue = id; cue(id); }
+        },
+        draw: (ctx, s, t) => t2Draw(ctx, s, t),
+        pointer: (s, type, x, y) => {
+          if (type !== 'down') return;
+          for (let i = 0; i < T2K.length; i++) { if (Math.abs(x - t2X(i)) < 230 && y > 250 && y < 760) { s.touched = true; const st = s.k[i]; if (st.done) s.k[i] = { heat: 0, on: false, done: false, dt: 0 }; else st.on = true; return; } }
+        },
+        cues: {
+          yes: 'Pop! The good kernel kept its steam inside.',
+          leak: 'Hiss! The steam leaked out of the crack. No pop.',
+          dry: 'Nothing! It dried out, so there is too little water to make enough steam. No pop.'
+        }
+      }
+    ]
+  };
+})(typeof window !== 'undefined' ? window : globalThis);
+
+/* Episode 24 — How does a caterpillar become a butterfly?  (the butterfly life cycle: metamorphosis)
+   Story: in the garden Curie finds a nibbled leaf and a hungry monarch caterpillar, then a butterfly. Silly guess first: did
+   the caterpillar put on a butterfly costume? Curie tries paper wings, flaps, wobbles and plops down. Maybe not!
+   -> look closer from the start: a monarch butterfly lays a tiny egg on a leaf; a tiny caterpillar wriggles out and its
+   first meal is its own eggshell; it eats leaves all day and grows (a little burp: excuse me!); its skin can't grow with
+   it, so it wriggles out of its old skin again and again. Wow fact: in about two weeks a monarch caterpillar gets about
+   2,000 times heavier (like a baby growing as heavy as a big elephant). It hangs upside down and sheds its skin one last
+   time: underneath is a chrysalis. Inside, its body breaks down and is built again into a butterfly: metamorphosis (a big
+   change; a silly tongue-twister). The butterfly comes out with wet, crumpled wings, pumps them up, lets them dry and flies;
+   later it lays eggs: round and round. How do scientists know? They watch: they look after caterpillars and check them
+   every day. -> say it -> try at home (a leaf hunt with a grown-up: look, don't touch).
+   Sources (checked 4 Nov 2026): American Museum of Natural History, "A guide to the butterfly life cycle" (egg, caterpillar
+   (larva), chrysalis (pupa), butterfly; the caterpillar eats and grows, shedding its skin; the last shed reveals the
+   chrysalis; inside, the tissues rearrange into wings, legs and antennae; the butterfly comes out with wet, crumpled wings
+   and pumps them up); Butterfly Conservation, "Life cycle of butterflies and moths" (eggs are laid on the plant the
+   caterpillar will eat; it sheds its skin to grow, most caterpillars five times; inside the chrysalis the body breaks down
+   and reforms); Journey North, "Two thousand times in just two weeks" (a monarch caterpillar's first meal is its own
+   eggshell; it gets about 2,000 times heavier in about 9-14 days). Elephant comparison: a newborn of about 3.5 kg x 2,000 =
+   about 7,000 kg, the weight of a big elephant.
+   Try it 1 "Feed the caterpillar" (drag leaves; it grows, sheds its skin, makes a chrysalis, becomes a butterfly);
+   Try it 2 "Life cycle circle" (put the four stages in order round the circle). */
+(function (global) {
+  const L = global.LSC; const LSC = L; const { W, H, P, E, seg, clamp, lerp, circle, ellipse, text, roundRect } = L;
+  L.episodes = L.episodes || {};
+  const PI = Math.PI, TAU = PI * 2;
+  const stk = (ctx, s, x, y, pIn, pOut, o) => L.sticker(ctx, s, x, y, pIn * (1 - (pOut || 0)), o);
+  const LEAF = '#5DBB4A', LEAFD = '#3E8E2E', MON = '#F28C28', MOND = '#D9661A', CHRY = '#7FD8A6', GOLD = '#F2C230';
+  const CLOSE = '#EAF6E4';          // the close-up background (also the colour of the holes nibbled in leaves there)
+  const ELE = '#A9B2C3', BONNET = '#FF9BD2';
+
+  // ---------- props ----------
+  // a leaf: (x, y) = where the stalk joins; it points up (rot turns it). o.bites: list of [t 0..1 along the edge, side -1|1];
+  // o.bg: the colour seen through the holes; o.w, o.len
+  function leaf(ctx, x, y, s, rot, o) {
+    o = o || {}; const w = o.w || 130, Ln = o.len || 320;
+    ctx.save(); ctx.translate(x, y); ctx.rotate(rot || 0); ctx.scale(s, s); ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+    const path = () => { ctx.beginPath(); ctx.moveTo(0, 0); ctx.quadraticCurveTo(-w, -Ln * 0.45, 0, -Ln); ctx.quadraticCurveTo(w, -Ln * 0.45, 0, 0); ctx.closePath(); };
+    ctx.strokeStyle = LEAFD; ctx.lineWidth = 10; ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(0, 46); ctx.stroke();
+    path(); ctx.fillStyle = o.color || LEAF; ctx.fill(); ctx.strokeStyle = P.ink; ctx.lineWidth = 6; ctx.stroke();
+    ctx.strokeStyle = 'rgba(255,255,255,0.45)'; ctx.lineWidth = 5; ctx.beginPath(); ctx.moveTo(0, -10); ctx.lineTo(0, -Ln * 0.88); ctx.stroke();
+    for (let k = 1; k <= 4; k++) { const yy = -Ln * k / 5.4; for (const sd of [-1, 1]) { ctx.beginPath(); ctx.moveTo(0, yy); ctx.quadraticCurveTo(sd * w * 0.25, yy - 18, sd * w * 0.42, yy - 46); ctx.stroke(); } }
+    if (o.bites && o.bites.length) {
+      ctx.save(); path(); ctx.clip();
+      for (const [u, sd] of o.bites) { const bx = sd * 2 * u * (1 - u) * w, by = -(2 * u * (1 - u) * 0.45 * Ln + u * u * Ln); circle(ctx, bx + sd * 10, by, 34, o.bg || CLOSE, P.ink, 5); }
+      ctx.restore();
+    }
+    ctx.restore();
+  }
+  // a monarch egg, standing on the leaf at (x, y). o.crack 0..1; o.eaten 0..1 (the caterpillar eats the shell)
+  function egg(ctx, x, y, s, o) {
+    o = o || {}; const e = clamp(o.eaten || 0, 0, 1); if (e >= 1) return;
+    ctx.save(); ctx.translate(x, y); ctx.scale(s, s * (1 - 0.85 * e)); ctx.lineJoin = 'round';
+    ctx.beginPath(); ctx.moveTo(0, -60); ctx.bezierCurveTo(30, -58, 34, -10, 26, 0); ctx.lineTo(-26, 0); ctx.bezierCurveTo(-34, -10, -30, -58, 0, -60); ctx.closePath();
+    ctx.fillStyle = '#FFF4D2'; ctx.fill(); ctx.strokeStyle = P.ink; ctx.lineWidth = 5; ctx.stroke();
+    ctx.strokeStyle = 'rgba(180,150,90,0.6)'; ctx.lineWidth = 3; for (const xx of [-14, 0, 14]) { ctx.beginPath(); ctx.moveTo(xx * 0.6, -54); ctx.lineTo(xx, -4); ctx.stroke(); }
+    const c = clamp(o.crack || 0, 0, 1);
+    if (c > 0) { ctx.strokeStyle = P.ink; ctx.lineWidth = 4; ctx.beginPath(); ctx.moveTo(-24, -32); for (let i = 1; i <= 6; i++) ctx.lineTo(-24 + i * 8 * c, -32 + (i % 2 ? -8 : 6)); ctx.stroke(); }
+    ctx.restore();
+  }
+  // a monarch caterpillar. (x, y) = the ground point under its middle (or the tail tip if o.tail is true). o.n segments;
+  // o.dir 1 faces right; o.crawl (radians) moves the humps; o.bend (radians per segment) curls it; o.rot turns it;
+  // o.munch 0..1 opens the mouth; o.tight 0..1 squeezes it into its skin; o.mood 'happy' | 'wow' | 'puff'; o.alpha
+  function caterpillar(ctx, x, y, s, t, o) {
+    o = o || {}; const n = o.n || 9, r = 26, gap = 30, tight = clamp(o.tight || 0, 0, 1);
+    const pts = []; let px = 0, py = 0, a = 0;
+    for (let i = 0; i < n; i++) { pts.push([px, py]); px += gap * Math.cos(a); py += gap * Math.sin(a); a += o.bend || 0; }
+    const cx = o.tail ? 0 : (pts[0][0] + pts[n - 1][0]) / 2, cy = o.tail ? 0 : (pts[0][1] + pts[n - 1][1]) / 2;
+    ctx.save(); ctx.translate(x, y); ctx.rotate(o.rot || 0); ctx.scale(s * (o.dir === -1 ? -1 : 1), s); if (o.alpha != null) ctx.globalAlpha *= clamp(o.alpha, 0, 1);
+    ctx.translate(-cx, o.tail ? 0 : -r - cy); ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+    const hump = i => (o.crawl == null ? 0 : Math.max(0, Math.sin(o.crawl - i * 0.75)) * 12);
+    const rr = r * (1 + 0.16 * tight);
+    // little feet
+    if (!o.tail) for (let i = 0; i < n - 1; i++) ellipse(ctx, pts[i][0], pts[i][1] + rr - 2 - hump(i) * 0.3, 8, 6, P.ink);
+    // filaments at the tail
+    ctx.strokeStyle = P.ink; ctx.lineWidth = 5;
+    const tl = pts[0]; ctx.beginPath(); ctx.moveTo(tl[0], tl[1] - rr * 0.6 - hump(0)); ctx.quadraticCurveTo(tl[0] - 20, tl[1] - rr - 26, tl[0] - 34, tl[1] - rr - 14 + Math.sin(t * 3) * 3); ctx.stroke();
+    for (let i = 0; i < n; i++) {
+      const [sx, sy0] = pts[i], sy = sy0 - hump(i);
+      ctx.save(); ctx.beginPath(); ctx.arc(sx, sy, rr, 0, TAU); ctx.fillStyle = '#FFFDF2'; ctx.fill(); ctx.clip();
+      ctx.fillStyle = '#FFD23F'; ctx.fillRect(sx - 15, sy - rr, 7, 2 * rr); ctx.fillRect(sx + 8, sy - rr, 7, 2 * rr);
+      ctx.fillStyle = P.ink; ctx.fillRect(sx - 6, sy - rr, 11, 2 * rr); ctx.restore();
+      ctx.strokeStyle = P.ink; ctx.lineWidth = 5; ctx.beginPath(); ctx.arc(sx, sy, rr, 0, TAU); ctx.stroke();
+      if (tight > 0.3) { ctx.save(); ctx.globalAlpha = (tight - 0.3) * 1.4; ctx.strokeStyle = 'rgba(255,255,255,0.9)'; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(sx, sy, rr - 7, -2.4, -1.4); ctx.stroke(); ctx.restore(); }
+    }
+    // head
+    const hd = pts[n - 1], ang = a - (o.bend || 0), hx = hd[0] + Math.cos(ang) * 30, hy = hd[1] + Math.sin(ang) * 30 - hump(n - 1);
+    ctx.strokeStyle = P.ink; ctx.lineWidth = 5; ctx.beginPath(); ctx.moveTo(hx - 6, hy - 20); ctx.quadraticCurveTo(hx - 10, hy - 52, hx + 14, hy - 62 + Math.sin(t * 3 + 1) * 3); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(hx + 8, hy - 22); ctx.quadraticCurveTo(hx + 12, hy - 52, hx + 36, hy - 56 + Math.sin(t * 3) * 3); ctx.stroke();
+    const puff = o.mood === 'puff' ? 1 : 0;
+    circle(ctx, hx, hy, rr * 1.05 + puff * 4, '#FFE79A', P.ink, 5);
+    circle(ctx, hx + 8, hy - 8, 8, P.ink); circle(ctx, hx + 10, hy - 10, 2.6, P.white);
+    if (puff) { circle(ctx, hx + 16, hy + 8, 9, 'rgba(255,120,150,0.7)'); }
+    const m = clamp(o.munch || 0, 0, 1);
+    if (o.mood === 'wow' || m > 0.05) ellipse(ctx, hx + 15, hy + 9, 6 + 3 * m, 4 + 7 * Math.max(m, o.mood === 'wow' ? 0.7 : 0), P.ink);
+    else { ctx.beginPath(); ctx.arc(hx + 12, hy + 4, 9, 0.15 * PI, 0.75 * PI); ctx.lineWidth = 4; ctx.stroke(); }
+    ctx.restore();
+    return { hx, hy };
+  }
+  // the old skin left behind: a crumpled, see-through little heap. (x, y) = the ground point
+  function oldSkin(ctx, x, y, s, a) {
+    if (a <= 0) return; ctx.save(); ctx.translate(x, y); ctx.scale(s, s); ctx.globalAlpha *= clamp(a, 0, 1);
+    ctx.fillStyle = 'rgba(230,215,170,0.8)'; ctx.strokeStyle = '#9A8B5E'; ctx.lineWidth = 4; ctx.lineJoin = 'round';
+    ctx.beginPath(); ctx.moveTo(-50, 0); ctx.lineTo(-40, -22); ctx.lineTo(-24, -14); ctx.lineTo(-12, -30); ctx.lineTo(4, -18); ctx.lineTo(18, -32); ctx.lineTo(34, -16); ctx.lineTo(50, -24); ctx.lineTo(54, 0); ctx.closePath(); ctx.fill(); ctx.stroke();
+    ctx.restore();
+  }
+  // a chrysalis hanging from (x, y). o.crack 0..1 splits it; o.see 0..1 opens a window to look inside; o.inside(ctx) draws
+  // what we see there (in chrysalis coordinates); o.clear 0..1 turns it see-through (just before the butterfly comes out)
+  function chrysalis(ctx, x, y, s, t, o) {
+    o = o || {}; ctx.save(); ctx.translate(x, y); ctx.rotate(Math.sin(t * 1.3) * 0.03); ctx.scale(s, s); ctx.lineJoin = 'round';
+    ctx.strokeStyle = P.ink; ctx.lineWidth = 6; ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(0, 22); ctx.stroke();
+    const body = () => { ctx.beginPath(); ctx.moveTo(0, 18); ctx.bezierCurveTo(46, 22, 64, 70, 60, 120); ctx.bezierCurveTo(56, 180, 24, 220, 0, 224); ctx.bezierCurveTo(-24, 220, -56, 180, -60, 120); ctx.bezierCurveTo(-64, 70, -46, 22, 0, 18); ctx.closePath(); };
+    const cl = clamp(o.clear || 0, 0, 1);
+    body(); ctx.fillStyle = cl > 0 ? 'rgba(127,216,166,' + (1 - 0.6 * cl).toFixed(3) + ')' : CHRY; ctx.fill();
+    if (cl > 0) { ctx.save(); body(); ctx.clip(); ctx.globalAlpha = cl; butterfly(ctx, 0, 110, 0.55, t, { folded: 1 }); ctx.restore(); }
+    ctx.fillStyle = 'rgba(255,255,255,0.3)'; ctx.beginPath(); ctx.ellipse(-24, 90, 12, 44, 0.1, 0, TAU); ctx.fill();
+    const see = clamp(o.see || 0, 0, 1);
+    if (see > 0 && o.inside) { ctx.save(); body(); ctx.clip(); ctx.beginPath(); ctx.ellipse(0, 125, 50 * see, 88 * see, 0, 0, TAU); ctx.fillStyle = '#FFF6E8'; ctx.fill(); ctx.clip(); o.inside(ctx); ctx.restore(); ctx.strokeStyle = P.ink; ctx.lineWidth = 4; ctx.setLineDash([10, 8]); ctx.beginPath(); ctx.ellipse(0, 125, 50 * see, 88 * see, 0, 0, TAU); ctx.stroke(); ctx.setLineDash([]); }
+    body(); ctx.strokeStyle = '#2E8B57'; ctx.lineWidth = 7; ctx.stroke(); body(); ctx.strokeStyle = P.ink; ctx.lineWidth = 3; ctx.stroke();
+    ctx.fillStyle = P.ink; ctx.fillRect(-40, 66, 80, 6);
+    for (const [gx, gy] of [[-36, 62], [-18, 62], [0, 62], [18, 62], [36, 62], [-28, 150], [28, 150], [-14, 196], [14, 196]]) circle(ctx, gx, gy, 5, GOLD, P.ink, 2);
+    const c = clamp(o.crack || 0, 0, 1);
+    if (c > 0) { ctx.strokeStyle = P.ink; ctx.lineWidth = 5; ctx.beginPath(); ctx.moveTo(0, 210); for (let i = 1; i <= 8; i++) ctx.lineTo((i % 2 ? 8 : -8), 210 - i * 22 * c); ctx.stroke(); }
+    ctx.restore();
+  }
+  // a monarch butterfly seen from above. o.flap 0..1 (wing beat), o.crumple 0..1 (fresh out: small, wet, crumpled),
+  // o.folded 1 (wings folded flat, seen inside the chrysalis), o.rot, o.ph (beat phase)
+  function butterfly(ctx, x, y, s, t, o) {
+    o = o || {}; const fl = o.flap == null ? 0 : clamp(o.flap, 0, 1), cr = clamp(o.crumple || 0, 0, 1), fo = clamp(o.folded || 0, 0, 1);
+    const beat = fl * (0.5 + 0.5 * Math.sin(t * 13 + (o.ph || 0))), k = clamp(1 - 0.75 * beat, 0.2, 1) * (1 - 0.55 * fo);
+    const ws = lerp(1, 0.42, cr);
+    ctx.save(); ctx.translate(x, y); ctx.rotate(o.rot || 0); ctx.scale(s, s); ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+    for (const sd of [-1, 1]) {
+      ctx.save(); ctx.scale(sd * k * ws, ws * (1 - 0.15 * fo)); if (cr > 0) ctx.rotate(0.25 * cr);
+      const fore = () => { ctx.beginPath(); ctx.moveTo(6, -24); ctx.bezierCurveTo(60, -120, 150, -130, 168, -90); ctx.bezierCurveTo(176, -50, 120, -6, 8, 4); ctx.closePath(); };
+      const hind = () => { ctx.beginPath(); ctx.moveTo(8, 2); ctx.bezierCurveTo(110, -2, 140, 60, 118, 104); ctx.bezierCurveTo(96, 140, 30, 110, 6, 40); ctx.closePath(); };
+      for (const f of [hind, fore]) { f(); ctx.fillStyle = cr > 0.5 ? MOND : MON; ctx.fill(); ctx.strokeStyle = P.ink; ctx.lineWidth = 12; ctx.stroke(); }
+      ctx.strokeStyle = P.ink; ctx.lineWidth = 4;
+      for (const [x2, y2] of [[150, -100], [160, -60], [120, -20], [110, 80], [70, 110], [40, 90]]) { ctx.beginPath(); ctx.moveTo(10, y2 < 0 ? -10 : 10); ctx.quadraticCurveTo(x2 * 0.5, y2 * 0.6, x2 * 0.9, y2 * 0.9); ctx.stroke(); }
+      for (const [dx, dy] of [[160, -96], [168, -72], [150, -40], [124, 76], [108, 108], [80, 120]]) circle(ctx, dx, dy, 5, P.white);
+      if (cr > 0.2) { ctx.strokeStyle = 'rgba(43,45,66,0.5)'; ctx.lineWidth = 4; for (const [a1, b1, a2, b2] of [[40, -70, 90, -40], [60, 30, 90, 80], [100, -90, 130, -60]]) { ctx.beginPath(); ctx.moveTo(a1, b1); ctx.lineTo(a2, b2); ctx.stroke(); } }
+      ctx.restore();
+    }
+    ellipse(ctx, 0, 6, 12, 50, P.ink); circle(ctx, 0, -48, 14, P.ink);
+    for (const d of [-1, 1]) { circle(ctx, d * 7, -52, 3.5, P.white); ctx.strokeStyle = P.ink; ctx.lineWidth = 4; ctx.beginPath(); ctx.moveTo(d * 5, -60); ctx.quadraticCurveTo(d * 14, -90, d * 26, -102); ctx.stroke(); circle(ctx, d * 26, -102, 6, P.ink); }
+    ctx.restore();
+  }
+  function baby(ctx, x, y, s, t) {
+    ctx.save(); ctx.translate(x, y + Math.sin(t * 3) * 2); ctx.scale(s, s); ctx.lineJoin = 'round';
+    ellipse(ctx, 0, -60, 70, 62, '#7FC8FF', P.ink, 6); ellipse(ctx, -40, -6, 26, 14, '#F5CFAE', P.ink, 5); ellipse(ctx, 40, -6, 26, 14, '#F5CFAE', P.ink, 5);
+    circle(ctx, 0, -160, 62, '#F5CFAE', P.ink, 6);
+    ctx.fillStyle = BONNET; ctx.beginPath(); ctx.arc(0, -168, 70, PI * 1.05, TAU - 0.05 * PI); ctx.closePath(); ctx.fill(); ctx.strokeStyle = P.ink; ctx.lineWidth = 6; ctx.stroke();
+    circle(ctx, -20, -158, 6, P.ink); circle(ctx, 20, -158, 6, P.ink); circle(ctx, 0, -126, 13, P.blue, P.ink, 4);
+    ctx.restore();
+  }
+  // a big elephant wearing the baby's bonnet (feet on y, faces left)
+  function elephant(ctx, x, y, s, t) {
+    ctx.save(); ctx.translate(x, y); ctx.scale(s, s); ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+    ctx.fillStyle = ELE; ctx.strokeStyle = P.ink; ctx.lineWidth = 8;
+    for (const lx of [-120, -40, 70, 150]) { roundRect(ctx, lx - 34, -150, 68, 150, 20); ctx.fill(); ctx.stroke(); }
+    ctx.beginPath(); ctx.ellipse(20, -220, 220, 150, 0, 0, TAU); ctx.fill(); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(236, -240); ctx.quadraticCurveTo(290, -200, 270, -150); ctx.stroke();
+    // head, trunk, ear
+    ctx.beginPath(); ctx.ellipse(-210, -300, 110, 105, 0, 0, TAU); ctx.fill(); ctx.stroke();
+    const sw = Math.sin(t * 1.6) * 0.15;
+    ctx.save(); ctx.translate(-300, -260); ctx.rotate(sw); ctx.lineWidth = 50; ctx.strokeStyle = P.ink; ctx.beginPath(); ctx.moveTo(0, 0); ctx.quadraticCurveTo(-40, 120, 10, 170); ctx.stroke(); ctx.lineWidth = 38; ctx.strokeStyle = ELE; ctx.stroke(); ctx.restore();
+    ctx.fillStyle = '#C3CAD7'; ctx.beginPath(); ctx.ellipse(-130, -290, 70, 95, 0.2, 0, TAU); ctx.fill(); ctx.strokeStyle = P.ink; ctx.lineWidth = 8; ctx.stroke();
+    circle(ctx, -250, -320, 10, P.ink); circle(ctx, -246, -324, 3, P.white);
+    ctx.strokeStyle = P.ink; ctx.lineWidth = 5; ctx.beginPath(); ctx.arc(-230, -280, 22, 0.3 * PI, 0.8 * PI); ctx.stroke();
+    // the bonnet
+    ctx.fillStyle = BONNET; ctx.beginPath(); ctx.arc(-210, -320, 108, PI * 1.08, TAU - 0.08 * PI); ctx.closePath(); ctx.fill(); ctx.strokeStyle = P.ink; ctx.lineWidth = 7; ctx.stroke();
+    for (let i = 0; i < 5; i++) circle(ctx, -300 + i * 45, -330 - Math.sin(i / 4 * PI) * 60, 9, P.white, P.ink, 3);
+    ctx.restore();
+  }
+  function twig(ctx, x0, x1, y) { ctx.strokeStyle = '#8A5A2B'; ctx.lineWidth = 26; ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(x0, y); ctx.quadraticCurveTo((x0 + x1) / 2, y - 24, x1, y + 10); ctx.stroke(); ctx.strokeStyle = P.ink; ctx.lineWidth = 5; ctx.beginPath(); ctx.moveTo(x0, y - 13); ctx.quadraticCurveTo((x0 + x1) / 2, y - 37, x1, y - 3); ctx.stroke(); ctx.beginPath(); ctx.moveTo(x0, y + 13); ctx.quadraticCurveTo((x0 + x1) / 2, y - 11, x1, y + 23); ctx.stroke(); }
+  function closeBg(ctx) { ctx.fillStyle = CLOSE; ctx.fillRect(0, 0, W, H); ctx.fillStyle = 'rgba(93,187,74,0.12)'; for (const [x, y, r] of [[160, 160, 120], [1800, 240, 160], [1700, 900, 200], [120, 900, 160]]) { ctx.beginPath(); ctx.arc(x, y, r, 0, TAU); ctx.fill(); } }
+  function garden(ctx, t) { L.sky(ctx); L.sun(ctx, 1720, 150, 80, t); L.cloud(ctx, 520 + Math.sin(t * 0.3) * 14, 150, 0.8); L.ground(ctx, 800); for (let i = 0; i < 9; i++) { const x = 60 + i * 230; ctx.fillStyle = '#7CC25A'; ctx.beginPath(); ctx.moveTo(x - 30, 800); ctx.quadraticCurveTo(x, 700 - (i % 3) * 20, x + 30, 800); ctx.fill(); } }
+  // a puff of air (the little burp)
+  function puff(ctx, x, y, p) { if (p <= 0 || p >= 1) return; ctx.save(); ctx.globalAlpha = 1 - p; for (let i = 0; i < 3; i++) circle(ctx, x + 30 * p + i * 22 * p, y - 20 * p - i * 10, 10 + 14 * p - i * 2, P.white, 'rgba(43,45,66,0.4)', 3); ctx.restore(); }
+  // paper wings for Curie's costume (drawn in Curie's own coordinates, behind her)
+  function paperWings(ctx, flap) {
+    ctx.save(); ctx.lineJoin = 'round';
+    for (const sd of [-1, 1]) { ctx.save(); ctx.translate(sd * 60, -20); ctx.rotate(sd * (-0.25 - 0.5 * flap)); ctx.fillStyle = sd < 0 ? '#FF9BD2' : '#FFB3DE'; ctx.strokeStyle = P.ink; ctx.lineWidth = 7;
+      ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(sd * 190, -150); ctx.lineTo(sd * 230, -30); ctx.lineTo(sd * 170, 60); ctx.lineTo(sd * 200, 140); ctx.lineTo(sd * 60, 90); ctx.closePath(); ctx.fill(); ctx.stroke();
+      circle(ctx, sd * 150, -50, 22, P.sun, P.ink, 4); circle(ctx, sd * 130, 70, 14, P.white, P.ink, 3); ctx.restore(); }
+    ctx.restore();
+  }
+  function dizzy(ctx, x, y, t, a) { if (a <= 0) return; ctx.save(); ctx.globalAlpha = clamp(a, 0, 1); for (let i = 0; i < 3; i++) { const an = t * 4 + i * TAU / 3; L.star(ctx, x + Math.cos(an) * 90, y + Math.sin(an) * 22, 22, P.sun, an); } ctx.restore(); }
+
+  // ======================= THE GARDEN (s1, s2) =======================
+  const GL = { x: 1180, y: 760 };
+  function gardenScene(ctx, t, Lt) {
+    garden(ctx, t);
+    // the plant
+    ctx.strokeStyle = LEAFD; ctx.lineWidth = 16; ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(GL.x, 800); ctx.quadraticCurveTo(GL.x - 20, 600, GL.x + 10, 380); ctx.stroke();
+    const mu = Lt.chunk('s1', 'munch, munch'), nb = seg(t, mu, mu + 2.0);
+    const bites = [[0.35, 1], [0.55, 1], [0.7, 1], [0.45, -1], [0.62, -1]].slice(0, Lt.cafter('s1', 'someone has been') ? 2 + Math.floor(nb * 3.99) : 0);
+    leaf(ctx, GL.x - 5, 640, 1.1, -0.9, { bg: P.sky });
+    leaf(ctx, GL.x + 10, 520, 1.25, 0.75, { bites, bg: '#BFE3FF' });
+    leaf(ctx, GL.x + 6, 400, 0.9, -0.2, { bg: '#BFE3FF' });
+    // the caterpillar on the big leaf (it shows itself on "munch, munch")
+    const ca = Lt.cwin('s1', 'munch, munch', 0.6, E.outBack, 0.1);
+    if (ca > 0) caterpillar(ctx, GL.x + 175, 400, 0.75 * clamp(ca, 0, 1.15), t, { rot: 0.75 - PI / 2 + PI / 2, n: 7, dir: -1, munch: Lt.cafter('s1', 'munch, munch') && !Lt.after('s2') ? 0.5 + 0.5 * Math.sin(t * 16) : 0, crawl: t * 3 });
+    // the butterfly flutters in
+    const bf = Lt.cwin('s2', 'and over there', 1.6, E.inOut);
+    if (bf > 0) butterfly(ctx, lerp(2050, 1640, bf) + Math.sin(t * 2) * 20, lerp(250, 360, bf) + Math.sin(t * 3.2) * 30, 0.6, t, { flap: 1, rot: -0.2 });
+    L.pip(ctx, { x: 420, y: 650, s: 1.1, t, mood: Lt.cafter('s2', 'but how') ? 'think' : Lt.cafter('s1', "it's a hungry") ? 'wow' : 'talk', armR: -0.5, armL: 0.6, lookX: 0.8, lookY: -0.2 });
+    const o = { size: 70, rot: -0.04 };
+    stk(ctx, 'in the garden', 820, 140, Lt.win('s1', 0.1, 0.5), Lt.cwin('s1', 'someone has been', 0.25), Object.assign({ bg: P.green, color: P.white }, o));
+    stk(ctx, 'nibble, nibble!', 820, 140, Lt.cwin('s1', 'someone has been', 0.5, null, 0.4), Lt.cwin('s1', 'munch, munch', 0.25), Object.assign({ bg: P.white }, o));
+    stk(ctx, 'Munch! Munch!', 820, 140, Lt.cwin('s1', 'munch, munch', 0.5), Lt.cwin('s1', "it's a hungry", 0.25), Object.assign({ bg: P.sun, size: 80 }, o));
+    stk(ctx, 'a caterpillar!', 820, 140, Lt.cwin('s1', "it's a hungry", 0.5, null, 0.5), Lt.win('s2', 0, 0.25), Object.assign({ bg: P.sun }, o));
+    stk(ctx, 'a butterfly!', 820, 140, Lt.cwin('s2', 'and over there', 0.5, null, 0.9), Lt.cwin('s2', 'a butterfly was once', 0.25), Object.assign({ bg: MON, color: P.white }, o));
+    stk(ctx, 'once a caterpillar?', 820, 140, Lt.cwin('s2', 'a butterfly was once', 0.5, null, 0.6), Lt.cwin('s2', 'but how', 0.25), Object.assign({ bg: P.white }, o));
+    if (Lt.cafter('s2', 'but how')) L.questionMark(ctx, 820, 250, Lt.cwin('s2', 'but how', 0.5, E.outBack), t, P.purple);
+  }
+
+  // ======================= THE SILLY GUESS (guess) =======================
+  function guessScene(ctx, t, Lt) {
+    garden(ctx, t);
+    leaf(ctx, 1540, 800, 1.3, 0.3, { bg: P.sky });
+    caterpillar(ctx, 1640, 640, 0.7, t, { rot: 0.3 - 0.0, n: 7, dir: -1, mood: Lt.cafter('guess', 'whoa') ? 'wow' : 'happy' });
+    const wings = Lt.cwin('guess', 'maybe the caterpillar', 0.6, E.outBack, 1.6);
+    const f0 = Lt.chunk('guess', 'flap, flap'), w0 = Lt.chunk('guess', 'whoa'), m0 = Lt.chunk('guess', 'maybe not');
+    const up = seg(t, f0, w0, E.out) * (1 - seg(t, w0 + 0.15, w0 + 0.55, E.in));
+    const fl = t > f0 && t < w0 + 0.4 ? 0.5 + 0.5 * Math.sin(t * 16) : 0.2;
+    const wob = t > w0 && t < w0 + 0.6 ? Math.sin((t - w0) * 18) * 0.35 : 0;
+    const land = seg(t, w0 + 0.5, w0 + 0.75), sq = land > 0 ? 0.18 * Math.sin(PI * seg(t, w0 + 0.5, w0 + 0.95)) : 0;
+    const x = 760, y = 650 - up * 220;
+    ctx.save(); ctx.translate(x, y); ctx.rotate(wob + (t > w0 + 0.5 && t < m0 ? 0.12 : 0));
+    if (wings > 0) { ctx.save(); ctx.scale(clamp(wings, 0, 1.1), clamp(wings, 0, 1.1)); paperWings(ctx, fl); ctx.restore(); }
+    L.pip(ctx, { x: 0, y: 0, s: 1.1, t, bob: false, squash: sq, mood: Lt.cafter('guess', 'maybe not') ? 'wink' : t > w0 ? 'wow' : 'talk', armR: -0.6 - 0.6 * fl, armL: -0.6 - 0.6 * fl, lookX: 0.4 });
+    ctx.restore();
+    dizzy(ctx, x, 440, t, seg(t, w0 + 0.6, w0 + 0.9) * (1 - seg(t, m0 + 0.6, m0 + 1.0)));
+    const o = { size: 70, rot: -0.04 };
+    stk(ctx, 'a butterfly costume?', 960, 130, Lt.cwin('guess', 'maybe the caterpillar', 0.5, null, 1.2), Lt.cwin('guess', 'flap, flap', 0.25), Object.assign({ bg: BONNET }, o));
+    stk(ctx, 'Flap! Flap!', 960, 130, Lt.cwin('guess', 'flap, flap', 0.5), Lt.cwin('guess', 'whoa', 0.2), Object.assign({ bg: P.white, size: 84 }, o));
+    stk(ctx, 'Whoa!', 1220, 300, Lt.cwin('guess', 'whoa', 0.4, E.outBack), Lt.cwin('guess', 'maybe not', 0.25), Object.assign({ bg: P.sun, size: 96, rot: 0.08 }, o));
+    stk(ctx, 'Maybe not!', 960, 130, Lt.cwin('guess', 'maybe not', 0.5, null, 0.3), Lt.win('look', 0, 0.25), Object.assign({ bg: P.white, size: 84 }, o));
+  }
+
+  // ======================= THE LIFE CYCLE, CLOSE UP (look, e1, e2, e3) =======================
+  const BL = { x: 330, y: 610 };   // the big leaf lies across the screen: stalk at the left, tip to the right
+  function bigLeaf(ctx, bites) { leaf(ctx, BL.x, BL.y, 2.05, PI / 2 - 0.05, { bites, bg: CLOSE, w: 150, len: 640 }); }
+  function cycleScene(ctx, t, Lt) {
+    closeBg(ctx);
+    const e1 = Lt.after('e1');
+    // leaf bites appear while it eats (e2)
+    const mu = Lt.chunk('e2', 'munch, munch'), nb = seg(t, mu, mu + 2.2);
+    const bites = [[0.5, -1], [0.62, -1], [0.74, -1], [0.56, 1], [0.68, 1]].slice(0, Lt.after('e2') ? Math.floor(nb * 5.99) : 0);
+    bigLeaf(ctx, bites);
+    // the butterfly visits and lays the egg (e1)
+    const lay = Lt.cwin('e1', 'a monarch butterfly', 2.2, E.inOut);
+    if (e1 && lay < 1) { const p = lay; butterfly(ctx, lerp(2050, 1000, Math.min(1, p * 1.6)) + (p > 0.62 ? (p - 0.62) * 2600 : 0), lerp(200, 440, Math.min(1, p * 1.6)) - (p > 0.62 ? (p - 0.62) * 900 : 0), 0.55, t, { flap: 1, rot: -0.2 }); }
+    const eg = Lt.cwin('e1', 'a monarch butterfly', 0.5, E.outBack, 1.2);
+    const hatch = Lt.cwin('e1', 'out wriggles', 0.8, E.inOut, 0.2), eat = Lt.cwin('e1', 'its own eggshell', 1.6, null, 0.1);
+    const EG = { x: 1000, y: 540 };
+    if (e1 && eg > 0) egg(ctx, EG.x, EG.y, 1.6 * clamp(eg, 0, 1.15), { crack: hatch, eaten: eat });
+    // the caterpillar: tiny at first, then it grows (e2), gets tight and wriggles out of its skin (e3)
+    if (e1 && hatch > 0) {
+      const grow = Lt.cwin('e2', 'it grows', 2.6, E.inOut);
+      const sc = lerp(0.55, 1.5, grow), n = Math.round(lerp(5, 9, grow));
+      const tight = Lt.cwin('e3', 'when it gets too tight', 0.9) * (1 - Lt.cwin('e3', 'wriggles out', 0.6, null, 0.3));
+      const shed = Lt.cwin('e3', 'wriggles out', 1.4, E.inOut, 0.2);
+      const x = lerp(EG.x + 90, EG.x + 80, grow) + shed * 140 + (Lt.cafter('e3', 'and again') ? 60 * seg(t, Lt.chunk('e3', 'and again'), Lt.chunk('e3', 'and again') + 2.2) : 0);
+      const munching = (t > Lt.chunk('e1', 'its own eggshell') && eat < 1) || (Lt.after('e2') && nb > 0 && nb < 1) || (Lt.cafter('e2', 'always hungry') && !Lt.after('e3'));
+      // old skins left behind
+      if (shed > 0.1) oldSkin(ctx, EG.x - 20, EG.y + 2, 1.7, shed * 1.5);
+      const again = Lt.cafter('e3', 'and again') ? seg(t, Lt.chunk('e3', 'and again'), Lt.chunk('e3', 'and again') + 2.2) : 0;
+      if (again > 0.3) oldSkin(ctx, EG.x - 150, EG.y + 2, 1.6, (again - 0.3) * 3);
+      if (again > 0.7) oldSkin(ctx, EG.x - 280, EG.y + 2, 1.5, (again - 0.7) * 3);
+      const pos = caterpillar(ctx, x + Math.max(0, 1 - hatch) * -40, EG.y + 4, sc * clamp(hatch * 1.2, 0, 1), t, { n, crawl: t * 4, tight, munch: munching ? 0.5 + 0.5 * Math.sin(t * 18) : 0, mood: tight > 0.4 ? 'puff' : 'happy' });
+      // the tight-sweater wobble lines
+      if (tight > 0.4) { ctx.save(); ctx.globalAlpha = tight; ctx.strokeStyle = P.red; ctx.lineWidth = 6; for (const dx of [-160, 160]) { ctx.beginPath(); ctx.moveTo(x + dx * sc, EG.y - 100 * sc); ctx.lineTo(x + dx * sc * 1.15, EG.y - 130 * sc); ctx.stroke(); } ctx.restore(); }
+    }
+    // little Curie in the corner reacts
+    L.pip(ctx, { x: 1780, y: 920, s: 0.42, t, mood: Lt.cafter('e2', 'always hungry', 0.2) && !Lt.after('e3') ? 'wink' : Lt.cafter('e1', 'its own eggshell') && !Lt.after('e2') ? 'wow' : 'talk', armR: -0.6, armL: 0.6, lookX: -0.8, lookY: -0.3 });
+    // the zoom-in at 'look'
+    const zp = Lt.win('look', 0.1, 1.2, E.inOut);
+    if (!e1 && zp < 1) { ctx.save(); ctx.beginPath(); ctx.rect(0, 0, W, H); ctx.arc(960, 520, lerp(140, 1300, zp), 0, TAU, true); ctx.clip(); guessBg(ctx, t); ctx.restore(); L.magnifier(ctx, 960, 520, lerp(140, 1300, zp), zp); }
+    const o = { size: 66, rot: -0.03 };
+    stk(ctx, 'Look closer!', 960, 120, Lt.win('look', 0.3, 0.5), Lt.win('e1', 0, 0.25), Object.assign({ bg: P.sun, size: 84 }, o));
+    stk(ctx, 'a tiny egg', 960, 120, Lt.cwin('e1', 'a monarch butterfly', 0.5, null, 1.4), Lt.cwin('e1', 'out wriggles', 0.25), Object.assign({ bg: '#FFF4D2' }, o));
+    stk(ctx, 'a tiny caterpillar', 960, 120, Lt.cwin('e1', 'out wriggles', 0.5, null, 0.4), Lt.cwin('e1', 'and its first breakfast', 0.25), Object.assign({ bg: P.sun }, o));
+    stk(ctx, 'first breakfast: its eggshell!', 960, 120, Lt.cwin('e1', 'its own eggshell', 0.5), Lt.cwin('e1', 'crunch', 0.25, null, 0.4), Object.assign({ bg: P.white, size: 60 }, o));
+    stk(ctx, 'CRUNCH!', 1300, 420, Lt.cwin('e1', 'crunch', 0.4, E.outBack), Lt.win('e2', 0.2, 0.25), Object.assign({ bg: P.sun, size: 92, rot: 0.08 }, o));
+    stk(ctx, 'it eats leaves all day', 960, 120, Lt.win('e2', 0.1, 0.5), Lt.cwin('e2', 'it grows', 0.25), Object.assign({ bg: LEAF, color: P.white }, o));
+    stk(ctx, 'it grows... and grows!', 960, 120, Lt.cwin('e2', 'it grows', 0.5, null, 0.3), Lt.cwin('e2', 'always hungry', 0.25), Object.assign({ bg: P.white }, o));
+    stk(ctx, 'always hungry!', 960, 120, Lt.cwin('e2', 'always hungry', 0.5, E.outBack), Lt.win('e3', 0, 0.25), Object.assign({ bg: P.sun, size: 76 }, o));
+    stk(ctx, "skin can't grow", 960, 120, Lt.win('e3', 0.1, 0.5), Lt.cwin('e3', 'when it gets too tight', 0.25), Object.assign({ bg: P.white }, o));
+    stk(ctx, 'too tight!', 960, 120, Lt.cwin('e3', 'when it gets too tight', 0.5), Lt.cwin('e3', 'wriggles out', 0.25), Object.assign({ bg: P.red, color: P.white, size: 80 }, o));
+    stk(ctx, 'out of the old skin!', 960, 120, Lt.cwin('e3', 'wriggles out', 0.5, null, 0.2), Lt.cwin('e3', 'and again', 0.25), Object.assign({ bg: P.sun }, o));
+    stk(ctx, 'again... and again!', 960, 120, Lt.cwin('e3', 'and again', 0.5, null, 0.3), 0, Object.assign({ bg: P.white }, o));
+  }
+  // the guess background (for the zoom-in): the garden with the leaf and the caterpillar
+  function guessBg(ctx, t) { garden(ctx, t); leaf(ctx, 1540, 800, 1.3, 0.3, { bg: P.sky }); caterpillar(ctx, 1640, 640, 0.7, t, { rot: 0.3, n: 7, dir: -1 }); L.pip(ctx, { x: 760, y: 650, s: 1.1, t, mood: 'talk', armR: -0.4, armL: 0.6, lookX: 0.6 }); }
+
+  // ======================= WOW FACT (wow) =======================
+  function wowScene(ctx, t, Lt) {
+    closeBg(ctx);
+    const a = Lt.cwin('wow', 'in about two weeks', 0.6, E.outBack, 0.2), g = Lt.cwin('wow', 'a monarch caterpillar gets', 2.0, E.inOut, 0.4);
+    const top = !Lt.cafter('wow', 'if a baby grew');
+    if (top) {
+      if (a > 0) { caterpillar(ctx, lerp(560, 900, g), 640, lerp(0.22, 1.55, g) * clamp(a, 0, 1.1), t, { n: lerp(5, 9, g) | 0, crawl: t * 3 }); }
+      if (g > 0.95) { ctx.save(); ctx.globalAlpha = 0.6; caterpillar(ctx, 470, 640, 0.22, t, { n: 5 }); ctx.restore(); text(ctx, 'day 1', 470, 700, { size: 40, weight: 700, color: P.ink }); text(ctx, 'two weeks later', 1050, 700, { size: 40, weight: 700, color: P.ink }); }
+    } else {
+      const b = Lt.cwin('wow', 'if a baby grew', 0.6, E.outBack), el = Lt.cwin('wow', 'it would be as heavy', 0.7, E.outBack, 0.6);
+      if (b > 0) baby(ctx, 420, 700, 1.1 * clamp(b, 0, 1.15), t);
+      if (el > 0) { L.arrow(ctx, 600, 520, 900, 520, P.purple, 16); text(ctx, 'x 2,000', 750, 470, { size: 54, weight: 700, color: P.purple }); elephant(ctx, 1380, 740, 1.05 * clamp(el, 0, 1.1), t); }
+    }
+    L.pip(ctx, { x: 1780, y: 920, s: 0.42, t, mood: Lt.cafter('wow', 'it would be as heavy', 0.8) ? 'wink' : 'wow', armR: -0.9, armL: -0.9, lookX: -0.8, lookY: -0.3 });
+    const o = { size: 68, rot: -0.03 };
+    stk(ctx, 'WOW!', 960, 120, Lt.win('wow', 0.05, 0.5), Lt.cwin('wow', 'in about two weeks', 0.25), Object.assign({ bg: P.sun, size: 100 }, o));
+    stk(ctx, 'in about two weeks...', 960, 120, Lt.cwin('wow', 'in about two weeks', 0.5), Lt.cwin('wow', 'a monarch caterpillar gets', 0.25), Object.assign({ bg: P.white }, o));
+    stk(ctx, 'about 2,000 times heavier!', 960, 120, Lt.cwin('wow', 'a monarch caterpillar gets', 0.5, null, 0.6), Lt.cwin('wow', 'if a baby grew', 0.25), Object.assign({ bg: P.purple, color: P.white }, o));
+    stk(ctx, 'if a baby grew like that...', 960, 120, Lt.cwin('wow', 'if a baby grew', 0.5), Lt.cwin('wow', 'it would be as heavy', 0.25), Object.assign({ bg: P.white }, o));
+    stk(ctx, '...as heavy as an elephant!', 960, 120, Lt.cwin('wow', 'it would be as heavy', 0.5, null, 0.6), 0, Object.assign({ bg: P.sun }, o));
+  }
+
+  // ======================= THE CHRYSALIS (e4, e5, silly) =======================
+  const TW = { x: 1060, y: 230 };
+  function chrysScene(ctx, t, Lt) {
+    closeBg(ctx); twig(ctx, 300, 1700, TW.y);
+    const silly = Lt.after('silly'), insideP = Lt.after('e5');
+    // e4: the caterpillar hangs upside down in a J, then its skin splits one last time: the chrysalis
+    const hang = Lt.win('e4', 0.2, 1.4, E.inOut), split = Lt.cwin('e4', 'and sheds its skin', 1.4, E.inOut, 0.4);
+    const cs = insideP ? lerp(1.6, 2.1, Lt.win('e5', 0, 0.8, E.inOut)) : 1.6;
+    if (split < 1) {
+      ctx.save(); ctx.globalAlpha = 1 - split;
+      caterpillar(ctx, TW.x, TW.y + 14, 1.1, t, { tail: true, rot: PI / 2, n: 9, bend: lerp(0, 0.28, hang), mood: 'happy' });
+      ctx.restore();
+    }
+    if (split > 0) {
+      const insideFn = c => {
+        const sw = Lt.cwin('e5', 'its body breaks down', 1.2), bt = Lt.cwin('e5', 'and is built again', 1.5, E.inOut);
+        for (let i = 0; i < 14; i++) { const an = t * 2 + i * 0.9, rr = 20 + (i % 5) * 9; circle(c, Math.cos(an) * rr, 125 + Math.sin(an * 1.3) * rr * 1.6, 7 + (i % 3) * 3, ['#FFD23F', '#7FD8A6', '#F28C28', '#FFFDF2'][i % 4]); }
+        if (sw > 0) { c.save(); c.globalAlpha = clamp(sw, 0, 1) * (1 - bt); c.fillStyle = 'rgba(242,140,40,0.25)'; c.fillRect(-60, 30, 120, 200); c.restore(); }
+        if (bt > 0) { c.save(); c.globalAlpha = bt; butterfly(c, 0, 120, 0.42 * bt, t, { folded: 1 }); c.restore(); }
+      };
+      ctx.save(); ctx.globalAlpha = clamp(split * 1.4, 0, 1) * (1 - 0.8 * Lt.win('silly', 0, 0.5));
+      chrysalis(ctx, TW.x, TW.y + 10, cs * clamp(0.6 + split * 0.5, 0, 1), t, { see: Lt.cwin('e5', 'inside the chrysalis', 0.8, E.out, 0.3), inside: insideFn });
+      ctx.restore();
+      oldSkin(ctx, TW.x + 160, 800 - 30 * (1 - split), 1.4, split * (1 - (silly ? 1 : 0)));
+    }
+    // the silly tongue-twister: bouncing letters and a dizzy Curie
+    if (silly) {
+      const sy = ['Me', 'ta', 'mor', 'pho', 'sis!'], c0 = Lt.start('silly'), c1 = Lt.chunk('silly', 'can you say');
+      sy.forEach((w, i) => { const p = seg(t, c0 + (c1 - c0) * i / 5, c0 + (c1 - c0) * (i + 0.6) / 5, E.outBack); if (p > 0) { ctx.save(); ctx.translate([560, 720, 900, 1120, 1350][i], 600 + Math.sin(t * 6 + i) * 10); ctx.scale(p, p); text(ctx, w, 0, 0, { size: 110, weight: 700, color: [P.purple, P.blue, P.green, MON, P.red][i], stroke: P.white, strokeWidth: 14 }); ctx.restore(); } });
+    }
+    const twist = silly && Lt.cafter('silly', 'metamorphosis, metamorphosis'), phew = silly && Lt.cafter('silly', 'phew');
+    L.pip(ctx, { x: 300, y: silly ? 640 : 680, s: silly ? 0.8 : 0.5, t, mood: phew ? 'wink' : twist ? 'wow' : 'talk', armR: twist && !phew ? -1.2 + Math.sin(t * 10) * 0.3 : -0.6, armL: twist && !phew ? -1.2 - Math.sin(t * 10) * 0.3 : 0.6, lookX: 0.8, lookY: -0.4 });
+    if (silly) dizzy(ctx, 300, 440, t, Lt.cwin('silly', 'metamorphosis, metamorphosis', 0.4) * (1 - Lt.cwin('silly', 'phew', 0.5, null, 0.3)));
+    const o = { size: 66, rot: -0.03 };
+    stk(ctx, 'upside down!', 520, 130, Lt.win('e4', 0.3, 0.5), Lt.cwin('e4', 'and sheds its skin', 0.25), Object.assign({ bg: P.sun }, o));
+    stk(ctx, 'one last time', 520, 130, Lt.cwin('e4', 'and sheds its skin', 0.5), Lt.cwin('e4', 'underneath is a', 0.25), Object.assign({ bg: P.white }, o));
+    stk(ctx, 'a CHRYSALIS', 520, 130, Lt.cwin('e4', 'underneath is a', 0.5, null, 0.5), Lt.win('e5', 0, 0.25), Object.assign({ bg: CHRY }, o));
+    stk(ctx, 'its body breaks down', 1520, 380, Lt.cwin('e5', 'its body breaks down', 0.5), Lt.cwin('e5', 'and is built again', 0.25), Object.assign({ bg: P.white, size: 50 }, o));
+    stk(ctx, '...and is built again!', 1520, 380, Lt.cwin('e5', 'and is built again', 0.5), Lt.cwin('e5', 'this big change', 0.25), Object.assign({ bg: MON, color: P.white, size: 50 }, o));
+    stk(ctx, 'METAMORPHOSIS', 1520, 380, Lt.cwin('e5', 'metamorphosis', 0.5, E.outBack), Lt.win('silly', 0, 0.25), Object.assign({ bg: P.purple, color: P.white, size: 58 }, o));
+    stk(ctx, 'a big change', 1520, 480, Lt.cwin('e5', 'this big change', 0.5, null, 0.3), Lt.win('silly', 0, 0.25), Object.assign({ bg: P.white, size: 50 }, o));
+    stk(ctx, 'Ten times fast?', 1300, 840 - 90, Lt.cwin('silly', 'can you say', 0.5), Lt.cwin('silly', 'phew', 0.25), Object.assign({ bg: P.sun, size: 60 }, o));
+    stk(ctx, 'Phew!', 560, 420, Lt.cwin('silly', 'phew', 0.4, E.outBack), 0, Object.assign({ bg: P.white, size: 90 }, o));
+  }
+
+  // ======================= THE BUTTERFLY COMES OUT (e6, e7) =======================
+  function emergeScene(ctx, t, Lt) {
+    closeBg(ctx);
+    const e7 = Lt.after('e7');
+    if (!e7) {
+      twig(ctx, 300, 1700, TW.y);
+      const out = Lt.cwin('e6', 'out comes the', 1.2, E.inOut, 0.2);
+      chrysalis(ctx, TW.x, TW.y + 10, 1.6, t, { crack: Lt.win('e6', 0.1, 0.8), clear: 1 - out, see: 0 });
+      if (out > 0) {
+        const pump = Lt.cwin('e6', 'it pumps them up', 1.6, E.inOut), dry = Lt.cwin('e6', 'lets them dry', 1.0), fly = Lt.cwin('e6', 'and flies', 2.0, E.in);
+        const bx = lerp(TW.x, TW.x + 900, fly) + Math.sin(t * 2) * 30 * fly, by = lerp(TW.y + 260 + 110 * (1 - out), TW.y + 300, pump) - fly * 300 + Math.sin(t * 3) * 30 * fly;
+        butterfly(ctx, bx, by, lerp(0.75, 0.95, pump), t, { crumple: 1 - pump, flap: fly > 0 ? 1 : dry > 0 ? 0.25 : 0, rot: fly > 0 ? -0.3 : 0 });
+        if (dry > 0 && fly <= 0) L.sparkles(ctx, bx, by, t, 7, 6, 200);
+      }
+    } else {
+      // e7: it lays eggs on a leaf, and the circle goes round and round
+      const ring = Lt.cwin('e7', 'round and round', 0.8, E.outBack);
+      const lf = 1 - ring;
+      if (lf > 0) {
+        ctx.save(); ctx.globalAlpha = lf; leaf(ctx, 520, 820, 2.0, PI / 2 - 0.1, { bg: CLOSE });
+        const lay = Lt.win('e7', 0.2, 2.0, E.inOut);
+        butterfly(ctx, lerp(1900, 1000, Math.min(1, lay * 1.5)), lerp(250, 560, Math.min(1, lay * 1.5)), 0.6, t, { flap: lay < 0.66 ? 1 : 0.2 });
+        for (let i = 0; i < 3; i++) if (lay > 0.7 + i * 0.08) egg(ctx, 860 + i * 70, 760 - i * 10, 0.9, {});
+        ctx.restore();
+      }
+      if (ring > 0) { ctx.save(); ctx.translate(960, 440); ctx.scale(0.8, 0.8); cycleRing(ctx, 0, 0, 300, t, ring, (t * 0.8) % 4); ctx.restore(); }
+    }
+    L.pip(ctx, { x: 1780, y: 920, s: 0.42, t, mood: Lt.cafter('e6', 'and flies') ? 'wow' : 'talk', armR: -0.6, armL: 0.6, lookX: -0.8, lookY: -0.3 });
+    const o = { size: 66, rot: -0.03 };
+    stk(ctx, 'out comes the butterfly!', 960, 120, Lt.cwin('e6', 'out comes the', 0.5, null, 0.4), Lt.cwin('e6', 'its wings are wet', 0.25), Object.assign({ bg: MON, color: P.white }, o));
+    stk(ctx, 'wet and crumpled', 960, 120, Lt.cwin('e6', 'its wings are wet', 0.5, null, 0.6), Lt.cwin('e6', 'it pumps them up', 0.25), Object.assign({ bg: P.white }, o));
+    stk(ctx, 'pump... dry...', 960, 120, Lt.cwin('e6', 'it pumps them up', 0.5), Lt.cwin('e6', 'and flies', 0.25), Object.assign({ bg: P.white }, o));
+    stk(ctx, 'and fly away!', 960, 120, Lt.cwin('e6', 'and flies', 0.5, null, 0.3), Lt.win('e7', 0, 0.25), Object.assign({ bg: P.sun }, o));
+    stk(ctx, 'new eggs', 960, 120, Lt.win('e7', 1.4, 0.5), Lt.cwin('e7', 'round and round', 0.25), Object.assign({ bg: '#FFF4D2' }, o));
+    stk(ctx, 'Round and round!', 1500, 170, Lt.cwin('e7', 'round and round', 0.5, E.outBack), 0, Object.assign({ bg: P.sun, size: 76 }, o));
+  }
+  // the life-cycle circle: four stages round a ring; `hot` (0..4) highlights the stage reached
+  const STAGES = ['egg', 'caterpillar', 'chrysalis', 'butterfly'];
+  function stageIcon(ctx, k, x, y, s, t) {
+    if (k === 0) egg(ctx, x, y + 40 * s, 1.4 * s, {});
+    if (k === 1) caterpillar(ctx, x, y + 40 * s, 0.6 * s, t, { n: 7, crawl: t * 3 });
+    if (k === 2) chrysalis(ctx, x, y - 90 * s, 0.75 * s, t, {});
+    if (k === 3) butterfly(ctx, x, y, 0.5 * s, t, { flap: 0.6 });
+  }
+  function cycleRing(ctx, cx, cy, R, t, a, hot) {
+    ctx.save(); ctx.globalAlpha *= clamp(a, 0, 1);
+    ctx.strokeStyle = P.purple; ctx.lineWidth = 14; ctx.setLineDash([2, 26]); ctx.lineCap = 'round'; ctx.beginPath(); ctx.arc(cx, cy, R, 0, TAU); ctx.stroke(); ctx.setLineDash([]);
+    for (let i = 0; i < 4; i++) { const an = -PI / 2 + i * PI / 2 + PI / 4; const ax = cx + Math.cos(an) * R, ay = cy + Math.sin(an) * R; ctx.save(); ctx.translate(ax, ay); ctx.rotate(an + PI / 2); ctx.fillStyle = P.purple; ctx.beginPath(); ctx.moveTo(22, 0); ctx.lineTo(-14, -18); ctx.lineTo(-14, 18); ctx.closePath(); ctx.fill(); ctx.restore(); }
+    for (let i = 0; i < 4; i++) {
+      const an = -PI / 2 + i * PI / 2, x = cx + Math.cos(an) * R, y = cy + Math.sin(an) * R, on = hot != null && Math.floor(hot) === i;
+      ctx.fillStyle = on ? '#FFF6C8' : P.white; ctx.beginPath(); ctx.arc(x, y, 112, 0, TAU); ctx.fill(); ctx.strokeStyle = on ? P.sunDeep : P.ink; ctx.lineWidth = on ? 10 : 6; ctx.stroke();
+      ctx.save(); ctx.beginPath(); ctx.arc(x, y, 108, 0, TAU); ctx.clip(); stageIcon(ctx, i, x, y - 10, 0.85, t); ctx.restore();
+      text(ctx, STAGES[i], x, y + 145, { size: 48, weight: 700, color: P.ink, stroke: P.white, strokeWidth: 8 });
+    }
+    ctx.restore();
+  }
+
+  // ======================= HOW DO SCIENTISTS KNOW? (test) =======================
+  function testScene(ctx, t, Lt) {
+    closeBg(ctx);
+    // a big see-through tank with leaves, a notebook with one row per day
+    const tk = Lt.cwin('test', 'they look after', 0.6, E.outBack, 0.2);
+    if (tk > 0) {
+      ctx.save(); ctx.translate(560, 700); ctx.scale(clamp(tk, 0, 1.1), clamp(tk, 0, 1.1));
+      ctx.fillStyle = 'rgba(200,235,255,0.5)'; roundRect(ctx, -260, -380, 520, 380, 30); ctx.fill(); ctx.strokeStyle = P.ink; ctx.lineWidth = 7; ctx.stroke();
+      ctx.fillStyle = '#C9B79A'; ctx.fillRect(-250, -40, 500, 32);
+      leaf(ctx, -120, -40, 0.9, -0.3, { bg: '#E4F4FF' }); leaf(ctx, 80, -40, 0.8, 0.4, { bg: '#E4F4FF' });
+      caterpillar(ctx, -40, -40, 0.6, t, { n: 7, crawl: t * 3 });
+      ctx.restore();
+    }
+    const ev = Lt.cwin('test', 'they look after', 0.6, E.outBack, 1.4);
+    if (ev > 0) {
+      ctx.save(); ctx.translate(1350, 470); ctx.scale(clamp(ev, 0, 1.1), clamp(ev, 0, 1.1)); ctx.fillStyle = P.white; roundRect(ctx, -320, -260, 640, 520, 24); ctx.fill(); ctx.strokeStyle = P.ink; ctx.lineWidth = 6; ctx.stroke();
+      ctx.strokeStyle = 'rgba(78,168,255,0.35)'; ctx.lineWidth = 3; for (let i = 1; i < 7; i++) { ctx.beginPath(); ctx.moveTo(-300, -260 + i * 74); ctx.lineTo(300, -260 + i * 74); ctx.stroke(); }
+      const days = Math.floor(clamp(seg(t, Lt.chunk('test', 'they look after') + 1.4, Lt.chunk('test', 'they look after') + 3.4), 0, 1) * 6);
+      for (let i = 0; i < 6; i++) { text(ctx, 'day ' + (i + 1), -210, -225 + i * 74, { size: 42, weight: 700, color: P.ink }); if (i < days) L.star(ctx, -80, -225 + i * 74, 18, P.sun, 0); }
+      ctx.restore();
+    }
+    // the same animal changes: three snapshots appear
+    const ch = Lt.cwin('test', 'and see a caterpillar', 0.6, E.outBack, 0.2), bf = Lt.cwin('test', 'then a butterfly', 0.6, E.outBack, 0.3);
+    if (ch > 0) {
+      ctx.save(); ctx.fillStyle = 'rgba(234,246,228,0.88)'; ctx.globalAlpha = clamp(ch, 0, 1); ctx.fillRect(0, 230, W, 560); ctx.restore();
+      const snap = (k, x, p) => { if (p <= 0) return; ctx.save(); ctx.translate(x, 520); ctx.scale(clamp(p, 0, 1.1), clamp(p, 0, 1.1)); ctx.fillStyle = P.white; roundRect(ctx, -200, -200, 400, 400, 26); ctx.fill(); ctx.strokeStyle = P.ink; ctx.lineWidth = 6; ctx.stroke(); ctx.beginPath(); roundRect(ctx, -196, -196, 392, 392, 24); ctx.clip(); stageIcon(ctx, k, 0, -10, 1.3, t); ctx.restore(); };
+      snap(1, 420, ch); if (ch >= 1) L.arrow(ctx, 640, 520, 760, 520, P.purple, 14);
+      snap(2, 980, Lt.cwin('test', 'and see a caterpillar', 0.6, E.outBack, 1.4)); snap(3, 1540, bf); if (bf > 0) L.arrow(ctx, 1200, 520, 1320, 520, P.purple, 14);
+    }
+    L.pip(ctx, { x: 1780, y: 920, s: 0.42, t, mood: Lt.cafter('test', 'then a butterfly') ? 'wow' : 'talk', armR: -0.6, armL: 0.6, lookX: -0.8, lookY: -0.3 });
+    const o = { size: 66, rot: -0.03 };
+    stk(ctx, 'How do they know?', 960, 120, Lt.win('test', 0.2, 0.5), Lt.cwin('test', 'they watch', 0.25), Object.assign({ bg: P.blue, color: P.white }, o));
+    stk(ctx, 'They watch!', 960, 120, Lt.cwin('test', 'they watch', 0.5, E.outBack), Lt.cwin('test', 'they look after', 0.25, null, 0.4), Object.assign({ bg: P.sun, size: 84 }, o));
+    stk(ctx, 'every day', 960, 120, Lt.cwin('test', 'they look after', 0.5, null, 1.4), Lt.cwin('test', 'and see a caterpillar', 0.25), Object.assign({ bg: P.white }, o));
+    stk(ctx, 'the same animal!', 960, 120, Lt.cwin('test', 'and see a caterpillar', 0.5, null, 0.4), 0, Object.assign({ bg: P.purple, color: P.white }, o));
+  }
+
+  // ======================= SAY IT, TRY AT HOME, OUTRO =======================
+  function sayScene(ctx, t, Lt) {
+    garden(ctx, t);
+    L.pip(ctx, { x: 420, y: 650, s: 1.15, t, mood: 'talk', armR: -1.2 + 0.2 * Math.sin(t * 8), armL: -1.2 - 0.2 * Math.sin(t * 8), lookX: 0.4, lookY: -0.3 });
+    const c0 = Lt.chunk('sayit', 'egg, caterpillar'), seq = [0, 0.55, 1.3, 2.0];
+    for (let i = 0; i < 4; i++) { const p = seg(t, c0 + seq[i], c0 + seq[i] + 0.4, E.outBack); if (p > 0) { const x = 820 + i * 290, y = 640; ctx.save(); ctx.translate(x, y); ctx.scale(clamp(p, 0, 1.1), clamp(p, 0, 1.1)); ctx.fillStyle = P.white; ctx.beginPath(); ctx.arc(0, 0, 120, 0, TAU); ctx.fill(); ctx.strokeStyle = P.ink; ctx.lineWidth = 6; ctx.stroke(); ctx.beginPath(); ctx.arc(0, 0, 116, 0, TAU); ctx.clip(); stageIcon(ctx, i, 0, -10, 0.9, t); ctx.restore(); if (i < 3 && seg(t, c0 + seq[i + 1], c0 + seq[i + 1] + 0.3) > 0) L.arrow(ctx, x + 125, y, x + 165, y, P.purple, 10); } }
+    L.sayItSticker(ctx, 'Egg, caterpillar, chrysalis, butterfly!', Lt.cwin('sayit', 'egg, caterpillar', 0.8), t);
+  }
+  function tryScene(ctx, t, Lt) {
+    garden(ctx, t);
+    L.tryBanner(ctx, Lt.win('try1', 0, 0.6) * (1 - Lt.win('try2', 0, 0.4))); L.grownUpBadge(ctx, 180, 330, Lt.win('try1', 1.5, 0.6));
+    // a bush with leaves; one leaf flips to show tiny eggs underneath, another has nibbled holes
+    const bush = Lt.cwin('try1', 'leaf hunt', 0.6, E.outBack);
+    if (bush > 0) {
+      ctx.save(); ctx.translate(1250, 800); ctx.scale(clamp(bush, 0, 1.1), clamp(bush, 0, 1.1)); ctx.translate(-1250, -800);
+      ctx.strokeStyle = LEAFD; ctx.lineWidth = 14; ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(1250, 800); ctx.lineTo(1250, 420); ctx.stroke();
+      const flip = Lt.cwin('try2', 'ask a grown-up to gently', 0.8, E.inOut, 0.8);
+      leaf(ctx, 1250, 600, 1.0, -1.0, { bg: P.sky });
+      // the flipped leaf: its underside (lighter) with three tiny eggs
+      ctx.save(); ctx.translate(1250, 520); ctx.scale(lerp(1, -1, flip), 1); ctx.translate(-1250, -520); leaf(ctx, 1250, 520, 1.05, 0.9, { bg: P.sky, color: flip > 0.5 ? '#9AD88A' : LEAF }); ctx.restore();
+      if (flip > 0.5) for (let i = 0; i < 3; i++) egg(ctx, 1080 + i * 34, 402 + i * 18, 0.45, {});
+      const nib = Lt.cwin('try2', 'and nibbled holes', 0.6, E.outBack);
+      leaf(ctx, 1250, 440, 1.0, 0.2, { bg: P.sky, bites: nib > 0 ? [[0.4, 1], [0.6, 1], [0.5, -1]] : [] });
+      const lt = Lt.cwin('try2', 'can you find', 0.6, E.outBack);
+      if (lt > 0) caterpillar(ctx, 1330, 300, 0.45 * clamp(lt, 0, 1.1), t, { n: 6, rot: 0.25, crawl: t * 3, dir: -1 });
+      ctx.restore();
+    }
+    // Curie with a magnifying glass
+    L.pip(ctx, { x: 560, y: 650, s: 0.95, t, mood: Lt.cafter('try2', 'can you find') ? 'wow' : 'talk', armR: -0.3, armL: 0.6, lookX: 0.9, lookY: -0.2 });
+    ctx.save(); ctx.translate(720, 600); ctx.strokeStyle = P.brown; ctx.lineWidth = 16; ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(60, -60); ctx.stroke(); circle(ctx, 100, -100, 54, 'rgba(200,235,255,0.5)', P.ink, 8); ctx.restore();
+    const o = { size: 60, rot: -0.03 };
+    stk(ctx, 'tiny eggs', 1500, 300, Lt.cwin('try2', 'look for tiny eggs', 0.5, null, 0.3), Lt.cwin('try2', 'and nibbled holes', 0.25), Object.assign({ bg: '#FFF4D2' }, o));
+    stk(ctx, 'nibbled holes', 1500, 300, Lt.cwin('try2', 'and nibbled holes', 0.5, null, 0.3), Lt.cwin('try2', "don't touch", 0.25), Object.assign({ bg: P.white }, o));
+    stk(ctx, "Look, don't touch!", 1500, 300, Lt.cwin('try2', "don't touch", 0.5), Lt.cwin('try2', 'and wash your hands', 0.25),
+      Object.assign({ bg: P.red, color: P.white }, o));
+    stk(ctx, 'wash your hands after', 1500, 300, Lt.cwin('try2', 'and wash your hands', 0.5), Lt.cwin('try2', 'can you find', 0.25), Object.assign({ bg: P.blue, color: P.white }, o));
+    stk(ctx, 'Can you find a nibbler?', 960, 760, Lt.cwin('try2', 'can you find', 0.5, null, 0.4), 0, { bg: P.sun, size: 54, rot: -0.02 });
+  }
+  function outro(ctx, t, Lt, phrase) {
+    L.sky(ctx, { top: '#5FB8FF', bottom: '#CDEBFF' }); L.confetti(ctx, t, 21, 70); L.ground(ctx, 860);
+    butterfly(ctx, 1000 + Math.sin(t * 0.9) * 120, 260 + Math.sin(t * 1.7) * 40, 0.4, t, { flap: 1, rot: Math.sin(t * 0.9) * 0.3 });
+    L.pip(ctx, { x: 560, y: 720, s: 1.4, t, mood: Lt.cafter('bye', 'bye-bye') ? 'happy' : 'talk', armR: -1.1 + Math.sin(t * 8) * 0.35, armL: 0.6 });
+    const lp = Lt.win('bye', 0, 0.6, E.outBack); ctx.save(); ctx.translate(1380, 340); ctx.scale(lp, lp); L.logo(ctx, 0, 0, 1, t); ctx.restore();
+    const pp = Lt.cwin('bye', 'remember', 0.6, E.outBack, 0.3);
+    if (pp > 0) { ctx.save(); ctx.translate(1340, 640); ctx.scale(pp, pp); ctx.font = '700 60px Fredoka'; const k = Math.min(1, 980 / ctx.measureText(phrase).width), size = Math.floor(60 * k); ctx.font = '700 ' + size + 'px Fredoka'; const w = ctx.measureText(phrase).width + 90; ctx.fillStyle = P.white; roundRect(ctx, -w / 2, -60, w, 120, 40); ctx.fill(); ctx.strokeStyle = P.ink; ctx.lineWidth = 8; ctx.stroke(); text(ctx, phrase, 0, 4, { size, weight: 700, color: P.ink }); ctx.restore(); }
+    const bp = Lt.cwin('bye', 'bye-bye', 0.6, E.outBack); if (bp > 0) L.sticker(ctx, 'Bye-bye!', 1380, 790, bp, { bg: P.sun, rot: 0.05, size: 84 });
+  }
+
+  // ======================= TRY IT 1: FEED THE CATERPILLAR =======================
+  // Drag a leaf from the pile to the caterpillar. It munches and grows; after the 2nd and 4th leaf it wriggles out of its
+  // old skin; after the 6th it climbs to the twig, hangs, makes a chrysalis, and a butterfly comes out and flies.
+  const T1 = { pile: { x: 230, y: 760 }, cat: { x: 1000, y: 820 }, twig: { x: 1000, y: 200 } };
+  function t1Draw(ctx, s, t) {
+    closeBg(ctx); twig(ctx, 640, 1500, T1.twig.y);
+    ctx.fillStyle = '#C9B79A'; roundRect(ctx, 520, T1.cat.y, 1000, 40, 18); ctx.fill(); ctx.strokeStyle = P.ink; ctx.lineWidth = 5; ctx.stroke();
+    // the leaf pile
+    for (let i = 0; i < 3; i++) leaf(ctx, T1.pile.x - 40 + i * 40, T1.pile.y + 90, 0.7, -0.4 + i * 0.4, { bg: CLOSE });
+    text(ctx, 'leaves', T1.pile.x, T1.pile.y + 150, { size: 38, weight: 700, color: P.ink });
+    s.skins.forEach((sk, i) => oldSkin(ctx, sk, T1.cat.y + 2, 1.1, 1));
+    const sc = 0.55 + 0.11 * Math.min(s.eaten, 6);
+    if (s.phase === 'eat' || s.phase === 'climb') {
+      const cl = s.phase === 'climb' ? clamp(s.pt / 2.2, 0, 1) : 0;
+      if (cl <= 0) {
+        const sh = s.shed > 0 ? 1 - s.shed : 0;
+        caterpillar(ctx, T1.cat.x + sh * 60, T1.cat.y, sc, t, { n: 8, crawl: s.chew > 0 ? t * 6 : t * 2, munch: s.chew > 0 ? 0.5 + 0.5 * Math.sin(t * 18) : 0, tight: s.shed > 0 ? s.shed : 0, mood: s.shed > 0.3 ? 'puff' : 'happy' });
+      } else {
+        caterpillar(ctx, T1.twig.x, lerp(T1.cat.y - 60, T1.twig.y + 14, cl), sc, t, { tail: cl > 0.95, rot: lerp(-PI / 2, PI / 2, seg(cl, 0.85, 1)), n: 8, crawl: t * 5, bend: cl > 0.95 ? 0.25 : 0 });
+      }
+    }
+    if (s.phase === 'chry' || s.phase === 'out') {
+      const out = s.phase === 'out' ? s.pt : 0;
+      chrysalis(ctx, T1.twig.x, T1.twig.y + 10, 1.5, t, { clear: s.phase === 'chry' ? clamp((s.pt - 1.2) / 1.2, 0, 1) : 1 - clamp(out, 0, 1), crack: s.phase === 'out' ? 1 : 0 });
+      if (s.phase === 'out') { const pump = clamp((out - 0.6) / 1.4, 0, 1), fly = clamp((out - 2.4) / 3, 0, 1); butterfly(ctx, T1.twig.x + fly * 500 + Math.sin(t * 2) * 60 * fly, T1.twig.y + 330 - fly * 120 + Math.sin(t * 3) * 50 * fly, lerp(0.7, 0.9, pump), t, { crumple: 1 - pump, flap: fly > 0 ? 1 : 0 }); }
+    }
+    if (s.drag) leaf(ctx, s.lx, s.ly + 100, 0.8, -0.3, { bg: CLOSE });
+    L.pip(ctx, { x: 1760, y: 900, s: 0.5, t, mood: s.lastCue ? 'wow' : 'happy', armR: -0.6, armL: 0.6, lookX: -0.8, lookY: -0.2 });
+    if (!s.touched) { const bob = Math.sin(t * 4) * 6; text(ctx, 'drag a leaf to the caterpillar', 960, 120 + bob, { size: 50, weight: 700, color: P.ink, stroke: P.white, strokeWidth: 10 }); L.arrow(ctx, 330, 620, 760, 640, P.sunDeep, 12); }
+    if (s.phase === 'eat') { for (let i = 0; i < 6; i++) circle(ctx, 760 + i * 80, 960, 18, i < s.eaten ? LEAF : 'rgba(43,45,66,0.12)', P.ink, 3); }
+  }
+
+  // ======================= TRY IT 2: LIFE CYCLE CIRCLE =======================
+  const RC = { x: 960, y: 470, r: 270 };
+  const slotPos = i => { const an = -PI / 2 + i * PI / 2; return { x: RC.x + Math.cos(an) * RC.r, y: RC.y + Math.sin(an) * RC.r }; };
+  const cardHome = j => ({ x: 360 + j * 400, y: 950 });
+  const T2ORDER = [2, 3, 0, 1];      // the cards' stages, as they start in the row
+  function t2Draw(ctx, s, t) {
+    closeBg(ctx);
+    if (s.done > 0) cycleRing(ctx, RC.x, RC.y, RC.r, t, 1, (s.done * 1.2) % 4);
+    else {
+      ctx.strokeStyle = 'rgba(155,107,255,0.5)'; ctx.lineWidth = 12; ctx.setLineDash([2, 26]); ctx.lineCap = 'round'; ctx.beginPath(); ctx.arc(RC.x, RC.y, RC.r, 0, TAU); ctx.stroke(); ctx.setLineDash([]);
+      for (let i = 0; i < 4; i++) { const p = slotPos(i); ctx.fillStyle = 'rgba(255,255,255,0.6)'; ctx.beginPath(); ctx.arc(p.x, p.y, 110, 0, TAU); ctx.fill(); ctx.strokeStyle = P.greyDark; ctx.lineWidth = 5; ctx.setLineDash([14, 10]); ctx.stroke(); ctx.setLineDash([]); text(ctx, String(i + 1), p.x, p.y, { size: 60, weight: 700, color: P.grey }); }
+      for (let j = 0; j < 4; j++) {
+        if (s.drag === j) continue; const p = s.pos[j], wig = s.wiggle > 0 && s.slot[j] >= 0 && s.slot[j] !== T2ORDER[j] ? Math.sin(t * 30) * 10 : 0;
+        card(ctx, p.x + wig, p.y, T2ORDER[j], t);
+      }
+      if (s.drag != null) card(ctx, s.pos[s.drag].x, s.pos[s.drag].y, T2ORDER[s.drag], t, 1.08);
+    }
+    text(ctx, s.done > 0 ? 'Round and round!' : 'Put them in order: start at 1', RC.x, 60, { size: 46, weight: 700, color: P.ink, stroke: P.white, strokeWidth: 9 });
+    L.pip(ctx, { x: 1760, y: 900, s: 0.5, t, mood: s.done > 0 ? 'wow' : s.wiggle > 0 ? 'think' : 'happy', armR: -0.6, armL: 0.6, lookX: -0.8, lookY: -0.3 });
+    if (!s.touched) { const bob = Math.sin(t * 4) * 6; text(ctx, 'drag the cards into the circle', 960, 800 + bob, { size: 44, weight: 700, color: P.ink, stroke: P.white, strokeWidth: 9 }); }
+  }
+  function card(ctx, x, y, k, t, sc) {
+    ctx.save(); ctx.translate(x, y); ctx.scale(sc || 1, sc || 1); ctx.fillStyle = P.white; ctx.beginPath(); ctx.arc(0, 0, 100, 0, TAU); ctx.fill(); ctx.strokeStyle = P.ink; ctx.lineWidth = 6; ctx.stroke();
+    ctx.save(); ctx.beginPath(); ctx.arc(0, 0, 96, 0, TAU); ctx.clip(); stageIcon(ctx, k, 0, -14, 0.75, t); ctx.restore();
+    text(ctx, STAGES[k], 0, 82, { size: 30, weight: 700, color: P.ink, stroke: P.white, strokeWidth: 7 }); ctx.restore();
+  }
+
+  L.episodes.ep24 = {
+    id: 'ep24', num: 24, title: 'How does a caterpillar become a butterfly?', short: 'Caterpillar to butterfly', phrase: 'Egg, caterpillar, chrysalis, butterfly!',
+    thumb: {
+      big: 'BUTTERFLY', small1: 'Caterpillar to', small2: 'How?', pip: { x: 520, y: 780 },
+      bg: (ctx, t) => {
+        closeBg(ctx); twig(ctx, 900, 1920, 200);
+        caterpillar(ctx, 1240, 860, 1.25, 0.6, { n: 9, mood: 'wow' });
+        chrysalis(ctx, 1500, 210, 1.1, 0, {});
+        butterfly(ctx, 1640, 560, 1.0, 0.3, { rot: -0.2 });
+        L.arrow(ctx, 1400, 740, 1460, 560, P.purple, 12);
+      }
+    },
+    lines: [
+      { id: 'hello', text: "Hello, little scientists! I'm Curie. Welcome to the Little Scientists Club!", say: "Hello, little scientists! I'm *Curie*! Welcome... to the Little Scientists Club!", hold: 0.3 },
+      { id: 'q', text: "Today's big question: how does a caterpillar become a butterfly?", say: "Today's big question... How does a caterpillar become a *butterfly*?", hold: 0.6 },
+      { id: 's1', text: "I'm in the garden. Look! Someone has been nibbling this leaf. Munch, munch, munch! It's a hungry little caterpillar!", say: "I'm in the *garden*. Look! Someone has been *nibbling* this leaf... {sfx:munch}Munch, munch, munch! It's a hungry little *caterpillar*!", hold: 0.3 },
+      { id: 's2', text: 'And over there, a butterfly! A butterfly was once a caterpillar. But how?', say: 'And over there... a *butterfly*! A butterfly was once a caterpillar. But *how*?', hold: 0.3 },
+      { id: 'guess', text: 'Maybe the caterpillar put on a butterfly costume? Flap, flap... whoa! Hmm, maybe not!', say: 'Maybe the caterpillar put on a butterfly *costume*? Flap, flap... {sfx:boing}Whoa! {sfx:thump}Hmm... maybe *not*!', hold: 0.6 },
+      { id: 'look', text: "Let's look closer, right from the start.", say: "Let's look *closer*... right from the start.", hold: 0.6 },
+      { id: 'e1', text: 'A monarch butterfly lays a tiny egg on a leaf. Out wriggles a tiny caterpillar. And its first breakfast is... its own eggshell! Crunch!', say: 'A monarch butterfly lays a *tiny* egg on a leaf. Out wriggles a tiny *caterpillar*. And its first breakfast is... its own *eggshell*! {sfx:munch}Crunch!', hold: 0.3 },
+      { id: 'e2', text: "Then it eats leaves, all day long. Munch, munch, munch! It grows, and grows. It's always hungry!", say: "Then it eats *leaves*, all day long. {sfx:munch}Munch, munch, munch! It grows... and *grows*. It's *always* hungry!", hold: 0.3 },
+      { id: 'e3', text: "But its skin can't grow with it. When it gets too tight, the caterpillar wriggles out of its old skin, like a too-tight sweater! Again and again.", say: "But its skin can't grow *with* it. When it gets too tight... the caterpillar *wriggles* out of its old skin, {sfx:slide_up}like a too-tight sweater! {pause 0.2}Again, and *again*.", hold: 0.4 },
+      { id: 'wow', text: 'Wow fact! In about two weeks, a monarch caterpillar gets 2,000 times heavier. If a baby grew like that, it would be as heavy as a big elephant!', say: "{sfx:ding}*Wow* fact! In about two weeks... a monarch caterpillar gets about two *thousand* times heavier. If a baby grew like that... it would be as heavy as a big *elephant*!", hold: 0.6 },
+      { id: 'e4', text: "When it's big enough, it hangs upside down, and sheds its skin one last time. Underneath is a chrysalis!", say: "When it's big enough, it hangs *upside down*... and sheds its skin one last time. Underneath is a *chrysalis*!", hold: 0.3 },
+      { id: 'e5', text: 'Inside the chrysalis, its body breaks down, and is built again into a butterfly! This big change is called metamorphosis.', say: 'Inside the chrysalis... its body breaks down... and is built *again*, into a butterfly! This big change is called... *metamorphosis*.', hold: 0.3 },
+      { id: 'silly', text: 'Meta-mor-pho-sis! Can you say that ten times fast? Metamorphosis, metamorphosis, metamorpho... phew!', say: 'Meta, mor, pho, sis! Can you say that ten times *fast*? Metamorphosis, metamorphosis, metamorpho... {pause 0.2}Phew!', hold: 0.4 },
+      { id: 'e6', text: 'Then, out comes the butterfly! Its wings are wet and crumpled. It pumps them up, lets them dry, and flies away!', say: 'Then... out comes the *butterfly*! Its wings are wet and *crumpled*. It pumps them up... lets them dry... and flies *away*!', hold: 0.3 },
+      { id: 'e7', text: 'Later, it lays tiny eggs on a leaf, and it all starts again. Round and round!', say: 'Later, it lays tiny eggs on a leaf... and it all starts *again*. Round and round!', hold: 0.6 },
+      { id: 'test', text: 'How do scientists know? They watch! They look after caterpillars every day, and see a caterpillar turn into a chrysalis, then a butterfly.', say: "{sfx:ding}How do scientists *know*? They *watch*! They look after caterpillars every day... and see a caterpillar turn into a chrysalis... then a *butterfly*.", hold: 0.6 },
+      { id: 'sayit', text: 'Say it with me: Egg, caterpillar, chrysalis, butterfly!', say: 'Say it with me... {sfx:ding}Egg, caterpillar, chrysalis, *butterfly*! {pause 0.9} {slow}Egg... caterpillar... chrysalis... butterfly!{/slow}', hold: 1.4 },
+      { id: 'try1', text: "Let's try it at home! Go on a leaf hunt with a grown-up.", say: "{sfx:tada}Let's try it at home! {pause 0.3}Go on a *leaf hunt*... with a grown-up.", hold: 0.4 },
+      { id: 'try2', text: "Ask a grown-up to gently turn over leaves. Look for tiny eggs and nibbled holes. Don't touch, and wash your hands after! Can you find a nibbler?", say: "Ask a grown-up to gently turn over some *leaves*... Look for tiny *eggs*... and nibbled holes. Don't *touch*... and wash your hands after! {sfx:ding}Can you find a *nibbler*?", hold: 1.2 },
+      { id: 'bye', text: 'Great job, little scientist! Remember: egg, caterpillar, chrysalis, butterfly! See you next time at the Little Scientists Club! Bye-bye!', say: '{sfx:tada}Great job, little scientist! Remember... egg, caterpillar, chrysalis, *butterfly*! See you next time, at the Little Scientists Club! {hi}Bye-bye!{/hi}', hold: 1.2 }
+    ],
+    sfx: [
+      { line: 'look', offset: 0.3, name: 'zoom' },
+      { line: 'silly', chunk: 'phew', offset: 0.45, name: 'boing', vol: 0.6 },
+      { line: 'e1', chunk: 'out wriggles', offset: 0.3, name: 'pop', vol: 0.4 },
+      { line: 'e4', chunk: 'underneath is a', offset: 0.2, name: 'pop', vol: 0.4 },
+      { line: 'e5', chunk: 'and is built again', offset: 0.3, name: 'sparkle', vol: 0.5 },
+      { line: 'e6', chunk: 'and flies', offset: 0.3, name: 'whoosh', vol: 0.3 },
+      { line: 'e7', chunk: 'round and round', offset: 0.2, name: 'sparkle', vol: 0.5 }
+    ],
+    scenes: [
+      { from: 'hello', draw: (ctx, t, Lt) => L.scenes.intro(ctx, t, Lt) },
+      { from: 'q', draw: (ctx, t, Lt) => L.scenes.question(ctx, t, Lt, (c, tt) => { caterpillar(c, -150, 120, 0.7, tt, { n: 7, crawl: tt * 3 }); L.arrow(c, -20, 40, 60, 40, P.purple, 12); butterfly(c, 200, 30, 0.6, tt, { flap: 1 }); }, { word: 'How?' }) },
+      { from: 's1', draw: (ctx, t, Lt) => gardenScene(ctx, t, Lt) },
+      { from: 'guess', draw: (ctx, t, Lt) => guessScene(ctx, t, Lt) },
+      { from: 'look', transition: 'cut', draw: (ctx, t, Lt) => cycleScene(ctx, t, Lt) },
+      { from: 'wow', draw: (ctx, t, Lt) => wowScene(ctx, t, Lt) },
+      { from: 'e4', draw: (ctx, t, Lt) => chrysScene(ctx, t, Lt) },
+      { from: 'e6', draw: (ctx, t, Lt) => emergeScene(ctx, t, Lt) },
+      { from: 'test', draw: (ctx, t, Lt) => testScene(ctx, t, Lt) },
+      { from: 'sayit', draw: (ctx, t, Lt) => sayScene(ctx, t, Lt) },
+      { from: 'try1', draw: (ctx, t, Lt) => tryScene(ctx, t, Lt) },
+      { from: 'bye', draw: (ctx, t, Lt) => outro(ctx, t, Lt, 'Egg, caterpillar, chrysalis, butterfly!') }
+    ],
+    interactives: [
+      {
+        title: 'Feed the caterpillar',
+        hint: 'Drag leaves to the hungry caterpillar. Watch it grow, wriggle out of its old skin... and then what happens?',
+        init: s => { s.eaten = 0; s.drag = false; s.lx = 0; s.ly = 0; s.chew = 0; s.shed = 0; s.skins = []; s.phase = 'eat'; s.pt = 0; s.touched = false; s.lastCue = ''; s.pend = null; s.saw = {}; },
+        update: (s, dt, cue) => {
+          s.chew = Math.max(0, s.chew - dt); s.pt += dt;
+          if (s.shed > 0) { s.shed = Math.max(0, s.shed - dt * 0.8); if (s.shed === 0) s.skins.push(1000 - 120 + s.skins.length * -90); }
+          if (s.phase === 'eat' && s.eaten >= 6 && s.chew <= 0 && s.shed <= 0) { s.phase = 'climb'; s.pt = 0; }
+          if (s.phase === 'climb' && s.pt > 3.0) { s.phase = 'chry'; s.pt = 0; }
+          if (s.phase === 'chry' && s.pt > 3.0) { s.phase = 'out'; s.pt = 0; }
+          if (s.phase === 'out' && s.pt > 2.4 && !s.saw.fly) { s.saw.fly = true; s.pend = 'fly'; }
+          if (s.pend) { const id = s.pend; s.pend = null; s.lastCue = id; cue(id); }
+        },
+        draw: (ctx, s, t) => t1Draw(ctx, s, t),
+        pointer: (s, type, x, y) => {
+          if (type === 'down' && s.phase === 'eat' && Math.hypot(x - T1.pile.x, y - T1.pile.y) < 170) { s.drag = true; s.touched = true; s.lx = x; s.ly = y; }
+          if (type === 'move' && s.drag) { s.lx = clamp(x, 100, W - 100); s.ly = clamp(y, 140, H - 120); }
+          if (type === 'up' && s.drag) {
+            s.drag = false;
+            const sc = 0.55 + 0.11 * Math.min(s.eaten, 6);
+            if (Math.abs(s.lx - (T1.cat.x + 160 * sc)) < 260 && Math.abs(s.ly - (T1.cat.y - 60)) < 220 && s.eaten < 6 && s.shed <= 0) {
+              s.eaten++; s.chew = 1.2;
+              if (L.sound) { try { L.sound.noise(0.25, 0.15, { lp: 3000, hp: 300 }); } catch (e) { /* no sound */ } }
+              if (s.eaten === 2 || s.eaten === 4) { s.shed = 1; if (!s.saw.shed) { s.saw.shed = true; s.pend = 'shed'; } }
+              else if (!s.saw.munch) { s.saw.munch = true; s.pend = 'munch'; }
+            }
+          }
+        },
+        cues: {
+          munch: 'Munch, munch! The caterpillar eats, and grows bigger.',
+          shed: 'Too tight! It wriggles out of its old skin.',
+          fly: 'A chrysalis... and now a butterfly! That is metamorphosis!'
+        }
+      },
+      {
+        title: 'Life cycle circle',
+        hint: 'Drag the four cards into the circle, in order from number 1. What comes first?',
+        init: s => { s.pos = [0, 1, 2, 3].map(cardHome); s.slot = [-1, -1, -1, -1]; s.drag = null; s.done = 0; s.wiggle = 0; s.touched = false; s.lastCue = ''; s.pend = null; s.saw = {}; },
+        update: (s, dt, cue) => {
+          s.wiggle = Math.max(0, s.wiggle - dt);
+          if (s.done > 0) { s.done += dt; if (s.done > 5 && !s.saw.round) { s.saw.round = true; s.pend = 'round'; } }
+          if (s.pend) { const id = s.pend; s.pend = null; s.lastCue = id; cue(id); }
+        },
+        draw: (ctx, s, t) => t2Draw(ctx, s, t),
+        pointer: (s, type, x, y) => {
+          if (s.done > 0) return;
+          if (type === 'down') { for (let j = 3; j >= 0; j--) { if (Math.hypot(x - s.pos[j].x, y - s.pos[j].y) < 105) { s.drag = j; s.touched = true; s.slot[j] = -1; return; } } }
+          if (type === 'move' && s.drag != null) s.pos[s.drag] = { x: clamp(x, 110, W - 110), y: clamp(y, 110, H - 110) };
+          if (type === 'up' && s.drag != null) {
+            const j = s.drag; s.drag = null; let best = -1, bd = 170;
+            for (let i = 0; i < 4; i++) { const p = slotPos(i), d = Math.hypot(s.pos[j].x - p.x, s.pos[j].y - p.y); if (d < bd && s.slot.indexOf(i) < 0) { bd = d; best = i; } }
+            if (best >= 0) { s.slot[j] = best; s.pos[j] = slotPos(best); if (L.sound) { try { L.sound.tone(520 + best * 90, 0.15, { type: 'triangle', vol: 0.2 }); } catch (e) { /* no sound */ } } }
+            else { s.pos[j] = cardHome(j); }
+            if (s.slot.every(v => v >= 0)) {
+              if (s.slot.every((v, k) => v === T2ORDER[k])) { s.done = 0.01; s.pend = 'order'; }
+              else { s.wiggle = 1.2; if (!s.saw.hmm) { s.saw.hmm = true; s.pend = 'hmm'; } [0, 1, 2, 3].forEach(k => { if (s.slot[k] !== T2ORDER[k]) { s.slot[k] = -1; s.pos[k] = cardHome(k); } }); }
+            }
+          }
+        },
+        cues: {
+          order: 'Egg, caterpillar, chrysalis, butterfly! You did it!',
+          round: 'And the butterfly lays new eggs. Round and round it goes!',
+          hmm: 'Not quite! What comes first? An egg!'
+        }
+      }
+    ]
+  };
+})(typeof window !== 'undefined' ? window : globalThis);
