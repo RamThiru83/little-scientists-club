@@ -13827,4 +13827,908 @@ function ep26Interactives(L) {
   };
 })(typeof window !== 'undefined' ? window : globalThis);
 
+/* Episode 27 — How does a toilet flush?
+   Scaffold made by ./lsc.sh new. It already runs end to end (audio, preview, render, site), so build it up step by step.
+   Replace every TODO (tools/check.py refuses TODOs) and read docs/STYLE_GUIDE.md + docs/PIPELINE.md first.
+   The closest published episode is the best model for scene and interactive code: ep6.js (pie, pots, panels, drag-and-drop),
+   ep5.js (sorting into water), ep4.js (light and shadows), ep3.js (cycle), ep2.js (throwing/falling), ep1.js (melting, zoom-in).
+
+   Coordinates: a 1920 x 1080 canvas. Keep anything important above y = 800: the caption box covers the bottom.
+   Everything is a pure function of time t: draw(ctx, t, Lt) must not keep state between frames (frames are rendered out of order).
+   Lt (lib/scenes.js L.tl) anchors animation to the narration:
+     Lt.p('line')                      0..1 across the spoken part of a line
+     Lt.win('line', offset, dur)       0..1 over [line start + offset, + dur]
+     Lt.cwin('line', 'words', dur, ease, offset)   0..1 starting when the chunk containing 'words' is spoken (+offset)
+     Lt.cafter('line', 'words', offset) true once that chunk has started
+     Lt.chunk('line', 'words')         start time of that chunk; Lt.after('line') / Lt.done('line'); Lt.span('a', 'b')
+   A chunk is a sentence, or a piece of one split at "...". Needles must match the spoken (say) text: ./lsc.sh check verifies them. */
+(function (global) {
+  const L = global.LSC; const LSC = L; const { W, H, P, E, seg, clamp, lerp, circle, ellipse, text, roundRect } = L;
+  L.episodes = L.episodes || {};
+
+  // ---------- props: draw functions for this episode's objects ----------
+
+  // ==== EP27 3D STAGING: BEGIN (animation director's block; scenes below call into it) ====
+  // Everything here is a pure function of the episode time (Lt.t). Worlds: 'ep27:bath' and 'ep27:shop', built once.
+  const TAU = Math.PI * 2, PI = Math.PI, L3 = L.three;
+  const C = { blue: '#3B82F6', pink: '#FF4D8D', gold: '#FFC233', mint: '#19C2A8', indigo: '#4338CA', water: '#4DABF7', orange: '#FF7A1A', green: '#2FBF71', curie: '#7C6AE0' };
+  const io = (t, a, b) => seg(t, a, b, E.inOut);
+  const pulse = (t, a, d) => seg(t, a, a + 0.35, E.out) * (1 - seg(t, a + d - 0.35, a + d, E.inOut));   // 0 -> 1 -> 0 over [a, a + d]
+  // constant speed with a smooth start and stop: 0..1 over [a, b], ramps of length r (seconds)
+  function trap(t, a, b, r) { const T = b - a, v = 1 / (T - r), u = clamp(t - a, 0, T); return u < r ? v * u * u / (2 * r) : u < T - r ? v * (u - r / 2) : 1 - v * (T - u) * (T - u) / (2 * r); }
+  // integral of a linear 0..1 ramp that starts at a and lasts d: the "opening x time" of a valve
+  const ramp = (t, a, d) => { const u = t - a; return u <= 0 ? 0 : u < d ? u * u / (2 * d) : u - d / 2; };
+
+  // ---------- kinematics (closed form) ----------
+  // toilet dimensions (lib/htw/toilet.js): water levels, float arm pivot, arm length, stops, tap range
+  const TD = { FULL: 2.5, EMPTY: 1.69, FPX: -0.70, FPY: 2.66, FARM: 0.56, FLOATUP: 0.035, ZA: -0.54, THMIN: -62 * PI / 180, TAPR: 0.3 }; TD.THFULL = Math.asin((TD.FULL + TD.FLOATUP - TD.FPY) / TD.FARM);
+  // the float and the tap as the asset derives them from the tank level (ov = floatOverride, null = floating)
+  function floatOf(tank, ov) {
+    const level = lerp(TD.EMPTY, TD.FULL, tank), th = ov == null ? clamp(Math.asin(clamp((level + TD.FLOATUP - TD.FPY) / TD.FARM, -1, 1)), TD.THMIN, TD.THFULL) : lerp(TD.THMIN, TD.THFULL, clamp(ov, 0, 1));
+    return { th, x: TD.FPX + TD.FARM * Math.cos(th), y: TD.FPY + TD.FARM * Math.sin(th), level, tap: clamp((TD.THFULL - th) / TD.TAPR, 0, 1) };
+  }
+  // One flush. c = { tp: the press starts, pd: press time (the plug rises with the button), rel: the button is let go, ts: the plug
+  // starts to drop, sd: drop time, tf: the tank is full again (null = no refill: the float is held), hmin: lowest tank level,
+  // k: time scale of the bowl, hold: the float is held up }.
+  //  - plug = button while it is pressed; it stays up by itself until ts (when the tank is nearly empty), then drops shut.
+  //  - tank: the outflow goes with opening x sqrt(depth) (Torricelli), so sqrt(tank) falls with the integral of the plug opening.
+  //  - the float rides on the water (above tank 0.54), the tap opens when the float drops; water comes in whenever the tap is
+  //    open (inflow is multiplied by the tap opening in the asset). While the plug is open the outflow wins; once it is shut the
+  //    tank rises at a steady rate and is full exactly at tf, where the float has pushed the tap shut.
+  //  - bowl: rises while the rush pours in, spills over the bend (trapFlow), settles back to the seal level after the plug shuts.
+  function flushCycle(t, c) {
+    const hmin = c.hmin == null ? 0.03 : c.hmin, te = c.ts + c.sd, k = c.k || 1, open = io(t, c.tp, c.tp + c.pd), shut = io(t, c.ts, te);
+    const button = open * (1 - io(t, c.rel, c.rel + 0.4)), plug = open * (1 - shut);
+    const A = ramp(t, c.tp, c.pd) - ramp(t, c.ts, c.sd), Ainf = (c.ts + c.sd / 2) - (c.tp + c.pd / 2), s = 1 - (1 - Math.sqrt(hmin)) * A / Ainf;
+    let tank = s * s;
+    if (c.tf != null && t > te) tank = t >= c.tf ? 1 : hmin + (1 - hmin) * trap(t, te, c.tf, Math.min(1.2, (c.tf - te) * 0.2));
+    const f = floatOf(tank, c.hold ? 1 : null);
+    const bowl = io(t, c.tp + 0.5 * c.pd, c.tp + c.pd + 1.2 * k) * (1 - io(t, c.ts, te + 1.6 * k)) * (0.45 + 0.55 * s);
+    return { button, plug, tank, rush: plug * (0.3 + 0.7 * s), bowl, trapFlow: clamp(bowl * 1.8, 0, 1), swirl: 2.6 * A + 1.2 * k * io(t, c.ts, te + 1.6 * k), trapPhase: 3 * t, phase: 2 * t,
+      inflow: 1, floatOverride: c.hold ? 1 : null, tap: f.tap, inflowEff: f.tap, floatY: f.y, floatX: f.x, level: f.level, te, tp: c.tp, ts: c.ts, tf: c.tf };
+  }
+  // bathroom (s1): a quick real flush when she presses the button
+  function kinBath(Lt) { const tp = Lt.chunk('s1', 'whoosh') - 0.15; return flushCycle(Lt.t, { tp, pd: 0.3, rel: tp + 0.75, ts: tp + 2.9, sd: 0.4, tf: tp + 9.2, k: 0.6 }); }
+  // workshop (e2 .. stop): ONE slow flush told in four steps, then (recap) a second, quick one
+  function kinMech(Lt) {
+    const t = Lt.t, r0 = Lt.chunk('recap', 'rush down') + 0.1;
+    if (t < r0 - 0.4) { const tp = Lt.chunk('e2', 'i press the button') + 0.45; return flushCycle(t, { tp, pd: 1.3, rel: tp + 2.75, ts: Lt.chunk('e4', 'the plug drops') + 0.35, sd: 0.6, tf: Lt.chunk('stop', 'stop!') - 0.45, k: 1 }); }
+    return flushCycle(t, { tp: r0, pd: 0.35, rel: r0 + 0.8, ts: Lt.chunk('recap', 'fill up again') - 0.15, sd: 0.2, tf: Lt.chunk('recap', 'and the float tells') + 1.0, k: 0.45 });
+  }
+  // test: the float is held up while the tank is flushed empty: the tap stays shut, no water. On "the float drops" it is let go:
+  // it falls (0.5 s), the tap opens and the tank starts to fill.
+  function kinTest(Lt) {
+    const t = Lt.t, tp = Lt.start('test') + 0.5, tl = Lt.chunk('result', 'the float drops') - 0.05, FALL = 0.5, hmin = 0.02;
+    const k = flushCycle(t, { tp, pd: 0.4, rel: Lt.chunk('test', 'what if i hold') + 0.75, ts: Lt.chunk('test', 'what if i hold') + 0.9, sd: 0.4, tf: null, hmin, k: 0.5, hold: true });
+    if (t > tl) { const u = clamp((t - tl) / FALL, 0, 1); k.floatOverride = u < 1 ? 1 - u * u : null; k.tank = hmin + 0.11 * ramp(t, tl + 0.3, 0.6); const f = floatOf(k.tank, k.floatOverride); k.tap = k.inflowEff = f.tap; k.floatY = f.y; k.floatX = f.x; k.level = f.level; }
+    k.tl = tl; k.held = t <= tl; return k;
+  }
+  // say it: a gentle flush every 6 s; bye: one flush on "Remember"; try at home (a listening experiment): the grown-up flushes once
+  function kinSay(Lt) { const t0 = Lt.start('sayit') + 0.5, n = Math.max(0, Math.floor((Lt.t - t0) / 6)), tp = t0 + 6 * n + 0.3; return flushCycle(Lt.t, { tp, pd: 0.35, rel: tp + 0.7, ts: tp + 2.0, sd: 0.3, tf: tp + 5.3, k: 0.45 }); }
+  function kinBye(Lt) { const tp = Lt.chunk('bye', 'remember') + 0.7; return flushCycle(Lt.t, { tp, pd: 0.35, rel: tp + 0.7, ts: tp + 2.4, sd: 0.3, tf: tp + 7.5, k: 0.5 }); }
+  function kinTry(Lt) { const tp = Lt.chunk('try2', 'first a whoosh') - 0.1; return flushCycle(Lt.t, { tp, pd: 0.35, rel: tp + 0.8, ts: tp + 1.35, sd: 0.25, tf: Lt.chunk('try2', 'then it goes quiet') + 0.5, k: 0.45 }); }   // full (tap shut, hiss ends) on the word "quiet"
+  // what toilet.userData.set() gets from a flush (plus the extras of the shot)
+  const flushSet = (k, extra) => Object.assign({ button: k.button, plug: k.plug, tank: k.tank, floatOverride: k.floatOverride, inflow: k.inflow, rush: k.rush, swirl: k.swirl, bowl: k.bowl, trapFlow: k.trapFlow, trapPhase: k.trapPhase, phase: k.phase }, extra || {});
+
+  // ---------- 3D helpers ----------
+  const wpos = (T, o) => { const v = new T.Vector3(); o.getWorldPosition(v); return v; };
+  // Curie: pose() plus optional arm targets (world Vector3): the arm turns to the target and stretches a little to reach it
+  function poseCurie(T, c, o, t) {
+    c.visible = true; c.userData.pose(o, t + (o.dt || 0)); const A = c.userData.anchor; let upd = false;   // dt shifts her automatic blink (every 3.7 s) away from key moments
+    // backL / backR (radians): swing that arm backwards (behind her body) about her shoulder's x axis
+    A.handL.parent.rotation.x = o.backL || 0; A.handR.parent.rotation.x = o.backR || 0;
+    for (const [key, tgt, k0] of [['handL', o.aimL, o.aimLk], ['handR', o.aimR, o.aimRk]]) {
+      const hand = A[key], arm = hand.parent; arm.scale.set(1, 1, 1); hand.scale.set(1, 1, 1);
+      const k = tgt ? (k0 == null ? 1 : clamp(k0, 0, 1)) : 0; if (k <= 0) continue;
+      if (!upd) { c.updateMatrixWorld(true); upd = true; }
+      const v = tgt.clone(); arm.parent.worldToLocal(v); v.sub(arm.position); const d = v.length(), q = new T.Quaternion().setFromUnitVectors(new T.Vector3(0, -1, 0), v.normalize());
+      arm.quaternion.slerp(q, k); const st = lerp(1, clamp(d / 0.63, 0.7, o.stretch || 1.6), k); arm.scale.y = st; hand.scale.y = 1 / st;
+    }
+  }
+  function camFold(keys, t) { let s = keys[0].s; for (let i = 1; i < keys.length; i++) { const k = keys[i], p = k.d > 0 ? io(t, k.t, k.t + k.d) : (t >= k.t ? 1 : 0); if (p > 0) s = L3.mix(s, k.s, p); } return s; }
+  // a point given in the toilet's own coordinates -> world Vector3 / canvas point
+  const tw = (T, w, x, y, z) => { w.toilet.updateWorldMatrix(true, false); return w.toilet.localToWorld(new T.Vector3(x, y, z)); };
+  const tp2 = (w, x, y, z) => L3.at(w, w.toilet, x, y, z);
+
+  function buildBath(T) {
+    const w = L3.kits.bathroom(T, L3), K = L3.kits, s = w.toiletSpot, d = w.duckSpot;
+    w.toilet = K.toilet(T, L3); w.toilet.position.set(s.x, s.y, s.z); w.scene.add(w.toilet);
+    w.duck = K.duck(T, L3); w.duck.position.set(d.x, d.y, d.z); w.duck.rotation.y = d.ry; w.duck.scale.setScalar(1.6); w.scene.add(w.duck);
+    w.curie = K.curie(T, L3); w.scene.add(w.curie);
+    return w;
+  }
+  function buildShop(T) {
+    const w = L3.kits.workshop(T, L3), K = L3.kits;
+    w.toilet = K.toilet(T, L3); w.toilet.position.set(0, w.floorY, 0); w.turntable.add(w.toilet); w.curie = K.curie(T, L3); w.scene.add(w.curie);
+    const f = w.fx = { tok: [K.token(T, L3, 1, C.water, 0.2), K.token(T, L3, 2, C.pink, 0.2), K.token(T, L3, 3, '#5B4BFF', 0.2), K.token(T, L3, 4, '#FFB400', 0.2)],
+      hPlug: K.halo(T, L3, C.pink, 0.26), hFloat: K.halo(T, L3, C.gold, 0.24), hTap: K.halo(T, L3, '#34E0C2', 0.24), hBtn: K.halo(T, L3, '#5AA2FF', 0.22) };
+    for (const t of f.tok) w.scene.add(t); for (const k in f) if (k !== 'tok') w.scene.add(f[k]);
+    // the "look inside" backdrop: a plain deep-blue board that pops up behind the turntable, so the glass, the water and the
+    // coloured parts read clearly (the pegboard tools would show through the glass tank)
+    const bd = w.board = new T.Group(), bm = (g, c, x, y, z) => { const m = new T.Mesh(g, new T.MeshLambertMaterial({ color: c })); m.position.set(x, y, z); m.castShadow = true; m.receiveShadow = true; bd.add(m); return m; };
+    bm(new T.BoxGeometry(4.5, 4.1, 0.08), '#C58B4A', 0, 2.3, -0.05); const face = bm(new T.BoxGeometry(4.24, 3.84, 0.08), '#FFFFFF', 0, 2.3, 0);
+    { const cv = document.createElement('canvas'); cv.width = 256; cv.height = 256; const x = cv.getContext('2d'), gr = x.createLinearGradient(0, 0, 0, 256); gr.addColorStop(0, '#5478B4'); gr.addColorStop(0.55, '#40629A'); gr.addColorStop(1, '#2F4B7C'); x.fillStyle = gr; x.fillRect(0, 0, 256, 256);
+      const vg = x.createRadialGradient(128, 120, 60, 128, 128, 190); vg.addColorStop(0, 'rgba(255,255,255,0.10)'); vg.addColorStop(0.6, 'rgba(255,255,255,0)'); vg.addColorStop(1, 'rgba(10,20,50,0.28)'); x.fillStyle = vg; x.fillRect(0, 0, 256, 256);
+      const tx = new T.CanvasTexture(cv); tx.colorSpace = T.SRGBColorSpace; face.material.map = tx; face.castShadow = false; }   // a soft studio backdrop (lighter in the middle, darker at the edges), not a chalkboard: no easel feet
+    bd.position.set(0, w.floorY, -2.1); w.scene.add(bd);
+    return w;
+  }
+  const showBoard = (w, p) => { const b = w.board; b.visible = p > 0.001; b.scale.set(1, Math.max(0.001, p <= 0 ? 0 : E.outBack(clamp(p, 0, 1))), 1); };
+  const hideFx = f => { for (const k in f) { if (k === 'tok') f.tok.forEach(t => t.userData.show(0)); else if (f[k].userData.show) f[k].userData.show(0, 0); } };
+
+  // ---------- 2D overlay helpers ----------
+  // a friendly label with a leader line to (tx, ty)
+  function label(ctx, str, x, y, tx, ty, p, o) {
+    if (p <= 0) return; o = o || {}; const size = o.size || 54, s = E.outBack(clamp(p, 0, 1));
+    ctx.save(); ctx.font = `700 ${size}px Fredoka`; const w = ctx.measureText(str).width + size * 1.1, h = size * 1.55;
+    if (o.keepIn) { x = clamp(x, w * 0.56 + 40, W - w * 0.56 - 40); y = clamp(y, h * 0.56 + 40, 800 - h * 0.56); }   // the whole pill inside the frame (40 px margin, allows for the pop-in overshoot)
+    for (const q of tx != null ? [[tx, ty]].concat(o.t2 ? [o.t2] : []) : []) { const a = Math.atan2(q[1] - y, q[0] - x), ex = q[0] - Math.cos(a) * (o.gap || 16), ey = q[1] - Math.sin(a) * (o.gap || 16); ctx.globalAlpha = clamp(p * 1.5, 0, 1); ctx.lineCap = 'round';
+      ctx.strokeStyle = P.ink; ctx.lineWidth = 13; ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(ex, ey); ctx.stroke(); ctx.strokeStyle = o.bg || P.white; ctx.lineWidth = 6; ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(ex, ey); ctx.stroke();
+      circle(ctx, ex, ey, 11, o.bg || P.white, P.ink, 5); ctx.globalAlpha = 1; }
+    ctx.translate(x, y); ctx.scale(s, s); ctx.rotate(o.rot || 0); ctx.fillStyle = o.bg || P.white; roundRect(ctx, -w / 2, -h / 2, w, h, h / 2); ctx.fill(); ctx.strokeStyle = P.ink; ctx.lineWidth = 7; ctx.stroke();
+    text(ctx, str, 0, 3, { size, weight: 700, color: o.color || P.ink }); ctx.restore();
+  }
+  // a screen-space arrow with a dark outline (for "this way" hints over the 3D picture); two = a head at both ends
+  function arrow2(ctx, x1, y1, x2, y2, color, lw, p, two) {
+    if (p <= 0) return; const k = clamp(p, 0, 1), ex = lerp(x1, x2, k), ey = lerp(y1, y2, k), a = Math.atan2(y2 - y1, x2 - x1), hd = lw * 2.4;
+    const head = (hx, hy, b) => { ctx.beginPath(); ctx.moveTo(hx, hy); ctx.lineTo(hx - Math.cos(b - 0.5) * hd, hy - Math.sin(b - 0.5) * hd); ctx.lineTo(hx - Math.cos(b + 0.5) * hd, hy - Math.sin(b + 0.5) * hd); ctx.closePath(); ctx.fill(); ctx.stroke(); };
+    const path = () => { ctx.beginPath(); ctx.moveTo(x1 + (two ? Math.cos(a) * hd * 0.6 : 0), y1 + (two ? Math.sin(a) * hd * 0.6 : 0)); ctx.lineTo(ex - Math.cos(a) * hd * 0.6, ey - Math.sin(a) * hd * 0.6); ctx.stroke(); head(ex, ey, a); if (two) head(x1, y1, a + PI); };
+    ctx.save(); ctx.globalAlpha = clamp(p * 3, 0, 1); ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.strokeStyle = P.ink; ctx.fillStyle = P.ink; ctx.lineWidth = lw + 10; path(); ctx.strokeStyle = color; ctx.fillStyle = color; ctx.lineWidth = lw; path(); ctx.restore();
+  }
+  // a screen-space arc arrow round (cx, cy), radius r (squashed by ys: an ellipse seen from above), from angle a0 sweeping by sw
+  function arcArrow2(ctx, cx, cy, r, a0, sw, color, lw, p, ys) {
+    if (p <= 0) return; const k = clamp(p, 0, 1), a1 = a0 + sw * k, hd = lw * 2.4, ha = hd * 0.75 / r * Math.sign(sw), sg = Math.sign(sw);
+    const tipX = r * Math.cos(a1), tipY = r * Math.sin(a1), dx = -Math.sin(a1) * sg, dy = Math.cos(a1) * sg, nx = Math.cos(a1), ny = Math.sin(a1);
+    const path = () => { ctx.beginPath(); ctx.arc(0, 0, r, a0, sg > 0 ? Math.max(a0, a1 - ha) : Math.min(a0, a1 - ha), sg < 0); ctx.stroke(); ctx.beginPath(); ctx.moveTo(tipX + dx * hd * 0.5, tipY + dy * hd * 0.5);
+      ctx.lineTo(tipX - dx * hd * 0.7 + nx * hd * 0.75, tipY - dy * hd * 0.7 + ny * hd * 0.75); ctx.lineTo(tipX - dx * hd * 0.7 - nx * hd * 0.75, tipY - dy * hd * 0.7 - ny * hd * 0.75); ctx.closePath(); ctx.fill(); ctx.stroke(); };
+    ctx.save(); ctx.translate(cx, cy); ctx.scale(1, ys || 1); ctx.globalAlpha = clamp(p * 3, 0, 1); ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.strokeStyle = P.ink; ctx.fillStyle = P.ink; ctx.lineWidth = lw + 10; path(); ctx.strokeStyle = color; ctx.fillStyle = color; ctx.lineWidth = lw; path(); ctx.restore();
+  }
+  // a big, friendly grown-up hand (sleeve from the upper left, fingers curled over) resting on (x, y)
+  function grownHand(ctx, x, y, p, sc) {
+    if (p <= 0) return; const s = (sc || 1) * E.outBack(clamp(p, 0, 1)); ctx.save(); ctx.translate(x, y - 28 * (sc || 1)); ctx.scale(s, s); ctx.globalAlpha = clamp(p * 2, 0, 1);
+    ctx.lineJoin = 'round'; ctx.lineCap = 'round'; ctx.strokeStyle = P.ink; ctx.lineWidth = 7;
+    ctx.save(); ctx.rotate(-0.75); ctx.fillStyle = '#6C8FD8'; roundRect(ctx, -250, -46, 190, 92, 30); ctx.fill(); ctx.stroke(); ctx.fillStyle = '#5476C4'; roundRect(ctx, -84, -52, 34, 104, 14); ctx.fill(); ctx.stroke(); ctx.restore();
+    ctx.fillStyle = '#E9B48A'; ctx.beginPath(); ctx.ellipse(0, -14, 78, 58, -0.15, 0, TAU); ctx.fill(); ctx.stroke();
+    for (let i = 0; i < 4; i++) { const fx = -48 + i * 31; roundRect(ctx, fx - 14, 4, 28, 58 - Math.abs(i - 1.5) * 6, 14); ctx.fill(); ctx.stroke(); }
+    ctx.beginPath(); ctx.ellipse(-70, -34, 34, 20, -0.9, 0, TAU); ctx.fill(); ctx.stroke(); ctx.restore();
+  }
+  // a grown-up's hand pressing with ONE fingertip: the index finger points straight down, its tip on (x, y); the sleeve comes in from the upper right
+  function pressHand(ctx, x, y, p, sc) {
+    if (p <= 0) return; const s = (sc || 1) * E.outBack(clamp(p, 0, 1)); ctx.save(); ctx.translate(x, y); ctx.scale(s, s); ctx.globalAlpha = clamp(p * 2, 0, 1);
+    ctx.lineJoin = 'round'; ctx.lineCap = 'round'; ctx.strokeStyle = P.ink; ctx.lineWidth = 7;
+    ctx.save(); ctx.translate(26, -150); ctx.rotate(-0.6); ctx.fillStyle = '#6C8FD8'; roundRect(ctx, 30, -46, 210, 92, 30); ctx.fill(); ctx.stroke(); ctx.fillStyle = '#5476C4'; roundRect(ctx, 22, -52, 34, 104, 14); ctx.fill(); ctx.stroke(); ctx.restore();
+    ctx.fillStyle = '#E9B48A'; roundRect(ctx, -17, -112, 34, 112, 17); ctx.fill(); ctx.stroke();                                   // the pointing finger
+    ctx.beginPath(); ctx.ellipse(28, -138, 62, 50, 0.1, 0, TAU); ctx.fill(); ctx.stroke();                                         // the fist
+    for (let i = 0; i < 3; i++) { roundRect(ctx, 14 + i * 26, -118, 26, 40 - i * 4, 13); ctx.fill(); ctx.stroke(); }             // curled fingers
+    ctx.beginPath(); ctx.ellipse(-22, -150, 22, 14, 0.7, 0, TAU); ctx.fill(); ctx.stroke(); ctx.restore();                         // thumb
+  }
+  // Curie's own hand (her purple mitt on its arm) coming in at angle a (0 = from straight above); the mitt's tip rests on (x, y)
+  function curieHand(ctx, x, y, p, a, sc) {
+    if (p <= 0) return; const s = (sc || 1) * E.outBack(clamp(p, 0, 1)); ctx.save(); ctx.translate(x, y); ctx.rotate(a || 0); ctx.scale(s, s); ctx.globalAlpha = clamp(p * 2, 0, 1);
+    ctx.strokeStyle = P.ink; ctx.lineWidth = 7; ctx.lineJoin = 'round'; ctx.fillStyle = '#6A59CF'; roundRect(ctx, -24, -330, 48, 270, 24); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = C.curie; ctx.beginPath(); ctx.arc(0, -46, 46, 0, TAU); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = 'rgba(255,255,255,0.35)'; ctx.beginPath(); ctx.ellipse(-16, -62, 14, 9, -0.6, 0, TAU); ctx.fill(); ctx.restore();
+  }
+  // Quacky as a little 2D picture (faces right), bottom-centre at (x, y)
+  function duck2(ctx, x, y, s) {
+    ctx.save(); ctx.translate(x, y); ctx.scale(s, s); ctx.strokeStyle = P.ink; ctx.lineWidth = 6; ctx.lineJoin = 'round';
+    ctx.fillStyle = '#FFD23F'; ctx.beginPath(); ctx.ellipse(-6, -34, 56, 36, 0, 0, TAU); ctx.fill(); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(-58, -44); ctx.lineTo(-78, -72); ctx.lineTo(-44, -62); ctx.closePath(); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = '#FF8A3D'; ctx.beginPath(); ctx.ellipse(66, -84, 20, 10, 0.1, 0, TAU); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = '#FFD23F'; ctx.beginPath(); ctx.arc(30, -86, 32, 0, TAU); ctx.fill(); ctx.stroke();
+    circle(ctx, 40, -94, 8, P.ink); circle(ctx, 43, -97, 3, P.white);
+    ctx.fillStyle = '#F5B800'; ctx.beginPath(); ctx.ellipse(-14, -34, 26, 15, -0.2, 0, TAU); ctx.fill(); ctx.stroke(); ctx.restore();
+  }
+  // "like Quacky": a card with the duck floating on water whose level is lv (1 high .. 0 low)
+  function duckCard(ctx, x, y, p, lv, t) {
+    if (p <= 0) return; const s = E.outBack(clamp(p, 0, 1)), wy = lerp(66, -8, lv); ctx.save(); ctx.translate(x, y); ctx.scale(s, s);
+    ctx.fillStyle = P.white; roundRect(ctx, -150, -130, 300, 260, 40); ctx.fill(); ctx.save(); roundRect(ctx, -150, -130, 300, 260, 40); ctx.clip();
+    ctx.fillStyle = '#8FD3FF'; ctx.beginPath(); ctx.moveTo(-150, wy); for (let i = 0; i <= 20; i++) ctx.lineTo(-150 + i * 15, wy + 5 * Math.sin(i * 0.9 + t * 3)); ctx.lineTo(150, 130); ctx.lineTo(-150, 130); ctx.closePath(); ctx.fill();
+    duck2(ctx, -6, wy + 14 + 3 * Math.sin(t * 3), 0.8); ctx.fillStyle = 'rgba(143,211,255,0.55)'; ctx.fillRect(-150, wy + 8, 300, 200); ctx.restore();
+    ctx.strokeStyle = P.ink; ctx.lineWidth = 7; roundRect(ctx, -150, -130, 300, 260, 40); ctx.stroke(); ctx.restore();
+  }
+  // a friendly little door (closed), centre (x, y)
+  function door2(ctx, x, y, p, sc) {
+    if (p <= 0) return; const s = (sc || 1) * E.outBack(clamp(p, 0, 1)); ctx.save(); ctx.translate(x, y); ctx.scale(s, s); ctx.strokeStyle = P.ink; ctx.lineWidth = 7; ctx.lineJoin = 'round';
+    ctx.fillStyle = '#B9793C'; roundRect(ctx, -62, -92, 124, 184, 16); ctx.fill(); ctx.stroke(); ctx.fillStyle = '#FFB04A'; roundRect(ctx, -46, -76, 92, 160, 46); ctx.fill(); ctx.stroke();
+    ctx.lineWidth = 5; ctx.strokeStyle = 'rgba(43,45,66,0.35)'; roundRect(ctx, -30, -56, 60, 52, 22); ctx.stroke(); roundRect(ctx, -30, 12, 60, 54, 10); ctx.stroke();
+    circle(ctx, 28, 6, 9, P.sun, P.ink, 4); ctx.restore();
+  }
+  // a speech bubble with its tail towards (tx, ty)
+  function bubble(ctx, str, x, y, tx, ty, p, o) {
+    if (p <= 0) return; o = o || {}; const size = o.size || 64, s = E.outBack(clamp(p, 0, 1)); ctx.save(); ctx.font = `700 ${size}px Fredoka`; const w = ctx.measureText(str).width + size * 1.4, h = size * 1.9;
+    ctx.translate(x, y); ctx.scale(s, s); const a = Math.atan2(ty - y, tx - x), nx = -Math.sin(a), ny = Math.cos(a), d = Math.min(Math.hypot(tx - x, ty - y), h * 1.1);
+    ctx.fillStyle = o.bg || P.white; ctx.strokeStyle = P.ink; ctx.lineWidth = 7; ctx.lineJoin = 'round';
+    ctx.beginPath(); ctx.moveTo(nx * 26, ny * 26); ctx.lineTo(Math.cos(a) * d, Math.sin(a) * d); ctx.lineTo(-nx * 26, -ny * 26); ctx.closePath(); ctx.fill(); ctx.stroke();
+    roundRect(ctx, -w / 2, -h / 2, w, h, h / 2); ctx.fill(); ctx.stroke(); ctx.beginPath(); ctx.moveTo(nx * 22, ny * 22); ctx.lineTo(Math.cos(a) * (d - 9), Math.sin(a) * (d - 9)); ctx.lineTo(-nx * 22, -ny * 22); ctx.closePath(); ctx.fill();
+    text(ctx, str, 0, 3, { size, weight: 700, color: o.color || P.ink }); ctx.restore();
+  }
+  // "wash your hands": a round badge with two soapy hands and bubbles
+  function washBadge(ctx, x, y, p, t) {
+    if (p <= 0) return; const s = E.outBack(clamp(p, 0, 1)); ctx.save(); ctx.translate(x, y); ctx.scale(s, s); circle(ctx, 0, 0, 150, '#DFF4FF', P.ink, 8);
+    const rub = 10 * Math.sin(t * 7); ctx.strokeStyle = P.ink; ctx.lineWidth = 6; ctx.lineJoin = 'round';
+    for (const d of [-1, 1]) { ctx.save(); ctx.translate(d * 34 + d * rub * 0.5, 26 - d * rub); ctx.rotate(d * 0.55); ctx.fillStyle = d < 0 ? C.curie : '#9384EC'; roundRect(ctx, -34, -58, 68, 104, 30); ctx.fill(); ctx.stroke(); ctx.beginPath(); ctx.ellipse(-d * 40, -8, 16, 26, d * 0.5, 0, TAU); ctx.fill(); ctx.stroke(); ctx.restore(); }
+    const r = L.rng(5); for (let i = 0; i < 9; i++) { const bx = (r() - 0.5) * 190, by = -40 - r() * 70 + 6 * Math.sin(t * 2.5 + i), br = 9 + r() * 15; circle(ctx, bx, by, br, 'rgba(255,255,255,0.85)', '#6CB8E6', 4); circle(ctx, bx - br * 0.3, by - br * 0.3, br * 0.22, P.white); }
+    ctx.restore();
+  }
+  const logoAt = (ctx, x, y, s, p, t) => { if (p <= 0) return; ctx.save(); ctx.translate(x, y); ctx.scale(p, p); L.logo(ctx, 0, 0, s, t); ctx.restore(); };
+  const pill = (ctx, phrase, x, y, pp, size) => { if (pp <= 0) return; ctx.save(); ctx.translate(x, y); ctx.scale(pp, pp); ctx.fillStyle = P.white; ctx.font = `700 ${size}px Fredoka`; const ww = ctx.measureText(phrase).width + 100; roundRect(ctx, -ww / 2, -size, ww, size * 2, 40); ctx.fill(); ctx.strokeStyle = P.ink; ctx.lineWidth = 8; ctx.stroke(); text(ctx, phrase, 0, 4, { size, weight: 700, color: P.ink }); ctx.restore(); };
+  const between = (Lt, ids) => ids.some(id => Lt.t > Lt.start(id) && Lt.t < Lt.end(id));
+
+  // =====================================================================================================================
+  // BATHROOM: hello + q + s1 + s2 (one continuous shot)
+  const BS = {
+    wide: { p: [-0.2, 2.5, 11.0], l: [-0.2, 1.4, -0.6], fov: 32 },
+    wide2: { p: [0.3, 2.45, 9.6], l: [0.5, 1.45, -0.6], fov: 32 },
+    press: { p: [3.0, 5.1, 5.6], l: [0.5, 1.75, -1.2], fov: 33 },
+    ask: { p: [1.2, 2.6, 8.4], l: [0.35, 1.3, -1.0], fov: 28 }
+  };
+  function sceneBath(ctx, t, Lt) {
+    const k = kinBath(Lt), tq = Lt.chunk('q', 'how does a toilet'), duckT = Lt.chunk('s1', 'rubber duck'), pressT = Lt.chunk('s1', 'i press the button'), gur = Lt.chunk('s1', 'gurgle');
+    const from = Lt.chunk('s2', 'where does'), stop = Lt.chunk('s2', 'how does the toilet know'), find = Lt.chunk('s2', "let's find out"), shop = Lt.chunk('s2', 'in my workshop');
+    const cheer = Lt.cwin('hello', 'welcome', 0.5, E.inOut, 0.9), go = io(t, pressT - 0.35, pressT + 0.95), hop = pulse(t, k.tp - 0.42, 0.9);
+    const gTank = pulse(t, from + 0.9, stop - from - 0.6), away = io(t, shop, shop + 0.4), quack = Math.max(pulse(t, duckT + 1.75, 0.34), pulse(t, duckT + 2.15, 0.34));
+    let pts = null;
+    const w = L3.frame(ctx, 'ep27:bath', buildBath, w => {
+      const T = global.THREE, B = w.toilet; w.duck.visible = true;
+      B.userData.set(flushSet(k, { ghost: 0, glow: { tank: gTank, button: 0.8 * pulse(t, k.tp - 0.5, 1.4) } })); B.updateMatrixWorld(true);
+      w.duck.userData.set({ squeak: quack });
+      L3.shoot(w, camFold([{ s: BS.wide }, { t: Lt.start('hello') - 0.5, d: Lt.end('hello') - Lt.start('hello') + 1, s: BS.wide2 }, { t: pressT - 0.55, d: 2.1, s: BS.press }, { t: from - 1.0, d: 2.2, s: BS.ask }], t)); w.camera.updateMatrixWorld(true);
+      const an = B.userData.anchor, btn = wpos(T, an.button), dk = wpos(T, w.duck.userData.anchor.top);
+      const wv = pulse(t, Lt.start('hello'), 2.0), hi = pulse(t, Lt.chunk('hello', "i'm curie"), 1.1), pd = pulse(t, duckT + 0.9, pressT - duckT - 1.1);
+      const speaking = between(Lt, ['hello', 'q', 's1', 's2']), wowF = pulse(t, k.tp + 0.25, 1.3) > 0.5 || away > 0.5;
+      const ask1 = pulse(t, from - 0.1, stop - from), ask2 = pulse(t, stop, find - stop), reach = io(t, k.tp - 0.5, k.tp - 0.1) * (1 - io(t, k.tp + 0.45, k.tp + 0.95));
+      poseCurie(T, w.curie, { x: lerp(-1.9, -0.75, go) + 0.25 * hop, y: 0.5 * Math.sin(PI * go) + 1.7 * hop, z: lerp(0.3, -0.85, go), ry: lerp(0.1, 0.55, go), s: lerp(1, 0.85, go), mood: wowF ? 'wow' : speaking ? 'talk' : 'happy',
+        armR: lerp(0.25, 2.25 + 0.3 * Math.sin(t * 9), wv) + 0.9 * cheer + 0.9 * ask2 + 2.0 * away, armL: 0.25 + 0.3 * hi + 0.9 * cheer + 1.0 * pd + 1.1 * ask1 + 2.0 * away,
+        aimL: reach > 0 ? btn.clone().setY(btn.y + 0.12) : dk, aimLk: reach > 0 ? reach : 0.8 * pd, stretch: reach > 0 ? 2.9 : 1.3,
+        lookX: t < tq ? 0 : go > 0 ? lerp(0.7, 0.55 + 0.3 * ask1, io(t, from - 0.3, from + 0.2)) * (1 - away) : pd > 0.2 ? 0.95 : 0.75 * io(t, tq + 0.2, tq + 0.7), lookY: 0.05 + 0.5 * Math.max(ask1, ask2) + 0.25 * reach,
+        bulb: 0.5 + 0.45 * hi + 0.3 * cheer + 0.5 * Math.max(ask1, ask2, away), squash: -0.08 * pulse(t, Lt.chunk('hello', "i'm curie"), 0.7) - 0.12 * hop + 0.18 * pulse(t, k.tp + 0.45, 0.4) }, t);
+      pts = { duck: L3.at(w, w.duck.userData.anchor.top), bowl: L3.at(w, an.bowlWater), tank: tp2(w, 0, 2.4, -0.3), btn: L3.at(w, an.button), lid: tp2(w, 0, 3.0, -0.74) };
+    });
+    if (!w) return;
+    logoAt(ctx, 330, 250, 0.8, Lt.cwin('hello', 'welcome', 0.7, E.outBack, 0.6) * (1 - Lt.win('q', -0.4, 0.3)), t);
+    L.sticker(ctx, "Today's big question", 960, 130, Lt.win('q', 0.1, 0.5) * (1 - Lt.win('s1', 0, 0.3)), { bg: P.white, size: 64, rot: -0.02 });
+    L.sticker(ctx, 'How?', 1030, 330, seg(t, tq + 0.5, tq + 1.0) * (1 - Lt.win('s1', 0, 0.3)), { bg: P.sun, size: 110, rot: 0.06 });
+    label(ctx, 'Quacky', pts.duck.x - 150, pts.duck.y - 190, pts.duck.x - 10, pts.duck.y - 14, pulse(t, duckT + 1.6, pressT - duckT - 1.9), { bg: '#FFF0A8', size: 60, keepIn: true });
+    L.sticker(ctx, 'Whoosh!', 1560, 660, pulse(t, k.tp + 0.2, gur - k.tp - 0.2), { bg: P.sun, size: 100, rot: -0.05 });
+    L.sticker(ctx, 'gurgle, gurgle!', 600, 190, pulse(t, gur + 0.25, from - gur - 1.2), { bg: '#BFE6FF', size: 80, rot: 0.04 });
+    label(ctx, 'the tank', pts.tank.x + 330, pts.tank.y - 250, pts.tank.x + 60, pts.tank.y - 40, gTank, { bg: '#D6EEFF', size: 58, keepIn: true });
+    L.questionMark(ctx, pts.lid.x - 20, Math.max(120, pts.lid.y - 120), 0.9 * pulse(t, from + 0.4, stop - from - 0.3), t, C.blue);
+    L.sticker(ctx, 'When to stop?', 1300, 200, pulse(t, stop + 0.6, find - stop - 0.5), { bg: P.white, size: 76, rot: 0.03 });
+    L.questionMark(ctx, 1640, 330, 0.9 * pulse(t, stop + 0.8, find - stop - 0.7), t, P.red);
+    L.sticker(ctx, 'To the workshop!', 1300, 200, away, { bg: P.green, color: P.white, size: 76, rot: -0.03 });
+  }
+
+  // =====================================================================================================================
+  // WORKSHOP shots (toilet on the turntable at the origin; floorY = 0.15)
+  const SH = {
+    wide: { p: [-1.6, 2.35, 9.8], l: [-1.6, 1.5, 0], fov: 30 },
+    mech: { p: [1.5, 2.3, 9.1], l: [-1.15, 1.3, 0], fov: 26 },
+    flush: { p: [2.6, 2.45, 7.6], l: [0.35, 1.77, -0.3], fov: 26 },
+    bowl: { p: [2.3, 3.4, 5.9], l: [0.1, 1.2, 0.15], fov: 26 },
+    cut: { p: [0.2, 1.4, 6.8], l: [0.2, 0.9, 0], fov: 22 },          // with the turntable turned -90 degrees (the cut face towards the camera)
+    cutW: { p: [-0.75, 1.6, 9.2], l: [-0.75, 1.05, 0], fov: 22 },
+    tryit: { p: [1.5, 3.7, 9.0], l: [-1.15, 1.85, 0], fov: 26 },   // like the mech shot, a little from above: the blue button on the lid shows, with headroom for the grown-up's hand
+    // tank close-ups: turned 20 degrees round to the +x side, so the float ball (arm plane z -0.54) and the pink plug rod (z -0.86) separate
+    tank: { p: [1.85, 2.7, 4.37], l: [0, 2.4, -0.7], fov: 27 },
+    tankIn: { p: [1.74, 2.68, 4.09], l: [0, 2.4, -0.7], fov: 27 },
+    say: { p: [-1.5, 2.65, 11.6], l: [-1.5, 2.1, 0], fov: 32 },
+    thumb: { p: [2.0, 2.35, 6.4], l: [-1.15, 1.75, 0], fov: 30 }
+  };
+  // fx placement shared by the workshop scenes; v = { tok: [p1..p4], tokDir, hPlug, hFloat, hTap, hBtn } (all 0..1)
+  function shopFx(T, w, t, v, tokScale) {
+    const f = w.fx, an = w.toilet.userData.anchor, k = tokScale || 1, cam = w.camera;
+    // tokens sit beside their part in EVERY shot: placed in screen space at a fixed direction from the part's anchor, just
+    // outside the part (part radius + token radius), kept inside the frame (and above the captions), then pulled towards the
+    // camera along the same sight line (so they stay in front of the model) and scaled to the same size on screen
+    const TK = [[tw(T, w, 0, 2.3, -0.74), 25, 1.12], [wpos(T, an.plug), 325, 0.36], [wpos(T, an.bowlWater), 180, 0.72], [wpos(T, an.tap), 160, 0.36]];   // [anchor, direction (deg, screen, anticlockwise from right), part radius]
+    const th = Math.tan(cam.fov * PI / 360), rpx = k * 0.2 * 1080 / (8.5 * 2 * th);
+    f.tok.forEach((tk, i) => {
+      const [A, d0, rp0] = TK[i], deg = (v.tokDir && v.tokDir[i] != null) ? v.tokDir[i] : d0, rp = (v.tokR && v.tokR[i] != null) ? v.tokR[i] : rp0, a = deg * PI / 180, q = A.clone().applyMatrix4(cam.matrixWorldInverse), d = -q.z, ppu = 1080 / (2 * d * th), R = (rp * ppu + rpx + 14) / ppu;
+      q.x += R * Math.cos(a); q.y += R * Math.sin(a); const Pp = q.applyMatrix4(cam.matrixWorld).project(cam);
+      const mx = (rpx + 30) / 960, my = (rpx + 30) / 540; Pp.x = clamp(Pp.x, -1 + mx, 1 - mx); Pp.y = clamp(Pp.y, 1 - 2 * 790 / 1080 + my, 1 - my);
+      Pp.unproject(cam); Pp.sub(cam.position).multiplyScalar(0.7).add(cam.position); tk.position.copy(Pp);
+      tk.scale.setScalar(k * clamp(Pp.distanceTo(cam.position) / 8.5, 0.2, 1.4)); tk.userData.face(cam); tk.userData.show((v.tok || [])[i] || 0); });
+    for (const [h, a, val] of [[f.hPlug, an.plug, v.hPlug], [f.hFloat, an.float, v.hFloat], [f.hTap, an.tap, v.hTap], [f.hBtn, an.button, v.hBtn]]) {
+      if (val > 0) { const p = wpos(T, a); p.add(cam.position.clone().sub(p).normalize().multiplyScalar(0.45)); h.position.copy(p); h.quaternion.copy(cam.quaternion); h.scale.setScalar(0.92); } h.userData.show(val || 0, t); }
+  }
+  const CUR = { x: -3.15, z: 1.2, s: 0.86 };   // Curie's spot beside the turntable (clear of the toilet)
+
+  // WORKSHOP: look + e1..e4 + stop + recap (one flush told step by step, then a quick second one)
+  function sceneMech(ctx, t, Lt) {
+    const K = kinMech(Lt), gogT = Lt.chunk('look', 'peek-inside'), gog = seg(t, gogT + 0.55, gogT + 1.45), inside = Lt.chunk('look', "let's look inside"), ghost = Lt.cwin('look', 'step by step', 0.45, E.inOut, 0.15);
+    const c1 = Lt.chunk('e1', 'step one'), c2 = Lt.chunk('e2', 'step two'), c3 = Lt.chunk('e3', 'step three'), c4 = Lt.chunk('e4', 'step four'), cr = Lt.start('recap');
+    const tok = [seg(t, c1, c1 + 0.5), seg(t, c2, c2 + 0.5), seg(t, c3, c3 + 0.5), seg(t, c4, c4 + 0.5)];
+    const full = Lt.chunk('e1', 'full of water'), high = Lt.chunk('e1', 'waiting up high'), press = Lt.chunk('e2', 'i press the button'), lifts = Lt.chunk('e2', 'it lifts a plug'), rushT = Lt.chunk('e2', 'the water rushes');
+    const swirlT = Lt.chunk('e3', 'swirls'), push = Lt.chunk('e3', 'carries everything'), byeT = Lt.chunk('e3', 'bye-bye'), drops = Lt.chunk('e4', 'the plug drops'), flo = Lt.chunk('e4', 'the float went down'), tapT = Lt.chunk('e4', 'opened a tap'), fills = Lt.chunk('e4', 'fills up again');
+    const rises = Lt.chunk('stop', 'as the water rises'), enough = Lt.chunk('stop', 'high enough'), shutT = Lt.chunk('stop', 'pushes the tap'), stopT = Lt.chunk('stop', 'stop!');
+    const rUp = Lt.chunk('recap', 'up high'), rDown = Lt.chunk('recap', 'rush down'), rFill = Lt.chunk('recap', 'fill up again'), rGrav = Lt.chunk('recap', 'gravity'), rFloat = Lt.chunk('recap', 'and the float tells');
+    const cutIn = push - 0.05, cutOut = c4 - 0.62, toRecap = cr - 1.25, DZ = 0.23, mainSt = t < cutIn ? 'pre' : t < cutOut ? 'cut' : 'post', inCut = mainSt === 'cut';
+    // the picture has three states: 'pre' (glass toilet, look .. swirl), 'cut' (cutaway from the side), 'post' (tank close-up .. recap).
+    // The two changes are quick dissolves (2 x DZ s): both states are rendered and blended, so the child sees it is the same toilet.
+    // the paper wad: floats, circles with the swirl, sinks, rides over the bend and is gone on "Bye-bye!"
+    const stuff = t < swirlT ? 0 : t < push ? 0.3 * io(t, swirlT + 0.2, push) : t < byeT + 0.35 ? 0.3 + 0.15 * io(t, push, push + 0.8) + 0.55 * trap(t, push + 0.8, byeT + 0.35, 0.5) : null;
+    const g = {
+      tank: Math.max(pulse(t, c1 + 0.3, c2 - c1 - 0.6), pulse(t, rUp, 1.3)) * 0.9,
+      button: Math.max(pulse(t, press, lifts - press + 0.3), pulse(t, rDown - 0.1, 0.9)),
+      float: Math.max(pulse(t, flo + 0.1, tapT - flo + 0.4), pulse(t, rises + 0.8, shutT - rises - 0.4), pulse(t, rFloat + 0.4, 2.2)),
+      tap: Math.max(pulse(t, tapT + 0.3, fills - tapT + 0.2), pulse(t, shutT + 0.2, stopT - shutT + 1.0), pulse(t, rFill, 1.4) * 0.8, pulse(t, rFloat + 0.9, 1.8)),
+      plug: Math.max(pulse(t, lifts + 0.2, rushT - lifts - 0.1), pulse(t, cutOut + 0.2, flo - cutOut - 0.2)),
+      trap: 0.75 * pulse(t, push + 0.9, byeT - push - 0.6)
+    };
+    const fxv = { tok, hPlug: pulse(t, lifts + 0.3, 1.9), hFloat: pulse(t, flo + 0.2, 2.2) + pulse(t, rFloat + 0.4, 1.8), hTap: pulse(t, tapT + 0.3, 1.7) + pulse(t, shutT + 0.3, 1.6), hBtn: pulse(t, press + 0.05, 1.2),
+      tokDir: null, tokR: null };
+    const tok3 = seg(t, toRecap + 0.9, toRecap + 1.3);   // in the tank close-up only 1, 2 and 4 show (3 belongs to the bowl); in the cutaway only 3
+    const keysPre = [{ s: SH.wide }, { t: inside - 0.1, d: 2.3, s: SH.mech }, { t: c2 - 0.75, d: 2.1, s: SH.flush }, { t: c3 - 1.0, d: 2.2, s: SH.bowl }];
+    const keysPost = [{ s: SH.tank }, { t: cutOut, d: stopT - cutOut, s: SH.tankIn }, { t: toRecap, d: 2.2, s: SH.mech }];
+    const washUp = io(t, swirlT - 0.3, swirlT + 0.5);   // e3: the full sheet of water spirals round the bowl
+    const AS = {};
+    const draw = st => L3.frame(ctx, 'ep27:shop', buildShop, w => {
+      const inCut = st === 'cut', T = global.THREE, B = w.toilet; w.upper.visible = true; w.turntable.rotation.y = inCut ? -PI / 2 : 0; showBoard(w, seg(t, inside + 0.3, inside + 1.0));
+      B.userData.set(flushSet(K, { ghost: inCut ? 0 : st === 'post' ? 1 : ghost, cut: inCut ? 1 : 0, stuff, wash: Math.max(K.rush, washUp * Math.min(1, K.plug * 2)), glow: Object.assign({}, g, { trap: inCut ? g.trap : 0 }) })); B.updateMatrixWorld(true);
+      L3.shoot(w, inCut ? SH.cut : camFold(st === 'pre' ? keysPre : keysPost, t)); w.camera.updateMatrixWorld(true);
+      shopFx(T, w, t, Object.assign({}, fxv, inCut ? { tok: [0, 0, tok[2], 0], tokDir: [20, 200, 150, 160], tokR: [1.0, 0.5, 0.9, 0.3] } : st === 'post' ? { tok: [tok[0], tok[1], tok[2] * tok3, tok[3]] } : {}), 1);
+      const an = B.userData.anchor, speaking = between(Lt, ['look', 'e1', 'e2', 'e3', 'e4', 'stop', 'recap']);
+      const wow = pulse(t, gogT + 1.3, 1.2) + pulse(t, Lt.chunk('look', 'step by step') + 0.4, 1.0) + pulse(t, rushT + 0.1, 1.3) + pulse(t, stopT, 1.2) + pulse(t, rGrav + 0.2, 1.0) > 0.5;
+      const tv = wpos(T, an.tankWater); for (const [tt, a] of [[rDown, an.rim], [rFill, an.tap], [rFloat, an.float]]) tv.lerp(wpos(T, a), io(t, tt, tt + 0.45));   // her pointing arm glides from part to part
+      const pt = io(t, c1 - 0.3, c1 + 0.3) * (1 - io(t, c2 - 0.9, c2 - 0.4)) + io(t, cr + 0.2, cr + 0.8);
+      const outF = io(t, c2 - 0.9, c2 + 0.1) * (1 - io(t, toRecap - 0.2, toRecap + 0.9));   // she steps aside while the camera is close on the toilet (no stray hand at the frame edge)
+      poseCurie(T, w.curie, { x: CUR.x - 1.3 * outF, y: 0.35 * Math.sin(PI * outF), z: CUR.z, ry: 0.5, s: CUR.s, mood: wow ? 'wow' : speaking ? 'talk' : 'happy', goggles: gog, lookX: 0.7, lookY: 0.2, dt: 1.5,
+        armL: 0.3 + 0.95 * io(t, inside, inside + 0.5) * (1 - io(t, c2 - 0.9, c2 - 0.4)) + 0.95 * io(t, cr + 0.2, cr + 0.8), armR: 0.3 + 2.2 * pulse(t, gogT + 1.2, 1.3) + 2.2 * pulse(t, rGrav + 0.2, 1.2), aimL: tv, aimLk: 0.75 * pt, stretch: 1.0,
+        bulb: 0.45 + 0.5 * (wow ? 1 : 0), squash: -0.1 * pulse(t, gogT + 1.3, 0.6) }, t);
+      const fFull = floatOf(1, null);
+      AS[st] = { tankW: L3.at(w, an.tankWater), water: tp2(w, 0.66, 2.3, -0.36), tankC: tp2(w, 0, 2.2, -0.36), btn: L3.at(w, an.button), plug: L3.at(w, an.plug), rim: L3.at(w, an.rim), bowl: L3.at(w, an.bowlWater), trapTop: L3.at(w, an.trapTop), trapLow: L3.at(w, an.trap), drain: L3.at(w, an.drain),
+        float: L3.at(w, an.float), tap: L3.at(w, an.tap), hi: tp2(w, 1.22, 2.5, -0.36), lo: tp2(w, 1.22, 0.78, -0.36), bowlR: tp2(w, 0.33, 0.78 + 0.3 * K.bowl, 0.5), floatFull: tp2(w, fFull.x, fFull.y, TD.ZA), spout: tp2(w, -0.58, 2.57, -0.68), tankL: tp2(w, -0.99, 2.3, -0.36), tankR: tp2(w, 0.99, 2.3, -0.36), tankB: tp2(w, 0, 1.52, -0.36),
+        seat: tp2(w, 0, 1.39, 0.58), seatX: tp2(w, 0.62, 1.39, 0.58), seatZ: tp2(w, 0, 1.39, 1.3) };
+    });
+    // one state, or two blended during a dissolve (the later state is drawn over the earlier one with a rising alpha)
+    let w = null;
+    const dissolve = (t0, a, b) => { w = draw(a); if (!w) return; const k = io(t, t0 - DZ, t0 + DZ); ctx.save(); ctx.globalAlpha = k; draw(b); ctx.restore(); if (!AS[mainSt]) AS[mainSt] = AS[b]; };
+    if (Math.abs(t - cutIn) < DZ) dissolve(cutIn, 'pre', 'cut'); else if (Math.abs(t - cutOut) < DZ) dissolve(cutOut, 'cut', 'post'); else w = draw(mainSt);
+    if (!w) return;
+    const A = AS[mainSt];
+    L.sticker(ctx, 'Peek-Inside Goggles: ON!', 1180, 150, seg(t, gogT + 1.3, gogT + 1.8) * (1 - seg(t, inside - 0.2, inside + 0.1)), { bg: P.sun, size: 70, rot: -0.02 });
+    // e1: the tank is full, and it is up high (above the bowl)
+    label(ctx, 'full of water', A.tankW.x - 430, A.tankW.y - 150, A.water.x, A.water.y, pulse(t, full + 0.4, high - full - 0.3), { bg: '#D6EEFF', size: 58, keepIn: true });
+    { const hp = pulse(t, high + 0.1, c2 - 0.75 - high - 0.1); arrow2(ctx, A.lo.x + 70, A.lo.y, A.hi.x + 70, A.hi.y, C.orange, 22, hp);   // one arrow, from the bowl's water level up to the tank's
+      label(ctx, 'up high!', A.hi.x + 290, A.hi.y + 50, null, null, seg(t, high + 0.5, high + 0.9) * (hp > 0 ? Math.min(1, hp * 3) : 0), { bg: '#FFE0C2', size: 60, keepIn: true });
+      label(ctx, 'bowl', A.lo.x + 200, A.lo.y + 10, null, null, seg(t, high + 0.7, high + 1.1) * (hp > 0 ? Math.min(1, hp * 3) : 0), { bg: P.white, size: 50, keepIn: true }); }
+    // e2: press -> the plug lifts -> the water rushes down
+    { const hp = seg(t, press + 0.1, press + 0.45) * (1 - seg(t, K.tp + 2.75, K.tp + 3.1)); if (t < cutIn) curieHand(ctx, A.btn.x, A.btn.y - 6, hp, 0.5, 0.8); }
+    label(ctx, 'button', A.btn.x - 330, A.btn.y - 40, A.btn.x - 70, A.btn.y + 4, pulse(t, press + 0.3, lifts - press - 0.2), { bg: '#CFE3FF', size: 56, keepIn: true });
+    label(ctx, 'plug', A.plug.x - 430, A.plug.y + 150, A.plug.x - 50, A.plug.y + 16, pulse(t, lifts + 0.5, rushT - lifts - 0.3), { bg: '#FFD0E2', size: 62, keepIn: true });
+    if (t < c3 - 1.0 + 0.3) { const rp = pulse(t, rushT + 0.1, c3 - 1.0 - rushT); arrow2(ctx, A.plug.x + 285, A.plug.y + 40, A.bowl.x + 300, A.bowl.y - 40, C.water, 26, rp);
+      L.sticker(ctx, 'Whoosh!', 520, 150, rp, { bg: P.sun, size: 96, rot: -0.05 }); }
+    // e3: swirl round the bowl, then (cutaway) over the bendy pipe
+    if (t < cutIn) { // stronger, bluer swirl on the bowl water: spiral streaks that turn with the water (an overlay; the 3D swirl is faint through the glass)
+      const sp = seg(t, swirlT - 0.2, swirlT + 0.5) * (1 - seg(t, cutIn - 0.45, cutIn - 0.15)), rx = Math.hypot(A.bowlR.x - A.bowl.x, A.bowlR.y - A.bowl.y) * 0.78, ry = rx * 0.42;
+      if (sp > 0) { ctx.save(); ctx.translate(A.bowl.x, A.bowl.y); ctx.scale(1, ry / rx); ctx.lineCap = 'round'; ctx.globalAlpha = 0.5 * sp; ctx.fillStyle = '#3B9BF5'; ctx.beginPath(); ctx.arc(0, 0, rx, 0, TAU); ctx.fill();
+        for (let j = 0; j < 3; j++) for (const [col, lw, al] of [['#1668D8', 15, 0.75], ['#FFFFFF', 5, 0.85]]) { ctx.globalAlpha = al * sp; ctx.strokeStyle = col; ctx.lineWidth = lw; ctx.beginPath(); for (let q = 0; q <= 16; q++) { const u = q / 16, a = -K.swirl * 1.0 + j * TAU / 3 - u * 2.6, rr = rx * (0.92 - 0.72 * u); q ? ctx.lineTo(rr * Math.cos(a), rr * Math.sin(a)) : ctx.moveTo(rr * Math.cos(a), rr * Math.sin(a)); } ctx.stroke(); }
+        ctx.restore(); } }
+    if (t < cutIn) { const r = Math.hypot(A.seatX.x - A.seat.x, A.seatX.y - A.seat.y) * 1.25, ys = Math.abs(A.seatZ.y - A.seat.y) / Math.max(1, Math.hypot(A.seatX.x - A.seat.x, A.seatX.y - A.seat.y)) * 0.62 / 0.72;
+      arcArrow2(ctx, A.seat.x, A.seat.y, r, 2.4 + 0.5 * (t - swirlT), -4.6, C.water, 24, seg(t, swirlT + 0.3, swirlT + 1.3) * (1 - seg(t, cutIn - 0.45, cutIn - 0.15)), clamp(ys, 0.3, 1));
+      L.sticker(ctx, 'swirl, swirl!', 520, 150, seg(t, swirlT + 0.4, swirlT + 0.8) * (1 - seg(t, cutIn - 0.45, cutIn - 0.15)), { bg: '#BFE6FF', size: 84, rot: -0.04 }); }
+    if (inCut) { label(ctx, 'bendy pipe', A.trapTop.x - 380, A.trapTop.y - 215, A.trapTop.x - 30, A.trapTop.y - 40, seg(t, push + 1.2, push + 1.6) * (1 - seg(t, cutOut - 0.35, cutOut - 0.05)), { bg: '#DAD6FF', size: 62, keepIn: true });
+      bubble(ctx, 'Bye-bye!', A.drain.x - 40, A.drain.y - 330, A.drain.x - 30, A.drain.y - 90, seg(t, byeT, byeT + 0.4) * (1 - seg(t, cutOut - 0.35, cutOut - 0.05)), { bg: P.sun, size: 70 }); }
+    // e4 + stop (tank front)
+    if (t >= cutOut && t < toRecap + 0.6) { const out = 1 - seg(t, toRecap - 0.1, toRecap + 0.3);
+      label(ctx, 'plug: still up', A.plug.x + 330, A.plug.y - 170, A.plug.x + 56, A.plug.y - 24, pulse(t, c4 + 0.45, K.ts - c4 - 0.35), { bg: '#FFD0E2', size: 58, keepIn: true });
+      arrow2(ctx, A.plug.x + 110, A.plug.y - 120, A.plug.x + 110, A.plug.y + 6, C.pink, 16, pulse(t, K.ts - 0.05, 1.0));
+      label(ctx, 'plug: shut', A.plug.x + 330, A.plug.y - 170, A.plug.x + 56, A.plug.y - 24, pulse(t, K.te + 0.1, flo - K.te), { bg: '#FFD0E2', size: 58, keepIn: true });
+      const fp = pulse(t, flo + 0.2, tapT - flo - 0.1), dn = seg(t, flo + 2.1, flo + 2.8, E.inOut);
+      if (fp > 0) { ctx.save(); ctx.globalAlpha = Math.min(1, fp * 2); ctx.setLineDash([14, 12]); ctx.strokeStyle = '#B97F00'; ctx.lineWidth = 7; ctx.beginPath(); ctx.arc(A.floatFull.x, A.floatFull.y, 46, 0, TAU); ctx.stroke(); ctx.restore();
+        arrow2(ctx, A.floatFull.x + 20, A.floatFull.y + 52, A.float.x + 78, A.float.y - 40, '#FFB400', 16, fp * seg(t, flo + 0.6, flo + 1.2)); }
+      label(ctx, 'float', A.float.x + 370, A.float.y - 20, A.float.x + 56, A.float.y - 4, fp, { bg: '#FFE9A8', size: 62, keepIn: true });
+      duckCard(ctx, 1660, 520, fp * seg(t, flo + 1.6, flo + 2.0), 1 - dn, t);
+      label(ctx, 'like Quacky!', 1660, 715, null, null, fp * seg(t, flo + 1.75, flo + 2.15), { bg: '#FFF0A8', size: 50 });
+      label(ctx, 'tap: open', A.tap.x - 210, A.tap.y - 190, A.tap.x - 20, A.tap.y - 50, pulse(t, tapT + 0.4, enough - tapT - 0.5), { bg: '#C9F7EC', size: 58, keepIn: true });
+      { const up = pulse(t, fills + 0.2, rises - fills + 0.2) + pulse(t, rises + 0.3, enough - rises - 0.2); arrow2(ctx, A.tankR.x + 90, A.tankW.y + 110, A.tankR.x + 90, A.tankW.y - 40, C.water, 22, up);
+        label(ctx, 'filling up', A.tankR.x + 250, A.tankW.y + 150, null, null, pulse(t, fills + 0.4, rises - fills - 0.3), { bg: '#D6EEFF', size: 54, keepIn: true });
+        label(ctx, 'the float rises', A.float.x + 80, A.float.y - 330, A.float.x + 10, A.float.y - 56, pulse(t, rises + 1.4, enough - rises - 1.0), { bg: '#FFE9A8', size: 56, keepIn: true }); }
+      label(ctx, 'tap: shut', A.tap.x - 210, A.tap.y - 190, A.tap.x - 20, A.tap.y - 50, seg(t, K.tf - 0.2, K.tf + 0.2) * out, { bg: '#C9F7EC', size: 58, keepIn: true });
+      L.sticker(ctx, 'Stop!', 1610, 500, seg(t, stopT, stopT + 0.35) * out, { bg: P.red, color: P.white, size: 110, rot: 0.05 }); }
+    // recap: the words on their parts, then gravity and the float
+    if (t >= toRecap + 1.2) { const lo = 1 - seg(t, rGrav - 0.2, rGrav + 0.1), out = 1 - seg(t, Lt.end('recap') + 0.5, Lt.end('recap') + 0.8);
+      label(ctx, 'up high', A.tankR.x + 240, A.tankR.y + 70, A.tankR.x + 16, A.tankR.y + 30, seg(t, rUp + 0.1, rUp + 0.5) * lo, { bg: '#D6EEFF', size: 60, keepIn: true });
+      arrow2(ctx, A.plug.x + 240, A.plug.y + 20, A.bowl.x + 240, A.bowl.y - 30, C.water, 24, seg(t, rDown + 0.2, rDown + 0.7) * lo);
+      label(ctx, 'rush down', A.plug.x + 450, (A.plug.y + A.bowl.y) / 2 + 40, null, null, seg(t, rDown + 0.3, rDown + 0.7) * lo, { bg: '#BFE6FF', size: 60, keepIn: true });
+      label(ctx, 'fill up again', A.tap.x - 300, A.tap.y + 150, A.tap.x - 30, A.tap.y + 26, seg(t, rFill + 0.2, rFill + 0.6) * lo, { bg: '#C9F7EC', size: 58, keepIn: true });
+      const gp = seg(t, rGrav + 0.15, rGrav + 0.9) * out; arrow2(ctx, A.tankR.x + 150, A.tankR.y - 150, A.tankR.x + 150, A.bowl.y + 20, C.orange, 40, gp);
+      label(ctx, 'gravity', A.tankR.x + 360, (A.tankR.y + A.bowl.y) / 2 - 60, null, null, seg(t, rGrav + 0.3, rGrav + 0.7) * out, { bg: '#FFE0C2', size: 72, keepIn: true });
+      label(ctx, 'float: "Stop!"', A.tap.x - 300, A.tap.y + 150, A.float.x - 46, A.float.y + 22, seg(t, rFloat + 0.5, rFloat + 0.9) * out, { bg: '#FFE9A8', size: 58, keepIn: true }); }
+  }
+
+  // WORKSHOP: the bendy pipe keeps a little water (cutaway from the side, Curie beside it)
+  function sceneTrap(ctx, t, Lt) {
+    const keep = Lt.chunk('trap', 'it keeps a little'), door = Lt.chunk('trap', 'like a door'), end = Lt.end('trap');
+    let A = null;
+    const w = L3.frame(ctx, 'ep27:shop', buildShop, w => {
+      const T = global.THREE, B = w.toilet; w.upper.visible = true; w.turntable.rotation.y = -PI / 2; hideFx(w.fx); showBoard(w, 1);
+      B.userData.set({ ghost: 0, cut: 1, tank: 1, glow: { trap: 0.55 * pulse(t, Lt.start('trap') + 0.6, keep - Lt.start('trap') - 0.2) }, phase: 2 * t }); B.updateMatrixWorld(true);
+      L3.shoot(w, L3.mix(SH.cutW, SH.cut, 0.12 * io(t, Lt.start('trap') - 0.3, Lt.end('trap') + 0.6))); w.camera.updateMatrixWorld(true);
+      const an = B.userData.anchor, tv = wpos(T, an.trap), wowF = pulse(t, door + 0.9, 1.4) > 0.5;
+      poseCurie(T, w.curie, { x: -2.8, y: 0, z: 0.3, ry: 0.75, s: 0.6, mood: wowF ? 'wow' : between(Lt, ['trap']) ? 'talk' : 'happy', goggles: 1, lookX: 0.75, lookY: -0.15, armL: 1.2, aimL: tv, aimLk: 0.7, stretch: 1.0, armR: 0.3 + 2.0 * pulse(t, door + 0.9, 1.4), bulb: wowF ? 1 : 0.45 }, t);
+      const path = B.userData.info.trapPath, n = path.length; A = { path: path.map(q => tp2(w, 0, q[1], q[0])), low: L3.at(w, an.trap), top: L3.at(w, an.trapTop), bowl: L3.at(w, an.bowlWater), seal: tp2(w, 0, 0.78, path[Math.round(n * 0.3)][0]), n };
+    });
+    if (!w) return;
+    // the water stands in the bowl and in the rising leg of the bend, up to the seal level: the "door" sits on that surface.
+    // iSeal = where the pipe's centre line crosses the seal level on the way up; iTop = the top of the bend (screen y smallest)
+    const tpath = w.toilet.userData.info.trapPath; let iLow = 0; for (let i = 0; i < 20; i++) if (tpath[i][1] < tpath[iLow][1]) iLow = i;
+    let iSeal = iLow; while (iSeal < A.n - 2 && tpath[iSeal][1] < 0.78) iSeal++;
+    let iTop = iSeal; A.path.forEach((q, i) => { if (q.y < A.path[iTop].y) iTop = i; });
+    // the door stands IN the blue standing water of the rising leg (a little below its surface), facing the drain side
+    let iDoor = iLow; while (iDoor < iSeal && tpath[iDoor][1] < 0.78 - 0.09) iDoor++;
+    const sp = A.path[iDoor], lowp = A.low;
+    label(ctx, 'bendy pipe', A.top.x + 200, A.top.y - 270, A.top.x + 10, A.top.y - 62, pulse(t, Lt.start('trap') + 0.9, keep - Lt.start('trap') - 0.6), { bg: '#DAD6FF', size: 62, keepIn: true });
+    label(ctx, 'a little water stays', lowp.x - 150, lowp.y - 470, lowp.x - 30, lowp.y - 60, seg(t, keep + 0.5, keep + 0.9) * (1 - seg(t, door + 0.3, door + 0.6)), { bg: '#D6EEFF', size: 62, keepIn: true });
+    // smell wisps: soft green squiggles drift up the drain side towards the top of the bend and turn back at the water door
+    const dp = seg(t, door + 0.25, door + 0.75), wis = seg(t, door + 1.1, door + 1.6) * (1 - seg(t, end + 0.9, end + 1.2));
+    if (wis > 0) { ctx.save(); ctx.lineCap = 'round'; ctx.lineJoin = 'round'; const last = A.n - 1, i0 = Math.min(last, iSeal + 3);
+      for (let j = 0; j < 3; j++) { const u = ((t - door) * 0.42 + j / 3) % 1, tri = u < 0.6 ? u / 0.6 : 1 - (u - 0.6) / 0.4, f = lerp(last - 2, i0, E.out(clamp(tri, 0, 1))), fi = Math.floor(f), q0 = A.path[fi], q1 = A.path[Math.min(last, fi + 1)], x = lerp(q0.x, q1.x, f - fi), y = lerp(q0.y, q1.y, f - fi);
+        ctx.globalAlpha = wis * (0.35 + 0.6 * Math.sin(PI * u)); for (const [col, lw] of [[P.ink, 15], ['#9BE28A', 8]]) { ctx.strokeStyle = col; ctx.lineWidth = lw; ctx.beginPath(); for (let q = 0; q <= 12; q++) { const xx = x + 9 * Math.sin(q * 1.1 + t * 5 + j), yy = y + 20 - q * 5; q ? ctx.lineTo(xx, yy) : ctx.moveTo(xx, yy); } ctx.stroke(); } }
+      ctx.restore(); }
+    door2(ctx, sp.x, sp.y, dp, 0.5);
+    label(ctx, 'water door', sp.x + 270, sp.y - 300, sp.x + 28, sp.y - 52, seg(t, door + 0.5, door + 0.9), { bg: '#FFE0C2', size: 60, keepIn: true });
+    L.sticker(ctx, 'No smells come up!', 620, 150, seg(t, door + 1.9, door + 2.3), { bg: P.green, color: P.white, size: 76, rot: -0.03 });
+  }
+
+  // WORKSHOP: test + result (tank front, glass): hold the float up -> the tap stays shut; let go -> water comes
+  function sceneTest(ctx, t, Lt) {
+    const k = kinTest(Lt), hold = Lt.chunk('test', 'what if i hold'), empty = Lt.chunk('test', 'even when'), shutT = Lt.chunk('result', 'the tap stays'), noW = Lt.chunk('result', 'no water'), letgo = Lt.chunk('result', 'when i let go'), end = Lt.end('result');
+    let A = null;
+    const w = L3.frame(ctx, 'ep27:shop', buildShop, w => {
+      const T = global.THREE, B = w.toilet; w.upper.visible = true; w.turntable.rotation.y = 0; showBoard(w, 1);
+      B.userData.set(flushSet(k, { ghost: 1, glow: { float: Math.max(pulse(t, hold + 0.2, shutT - hold - 0.3), pulse(t, k.tl, 1.6)), tap: Math.max(pulse(t, shutT + 0.2, letgo - shutT - 0.3), pulse(t, k.tl + 0.4, 2.2)), button: pulse(t, k.tp - 0.2, 1.0) } })); B.updateMatrixWorld(true);
+      L3.shoot(w, L3.mix(SH.tank, SH.tankIn, io(t, Lt.start('test') - 0.4, end + 0.8))); w.camera.updateMatrixWorld(true);
+      shopFx(T, w, t, { hTap: pulse(t, shutT + 0.2, 1.5) + pulse(t, k.tl + 0.5, 1.5) }, 1);
+      w.curie.visible = false;
+      const an = B.userData.anchor; A = { float: L3.at(w, an.float), tap: L3.at(w, an.tap), btn: L3.at(w, an.button), tankW: L3.at(w, an.tankWater), tankB: tp2(w, 0.45, 1.75, -0.36), tankR: tp2(w, 0.99, 2.3, -0.36), spout: tp2(w, -0.58, 2.57, -0.68) };
+    });
+    if (!w) return;
+    L.sticker(ctx, 'Scientists test it!', 430, 120, pulse(t, Lt.start('test') + 0.1, hold - Lt.start('test') + 0.2), { bg: P.purple, color: P.white, size: 68, rot: 0.03 });
+    { const fl = pulse(t, k.tp - 0.25, k.te - k.tp + 0.5); arrow2(ctx, A.btn.x + 190, A.btn.y + 70, A.btn.x + 52, A.btn.y + 14, C.blue, 16, fl); label(ctx, 'Flush!', A.btn.x + 300, A.btn.y + 96, null, null, fl, { bg: '#CFE3FF', size: 64, keepIn: true }); }   // why the tank drains: the button is held down
+    // Curie's hand holds the float up (from above), and lifts away on "the float drops"
+    const lift = seg(t, k.tl, k.tl + 0.45, E.out);
+    { const fy = k.held ? A.float.y : null, base = tp2(w, floatOf(1, null).x, floatOf(1, null).y, TD.ZA); curieHand(ctx, base.x - 30 - 110 * lift, base.y - 30 - 110 * lift, seg(t, Lt.start('test') - 0.2, Lt.start('test') + 0.1) * (1 - seg(t, k.tl + 0.3, k.tl + 0.6)), -0.8, 0.72); }   // from the float's own side (upper left), the mitt on the ball
+    label(ctx, 'I hold the float up', A.float.x + 480, A.float.y + 110, A.float.x + 56, A.float.y + 20, pulse(t, hold + 0.3, empty - hold - 0.2), { bg: '#FFE9A8', size: 56, keepIn: true });
+    label(ctx, 'empty tank', A.tankB.x + 330, A.tankB.y - 190, A.tankB.x + 20, A.tankB.y - 10, pulse(t, empty + 0.3, shutT - empty - 0.2), { bg: '#D6EEFF', size: 58, keepIn: true });
+    L.questionMark(ctx, 1680, 420, 0.9 * pulse(t, empty + 0.5, shutT - empty - 0.5), t, P.red);
+    label(ctx, 'tap: shut', A.tap.x - 210, A.tap.y - 190, A.tap.x - 20, A.tap.y - 50, pulse(t, shutT + 0.3, k.tl - shutT - 0.2), { bg: '#C9F7EC', size: 58, keepIn: true });
+    L.sticker(ctx, 'No water!', 1500, 200, pulse(t, noW, k.tl - noW - 0.1), { bg: P.red, color: P.white, size: 96, rot: 0.04 });
+    L.sticker(ctx, 'Let go!', 1500, 200, pulse(t, k.tl, 1.3), { bg: P.sun, size: 96, rot: -0.04 });
+    label(ctx, 'tap: open', A.tap.x - 210, A.tap.y - 190, A.tap.x - 20, A.tap.y - 50, seg(t, k.tl + 0.6, k.tl + 1.0), { bg: '#C9F7EC', size: 58, keepIn: true });
+    L.sticker(ctx, 'Water comes again!', 1380, 200, seg(t, k.tl + 1.4, k.tl + 1.8), { bg: P.green, color: P.white, size: 72, rot: 0.03 });
+  }
+
+  // WORKSHOP: say it
+  function sceneSay(ctx, t, Lt) {
+    const k = kinSay(Lt), c0 = Lt.chunk('sayit', 'water up high');
+    let A = null;
+    const w = L3.frame(ctx, 'ep27:shop', buildShop, w => {
+      const T = global.THREE, B = w.toilet; w.upper.visible = true; w.turntable.rotation.y = 0; hideFx(w.fx); showBoard(w, 1);
+      B.userData.set(flushSet(k, { ghost: 1, glow: { tank: 0.5 + 0.4 * (1 - k.tank), button: k.button } })); B.updateMatrixWorld(true);
+      L3.shoot(w, SH.say); w.camera.updateMatrixWorld(true);
+      const said = io(t, c0 - 0.1, c0 + 0.3), sw = 0.25 * Math.sin(t * 8) * said;
+      poseCurie(T, w.curie, { x: -4.3, y: 0, z: 2.8, ry: 0.25, s: 1.0, mood: t > Lt.end('sayit') ? 'happy' : 'talk', goggles: 0, dt: 1.5, armL: lerp(0.9, 2.1, said) + sw, armR: lerp(0.9, 2.1, said) - sw, lookX: 0.1, lookY: 0.1, bulb: 0.5 + 0.5 * said }, t);
+      const an = B.userData.anchor; A = { plug: L3.at(w, an.plug), bowl: L3.at(w, an.bowlWater), tankR: tp2(w, 0.99, 2.3, -0.36) };
+    });
+    if (!w) return;
+    arrow2(ctx, A.tankR.x + 70, A.plug.y - 10, A.tankR.x + 70, A.bowl.y, C.water, 26, k.rush > 0.05 ? Math.min(1, (t - k.tp) / 0.6) * Math.min(1, k.rush * 3) : 0);
+    L.sayItSticker(ctx, 'Water up high rushes down!', Lt.cwin('sayit', 'water up high', 0.8), t);
+  }
+
+  // WORKSHOP: try at home (try1 + try2): a LISTENING experiment. The grown-up flushes (the lid stays on, nobody touches the
+  // tank); the child stands back and listens: whoosh, hiss while the tank fills, then quiet. For "hiss" the porcelain turns to
+  // glass so the child sees what makes the sound (water coming in, the float riding up); the answer is not labelled.
+  function sceneTry(ctx, t, Lt) {
+    const k = kinTry(Lt), ask = Lt.chunk('try1', 'ask a grown-up'), back = Lt.chunk('try1', 'you stand back'), listen = Lt.chunk('try1', 'and listen'), shh = Lt.chunk('try1', 'shh'), hiss = Lt.chunk('try2', 'then a hiss'), quiet = Lt.chunk('try2', 'then it goes quiet'), what = Lt.chunk('try2', 'what made');
+    const ghost = io(t, hiss - 0.3, hiss + 0.1), step = io(t, back + 0.1, back + 0.9), ear = io(t, listen + 0.1, listen + 0.6), wonder = seg(t, what + 0.2, what + 0.7, E.inOut);
+    let A = null;
+    const w = L3.frame(ctx, 'ep27:shop', buildShop, w => {
+      const T = global.THREE, B = w.toilet; w.upper.visible = true; w.turntable.rotation.y = 0; hideFx(w.fx); showBoard(w, 1);
+      B.userData.set(flushSet(k, { ghost, glow: { button: 0.5 + 0.5 * pulse(t, ask + 0.9, 1.6) + 0.5 * pulse(t, k.tp - 0.3, 1.2), float: 0.8 * wonder } })); B.updateMatrixWorld(true);
+      L3.shoot(w, SH.tryit); w.camera.updateMatrixWorld(true);
+      // Curie touches nothing: she steps back, hands behind her back, then cups an ear towards the toilet and listens
+      poseCurie(T, w.curie, { x: lerp(-2.25, -3.0, step), y: 0.3 * Math.sin(PI * step), z: 0.3, ry: 0.5, s: 0.72, mood: pulse(t, k.tf, 1.0) > 0.5 ? 'wow' : between(Lt, ['try1', 'try2']) ? 'talk' : 'happy', goggles: 0, lookX: 0.75, lookY: lerp(0.2, 0.45, wonder),
+        armR: 0.2, backR: 0.75 * step, armL: 0.25 + 1.75 * ear, backL: 0.75 * step * (1 - ear), bulb: 0.5 + 0.5 * wonder, squash: 0.05 * pulse(t, shh, 0.6) }, t);
+      const an = B.userData.anchor, ca = w.curie.userData.anchor; A = { btn: L3.at(w, an.button), float: L3.at(w, an.float), tap: L3.at(w, an.tap), tankL: tp2(w, -0.99, 2.3, -0.36), tankR: tp2(w, 0.99, 2.3, -0.36), bowl: L3.at(w, an.bowlWater), plug: L3.at(w, an.plug), mouth: L3.at(w, ca.mouth), top: L3.at(w, ca.top), handL: L3.at(w, ca.handL) };
+    });
+    if (!w) return;
+    L.tryBanner(ctx, Lt.win('try1', 0, 0.6) * (1 - seg(t, ask + 0.6, ask + 0.9)));
+    // "with a grown-up": the hand badge (pulsing while the grown-up flushes) with its own big, phone-readable label
+    { const gp = Lt.win('try1', 1.5, 0.6), act = Math.max(pulse(t, ask + 0.8, 1.8), pulse(t, k.tp - 0.4, 1.4)); if (gp > 0) { const bs = 1 + 0.09 * act * Math.sin(TAU * t / 0.9) ** 2; ctx.save(); ctx.translate(150, 330); ctx.scale(bs, bs);
+        const s0 = E.outBack(clamp(gp, 0, 1)); ctx.save(); ctx.scale(s0, s0); circle(ctx, 0, 0, 84, P.white, P.ink, 7); L.hand(ctx, -8, 10, 0.55, 0.2); ctx.restore(); ctx.restore();
+        label(ctx, 'with a grown-up', 434, 330, null, null, gp, { size: 50, bg: P.white }); } }
+    // the grown-up's hand: comes to the button on "Ask a grown-up to flush", waits just above it, presses on "whoosh", leaves
+    { const hp = seg(t, ask + 0.9, ask + 1.3) * (1 - seg(t, k.tp + 1.1, k.tp + 1.5)), hover = 46 * (1 - io(t, k.tp - 0.25, k.tp)); pressHand(ctx, A.btn.x, A.btn.y - 2 - hover, hp, 0.62);
+      label(ctx, 'button', A.btn.x - 300, A.btn.y - 30, A.btn.x - 40, A.btn.y + 6, pulse(t, ask + 1.2, back - ask - 1.0), { bg: '#CFE3FF', size: 56, keepIn: true }); }
+    L.sticker(ctx, 'Stand back!', 700, 130, seg(t, back + 0.2, back + 0.6) * (1 - seg(t, k.tp - 0.2, k.tp + 0.1)), { bg: P.sun, size: 92, rot: -0.03 });
+    // listening: little sound arcs at her ear, and "Shh!" from her mouth
+    const arcs = (x, y, dir, p, col, ph) => { if (p <= 0) return; ctx.save(); ctx.lineCap = 'round'; for (let i = 0; i < 3; i++) { const u = ((t * 1.3 + ph) + i / 3) % 1, r = 26 + 74 * u; ctx.globalAlpha = clamp(p, 0, 1) * Math.sin(PI * u);
+        for (const [c, lw] of [[P.ink, 15], [col, 8]]) { ctx.strokeStyle = c; ctx.lineWidth = lw; ctx.beginPath(); ctx.arc(x, y, r, dir - 0.6, dir + 0.6); ctx.stroke(); } } ctx.restore(); };
+    arcs(A.handL.x + 30, A.handL.y - 10, -0.3, ear * (1 - seg(t, what, what + 0.3)) * (k.rush > 0.05 || (k.inflowEff > 0 && t > k.tp) ? 1 : 0.35), '#FFD23F', 0);
+    label(ctx, 'listen!', A.handL.x + 190, A.handL.y - 110, null, null, pulse(t, listen + 0.3, shh - listen - 0.2), { bg: P.white, size: 56, keepIn: true });
+    bubble(ctx, 'Shh!', A.mouth.x + 300, A.mouth.y - 250, A.mouth.x + 40, A.mouth.y - 20, pulse(t, shh, k.tp - shh - 0.1), { bg: P.white, size: 80 });
+    // the three sounds, each on its word
+    L.sticker(ctx, 'Whoosh!', 700, 130, pulse(t, k.tp + 0.1, hiss - k.tp), { bg: P.sun, size: 100, rot: -0.05 });
+    const hp = seg(t, hiss + 0.2, hiss + 0.6) * (1 - seg(t, k.tf - 0.15, k.tf + 0.05));
+    L.sticker(ctx, 'Hisss...', 700, 130, hp, { bg: '#BFE6FF', size: 96, rot: 0.03 });
+    arcs(A.tankL.x - 30, A.tap.y, PI, hp * (k.inflowEff > 0 ? 1 : 0), '#8FD3FF', 0.4);
+    L.sticker(ctx, 'Quiet!', 700, 130, seg(t, k.tf, k.tf + 0.35) * (1 - seg(t, what, what + 0.3)), { bg: P.white, size: 100, rot: -0.03 });
+    const q = seg(t, what + 0.3, what + 0.8);
+    L.sticker(ctx, 'What made the water stop?', 560, 130, q, { bg: P.white, size: 68, rot: -0.015 });
+    L.questionMark(ctx, A.tankL.x - 120, A.float.y + 90, 1.0 * q, t, P.red);
+  }
+
+  // WORKSHOP: bye
+  function sceneBye(ctx, t, Lt) {
+    const k = kinBye(Lt), rem = Lt.chunk('bye', 'remember'), wash = Lt.chunk('bye', 'and wash'), see = Lt.chunk('bye', 'see you next'), bye = Lt.chunk('bye', 'bye-bye');
+    let A = null;
+    const w = L3.frame(ctx, 'ep27:shop', buildShop, w => {
+      const T = global.THREE, B = w.toilet; w.upper.visible = true; w.turntable.rotation.y = 0; hideFx(w.fx); showBoard(w, 1);
+      B.userData.set(flushSet(k, { ghost: 1, glow: { tank: pulse(t, rem + 0.5, 1.6), button: k.button } })); B.updateMatrixWorld(true);
+      L3.shoot(w, L3.mix({ p: [-1.6, 2.2, 11.4], l: [-1.4, 1.4, 0], fov: 32 }, { p: [-1.9, 2.15, 10.5], l: [-1.7, 1.4, 0], fov: 32 }, io(t, Lt.start('bye'), Lt.end('bye')))); w.camera.updateMatrixWorld(true);
+      const hap = pulse(t, see, 1.6), big = io(t, bye - 0.1, bye + 0.25), wv = pulse(t, Lt.start('bye'), 1.9), ws = pulse(t, wash + 0.1, see - wash - 0.1), rub = 0.18 * Math.sin(t * 11) * ws;
+      poseCurie(T, w.curie, { x: -4.2, y: 0, z: 2.6, ry: 0.25, s: 1.0, mood: t > Lt.end('bye') || hap > 0.5 ? 'happy' : 'talk', goggles: 0,   // a big smile (not a surprised mouth) on "See you next time"
+        armR: lerp(lerp(lerp(0.3, 2.2 + 0.3 * Math.sin(t * 9), wv), 1.0 + rub, ws) + 2.0 * hap, 2.3 + 0.35 * Math.sin(t * 9), big), armL: lerp(0.3 + 1.0 * pulse(t, rem + 0.5, 3.0), 1.0 - rub, ws) + 2.0 * hap + 0.5 * big, lookX: pulse(t, rem + 0.5, 3.0) * 0.6, lookY: 0.05 - 0.2 * ws,
+        bulb: 0.5 + 0.5 * hap + 0.5 * big, squash: -0.1 * hap }, t);
+      const an = B.userData.anchor; A = { plug: L3.at(w, an.plug), bowl: L3.at(w, an.bowlWater), tankR: tp2(w, 0.99, 2.3, -0.36) };
+    });
+    if (!w) return;
+    if (t > see) { ctx.save(); ctx.globalAlpha = seg(t, see, see + 0.4); L.confetti(ctx, t, 21, 60); ctx.restore(); }
+    arrow2(ctx, A.tankR.x + 70, A.plug.y - 10, A.tankR.x + 70, A.bowl.y, C.water, 26, k.rush > 0.05 ? Math.min(1, (t - k.tp) / 0.6) * Math.min(1, k.rush * 3) : 0);
+    logoAt(ctx, 1560, 250, 0.82, Lt.win('bye', 0, 0.6, E.outBack), t);
+    pill(ctx, 'Water up high rushes down!', 820, 120, Lt.cwin('bye', 'remember', 0.6, E.outBack, 0.3), 60);
+    washBadge(ctx, 1000, 420, pulse(t, wash + 0.1, see - wash - 0.1), t);
+    L.sticker(ctx, 'Wash your hands!', 1000, 640, pulse(t, wash + 0.3, see - wash - 0.3), { bg: '#BFE6FF', size: 70, rot: -0.02 });
+    L.sticker(ctx, 'Bye-bye!', 1500, 520, Lt.cwin('bye', 'bye-bye', 0.6, E.outBack), { bg: P.sun, rot: 0.05, size: 84 });
+  }
+
+  // THUMBNAIL background: the glass toilet in mid-flush with its step tokens (2D fallback while three.js is not loaded)
+  function thumbBg(ctx, t) {
+    if (!L3 || !L3.ok || !L3.ok()) {
+      const g = ctx.createLinearGradient(0, 0, 0, H); g.addColorStop(0, '#F6E3BD'); g.addColorStop(1, '#E9C98F'); ctx.fillStyle = g; ctx.fillRect(0, 0, W, H); ctx.fillStyle = '#C99655'; ctx.fillRect(0, 820, W, H - 820);
+      ctx.strokeStyle = P.ink; ctx.lineWidth = 10; ctx.fillStyle = P.white; roundRect(ctx, 1180, 240, 420, 300, 30); ctx.fill(); ctx.stroke(); ctx.fillStyle = '#8FD3FF'; roundRect(ctx, 1200, 330, 380, 190, 20); ctx.fill();
+      ctx.fillStyle = P.white; ctx.beginPath(); ctx.moveTo(1230, 560); ctx.lineTo(1560, 560); ctx.lineTo(1500, 840); ctx.lineTo(1290, 840); ctx.closePath(); ctx.fill(); ctx.stroke(); circle(ctx, 1390, 300, 34, C.gold, P.ink, 8);
+      return;
+    }
+    L3.frame(ctx, 'ep27:shop', buildShop, w => {
+      const T = global.THREE, B = w.toilet; w.upper.visible = true; w.turntable.rotation.y = 0; showBoard(w, 1);
+      poseCurie(T, w.curie, { x: -2.35, y: 0, z: 1.1, ry: 0.6, s: 0.74, mood: 'wow', armL: 2.3, armR: 0.5, lookX: 0.7, lookY: 0.2, bulb: 1, goggles: 1, bob: 0 }, t);
+      B.userData.set({ ghost: 1, tank: 0.62, plug: 1, button: 0.3, rush: 1, swirl: 1.2, bowl: 0.8, trapFlow: 1, trapPhase: 1, phase: 2, inflow: 1, glow: { plug: 0.8, float: 0.7, tap: 0.6, button: 0.6, tank: 0.5 } }); B.updateMatrixWorld(true);
+      L3.shoot(w, SH.thumb); w.camera.updateMatrixWorld(true); shopFx(T, w, 0, { tok: [1, 1, 1, 1], tokDir: [25, 325, 200, 150], tokR: [1.12, 0.36, 0.56, 0.2] }, 1.3);   // 3 tight on the bowl, 4 tight on the tap
+    });
+  }
+  // ==== EP27 3D STAGING: END ====
+
+  // ---------- Try it (website): two live 3D activities ----------
+/* Episode 27 "How does a toilet flush?": the two Try-it activities, in live 3D.
+   Paste into episodes/ep27.js (above L.episodes.ep27) and set   interactives: ep27Interactives(L)
+   Self-contained: needs only L (lib/lsc.js), L.three (lib/lsc3d.js) and the kits workshop, toilet and curie (lib/htw/).
+   Nothing touches the DOM or THREE when this function runs: only inside draw, through L.three.frame.
+   State is plain JSON. Cue ids: rush, fill, stop (task 1); held, letgo, full (task 2).
+
+   The water is simulated in update(s, dt) with the toilet asset's own float rules (lib/htw/toilet.js): the gold ball
+   floats on the water only in the top part of the tank (tank 0.54 .. 1), below that it hangs at its lowest stop; the tap
+   opening comes from the float arm's angle (shut at the full position, fully open after a 0.3 rad drop). Water comes in
+   only while the tap is open, so the tap shuts exactly when the tank is full. The plug lifts only on a flush (the button)
+   and drops shut when the tank is nearly empty (tank <= 0.06). */
+function ep27Interactives(L) {
+  const { W, P, E, clamp, lerp, circle, text, roundRect } = L;
+  const PI = Math.PI, TAU = PI * 2;
+  const C = { blue: '#3B82F6', blueDark: '#1F5FC4', pink: '#FF4D8D', gold: '#FFC233', mint: '#34E0C2', water: '#4DABF7', waterDark: '#1C7ED6', panel: '#FFFDF6', grey: '#E3E6EE' };
+  const clamp01 = v => clamp(v, 0, 1);
+  const snd = f => { try { if (L.sound && L.sound.ctx) f(L.sound); } catch (e) { /* no sound is fine */ } };
+  const inRect = (r, x, y, m) => x >= r.x - (m || 0) && x <= r.x + r.w + (m || 0) && y >= r.y - (m || 0) && y <= r.y + r.h + (m || 0);
+  const toward = (v, target, up, down, dt) => v < target ? Math.min(target, v + up * dt) : Math.max(target, v - down * dt);
+
+  // ---------- the toilet's float and tap rules (the same numbers as lib/htw/toilet.js -> userData.info)
+  const K = { FULL: 2.5, EMPTY: 1.69, FPX: -0.70, FPY: 2.66, ZA: -0.54, FARM: 0.56, FLOATUP: 0.035, BALL: 0.125, THMIN: -62 * PI / 180, TAPR: 0.3 };
+  K.THFULL = Math.asin((K.FULL + K.FLOATUP - K.FPY) / K.FARM);
+  const levelY = tank => lerp(K.EMPTY, K.FULL, tank);
+  const natTh = tank => clamp(Math.asin(clamp((levelY(tank) + K.FLOATUP - K.FPY) / K.FARM, -1, 1)), K.THMIN, K.THFULL);   // the float on the water
+  const thOf = (tank, fo) => fo == null ? natTh(tank) : lerp(K.THMIN, K.THFULL, clamp01(fo));
+  const fracOf = th => (th - K.THMIN) / (K.THFULL - K.THMIN);                              // 0 = lowest stop, 1 = full position
+  const tapOf = th => clamp01((K.THFULL - th) / K.TAPR);                                    // 0 = shut
+  const PLUG_SHUT = 0.06;   // the plug drops shut when the tank is this low (nearly empty)
+
+  // ---------- shared water simulation (both tasks); returns the events of this step
+  function initWater(s, tank) {
+    s.tank = tank; s.plugOpen = false; s.plug = 0; s.btn = 0; s.btnT = 0; s.fo = null; s.rush = 0; s.bowl = 0; s.trapFlow = 0;
+    s.swirl = 0; s.trapPhase = 0; s.phase = 0; s.tap = tapOf(thOf(tank, null)); s.tapOpen = s.tap > 0; s.inRate = 0; s.outRate = 0; s.trT = 0; s.flushes = 0;
+  }
+  function stepWater(s, dt, fill) {
+    const ev = {};
+    s.btnT = Math.max(0, s.btnT - dt); s.btn = toward(s.btn, s.btnT > 0 ? 1 : 0, 9, 5, dt);
+    s.plug = toward(s.plug, s.plugOpen ? 1 : 0, 6, 3, dt);
+    // in through the tap (only while it is open), out through the plug (only while it is lifted)
+    const tap = tapOf(thOf(s.tank, s.fo));
+    s.inRate = tap > 0 ? fill * (0.35 + 0.65 * Math.min(1, tap * 4)) : 0;
+    s.outRate = s.plugOpen && s.plug > 0.5 ? 0.34 + 0.3 * Math.sqrt(s.tank) : 0;   // always faster than the tap (at most 0.2 a second)
+    s.tank = clamp01(s.tank + (s.inRate - s.outRate) * dt);
+    if (s.plugOpen && s.tank <= PLUG_SHUT) { s.plugOpen = false; ev.plugShut = true; snd(S => S.tone(170, 0.45, { type: 'sine', vol: 0.07, glide: 90 })); }
+    // a float the child let go of (task 2) cannot sit below the water: the water lifts it
+    if (s.fo != null) s.fo = Math.max(s.fo, fracOf(natTh(s.tank)));
+    s.tap = tapOf(thOf(s.tank, s.fo)); if (s.tap === 0) s.inRate = 0;                  // a shut tap: the water stops now
+    if (s.tap > 0 && !s.tapOpen) { s.tapOpen = true; ev.tapOpened = true; }
+    else if (s.tap === 0 && s.tapOpen) { s.tapOpen = false; ev.tapShut = true; snd(S => S.tone(1700, 0.04, { type: 'triangle', vol: 0.07 })); }
+    // the flush water: rush through the plug opening into the bowl, the bowl rises, the trap carries it away
+    s.rush = toward(s.rush, s.plugOpen && s.plug > 0.5 ? clamp01(0.45 + 1.2 * s.tank) : 0, 4, 2.2, dt);
+    s.bowl = toward(s.bowl, s.rush > 0.05 ? Math.min(1, 0.35 + s.rush) : 0, 1.3, 0.45, dt);
+    s.trapFlow = toward(s.trapFlow, s.bowl > 0.3 ? 1 : (s.bowl > 0.04 ? s.bowl * 2.5 : 0), 2, 1.2, dt);
+    s.swirl = (s.swirl + dt * (1.2 + 4 * Math.max(s.rush, s.trapFlow))) % (TAU * 100);
+    s.trapPhase = (s.trapPhase + dt * 6 * s.trapFlow) % (TAU * 100);
+    s.phase = (s.phase + dt * 2.5) % (TAU * 100);
+    // a soft trickle while water comes in
+    s.trT -= dt; if (s.inRate > 0 && s.trT <= 0) { s.trT = 0.24; const v = 0.012 + 0.018 * Math.min(1, s.tap * 4); snd(S => S.noise(0.3, v, { hp: 1800, lp: 5200 })); }
+    return ev;
+  }
+  function startFlush(s) {
+    s.plugOpen = true; s.btnT = 0.35; s.flushes++;
+    snd(S => S.noise(1.9, 0.14, { lp: 900, hp: 110 })); snd(S => S.tone(260, 0.5, { type: 'sine', vol: 0.06, glide: 120 }));
+  }
+  function poseToilet(w, s, glow) {
+    w.toilet.userData.set({ ghost: 1, button: s.btn, plug: s.plug, tank: s.tank, floatOverride: s.fo, inflow: s.tap > 0 ? 1 : 0,
+      rush: s.rush, swirl: s.swirl, bowl: s.bowl, trapFlow: s.trapFlow, trapPhase: s.trapPhase, phase: s.phase, stuff: s.stuff == null ? null : s.stuff, glow });
+  }
+  // cues: each once (flags in s.saw); one waits until Curie has finished the one before (4.5 s)
+  function cues(s, dt, cue) {
+    s.quiet += dt;
+    if (s.queue.length && s.quiet > 4.5) { const id = s.queue.shift(); s.lastCue = id; s.quiet = 0; cue(id); }
+  }
+  const ask = (s, id) => { if (!s.saw[id]) { s.saw[id] = true; s.queue.push(id); } };
+
+  // ---------- the 3D world (one per task: separate keys, so each keeps its own camera and poses)
+  function build(T, L3) {
+    const w = L3.kits.workshop(T, L3);
+    w.toilet = L3.kits.toilet(T, L3); w.toilet.position.y = w.floorY; w.turntable.add(w.toilet);
+    w.curie = L3.kits.curie(T, L3); w.scene.add(w.curie);
+    return w;
+  }
+  function setStage(w, shot) {
+    L.three.shoot(w, shot); w.turntable.rotation.y = 0; w.upper.visible = false; w.beam.visible = false;   // a plain wall behind the glass tank
+  }
+  function poseCurie(w, s, t, o) {
+    const wow = s.wow > 0;
+    w.curie.userData.pose(Object.assign({ y: w.floorY, mood: wow ? 'wow' : 'happy', armL: wow ? 2.5 : 1.0, armR: wow ? 2.5 : 0.2, lookX: 0.7, lookY: wow ? 0.3 : 0.1,
+      bulb: wow ? 1 : 0.4, goggles: 1, squash: wow ? -0.1 * Math.sin(clamp(s.wow / 2.2, 0, 1) * PI) : 0 }, o), t);
+  }
+  const r1 = v => Math.round(v * 10) / 10;
+
+  // ---------- 2D pieces
+  function panel(ctx, x, y, w, h, r) {
+    ctx.save(); ctx.fillStyle = 'rgba(43,45,66,0.22)'; roundRect(ctx, x + 4, y + 10, w, h, r); ctx.fill();
+    ctx.fillStyle = C.panel; roundRect(ctx, x, y, w, h, r); ctx.fill(); ctx.strokeStyle = P.ink; ctx.lineWidth = 6; ctx.stroke(); ctx.restore();
+  }
+  function tag(ctx, str, x, y, size, bg, color) {
+    ctx.save(); ctx.font = '700 ' + size + 'px Fredoka'; const w = ctx.measureText(str).width + size * 0.9, h = size * 1.5;
+    ctx.fillStyle = bg; roundRect(ctx, x - w / 2, y - h / 2, w, h, h / 2); ctx.fill(); ctx.strokeStyle = P.ink; ctx.lineWidth = 5; ctx.stroke();
+    text(ctx, str, x, y + 3, { size, weight: 700, color: color || P.ink }); ctx.restore();
+  }
+  // a name tag at (tx, ty) with a leader line to a part at (px, py); lit = filled with the part's colour
+  function partTag(ctx, str, tx, ty, px, py, color, lit) {
+    ctx.save(); ctx.lineCap = 'round'; ctx.strokeStyle = P.ink; ctx.lineWidth = 10; ctx.beginPath(); ctx.moveTo(tx, ty); ctx.lineTo(px, py); ctx.stroke();
+    ctx.strokeStyle = color; ctx.lineWidth = 5; ctx.stroke(); circle(ctx, px, py, 9, color); ctx.lineWidth = 4; ctx.strokeStyle = P.ink; ctx.beginPath(); ctx.arc(px, py, 9, 0, TAU); ctx.stroke(); ctx.restore();
+    tag(ctx, str, tx, ty, 44, lit ? color : C.panel, P.ink);
+  }
+  // a tank gauge: a little tank with its water level, and a word
+  function gauge(ctx, R, tank, word, sub, wordColor) {
+    panel(ctx, R.x, R.y, R.w, R.h, 40);
+    const gx = R.x + 36, gy = R.y + 32, gw = 96, gh = R.h - 64;
+    ctx.save(); ctx.fillStyle = '#EAF6FF'; roundRect(ctx, gx, gy, gw, gh, 16); ctx.fill();
+    ctx.save(); roundRect(ctx, gx, gy, gw, gh, 16); ctx.clip(); ctx.fillStyle = C.water; ctx.fillRect(gx, gy + gh * (1 - tank), gw, gh * tank + 2); ctx.restore();
+    ctx.strokeStyle = P.ink; ctx.lineWidth = 5; roundRect(ctx, gx, gy, gw, gh, 16); ctx.stroke();
+    ctx.setLineDash([10, 8]); ctx.strokeStyle = C.waterDark; ctx.lineWidth = 4; ctx.beginPath(); ctx.moveTo(gx - 10, gy + 6); ctx.lineTo(gx + gw + 10, gy + 6); ctx.stroke(); ctx.restore();
+    text(ctx, word, gx + gw + (R.w - gw - 36) / 2, R.y + R.h / 2 - (sub ? 22 : -4), { size: 60, weight: 700, color: wordColor || P.ink });
+    if (sub) text(ctx, sub, gx + gw + (R.w - gw - 36) / 2, R.y + R.h / 2 + 40, { size: 38, weight: 600 });
+  }
+  // a big press button: it sinks when pressed
+  function button(ctx, r, label, fill, lip, down, glow) {
+    const d = down ? 10 : 0; ctx.save();
+    if (glow > 0) { ctx.fillStyle = 'rgba(255,255,255,' + (0.5 * glow).toFixed(3) + ')'; roundRect(ctx, r.x - 14, r.y - 14, r.w + 28, r.h + 28, 58); ctx.fill(); }
+    ctx.fillStyle = lip; roundRect(ctx, r.x, r.y + 14, r.w, r.h - 14, 46); ctx.fill(); ctx.strokeStyle = P.ink; ctx.lineWidth = 7; ctx.stroke();
+    ctx.fillStyle = fill; roundRect(ctx, r.x, r.y + d, r.w, r.h - 14, 46); ctx.fill(); ctx.stroke();
+    text(ctx, label, r.x + r.w / 2, r.y + d + (r.h - 14) / 2 + 4, { size: 88, weight: 700, color: P.white, stroke: P.ink, strokeWidth: 12 });
+    ctx.restore();
+  }
+  // a pulsing dashed ring (a "touch here" invitation) and a solid ring (a touch that landed)
+  function invite(ctx, x, y, r, t) { const k = 0.5 + 0.5 * Math.sin(t * 4); ctx.save(); ctx.strokeStyle = 'rgba(255,255,255,' + (0.55 + 0.4 * k).toFixed(3) + ')'; ctx.lineWidth = 8; ctx.setLineDash([18, 16]); ctx.beginPath(); ctx.arc(x, y, r + 8 * k, 0, TAU); ctx.stroke(); ctx.restore(); }
+  function ring(ctx, x, y, r, a, color) { if (a <= 0) return; ctx.save(); ctx.globalAlpha = clamp01(a); ctx.strokeStyle = color || 'rgba(255,255,255,0.95)'; ctx.lineWidth = 9; ctx.beginPath(); ctx.arc(x, y, r, 0, TAU); ctx.stroke(); ctx.restore(); }
+
+  // =====================================================================================================
+  // Try it 1: Flush it!
+  // Tap the blue button on the tank lid: the button pushes the see-saw, the pink plug lifts, the tank water rushes down
+  // into the bowl (swirl, the bend carries it away, the paper wad goes); when the tank is nearly empty the plug drops
+  // shut; the float has dropped, so the tap is open and the tank fills; the rising float shuts the tap exactly at full.
+  // =====================================================================================================
+  const S1 = { p: [1.2, 2.95, 5.4], l: [0.35, 1.95, -0.5], fov: 33 };
+  const R1 = { gauge: { x: 1400, y: 50, w: 470, h: 200 } };
+  const task1 = {
+    title: 'Flush it!',
+    hint: 'Tap the blue button on top of the tank and watch the pink plug, the gold float and the green tap!',
+    init: s => {
+      initWater(s, 1); s.stuff = 0; s.touched = false; s.ready = false; s.wow = 0; s.hit = 0; s.nope = 0; s.nopeWhy = '';
+      s.bx = 0; s.by = 0; s.labels = null; s.saw = { rush: false, fill: false, stop: false }; s.queue = []; s.quiet = 99; s.lastCue = '';
+    },
+    update: (s, dt, cue) => {
+      dt = clamp(dt, 0, 0.05);
+      const wasFilling = !s.plugOpen && s.tank < 1;
+      const ev = stepWater(s, dt, 0.2);
+      if (s.stuff != null && (s.stuff > 0 || s.rush > 0.3)) { s.stuff += dt / 3.2; if (s.stuff >= 1) s.stuff = null; }   // the paper wad rides away, once
+      if (s.flushes > 0) ask(s, 'rush');
+      if (ev.plugShut && s.tap > 0) ask(s, 'fill');
+      if (ev.tapShut && wasFilling && s.tank === 1) { ask(s, 'stop'); s.wow = Math.max(s.wow, 2.2); }
+      s.wow = Math.max(0, s.wow - dt); s.hit = Math.max(0, s.hit - dt); s.nope = Math.max(0, s.nope - dt);
+      cues(s, dt, cue);
+    },
+    draw: (ctx, s, t) => {
+      const filling = !s.plugOpen && s.tank < 1, flushing = s.plugOpen;
+      const w = L.three.frame(ctx, 'ep27:try1', build, w => {
+        setStage(w, S1);
+        poseToilet(w, s, { button: s.touched ? (s.btn > 0 ? 1 : 0.15) : 0.55 + 0.4 * Math.sin(t * 4), plug: flushing ? 0.9 : 0, float: filling ? 0.7 : 0, tap: s.tap > 0 ? 0.8 : 0 });
+        poseCurie(w, s, t, { x: -2.05, z: -0.9, ry: 0.55, s: 0.42 });
+      });
+      if (!w) { s.ready = false; return; }
+      const A = w.toilet.userData.anchor, b = L.three.at(w, A.button), pl = L.three.at(w, A.plug), fl = L.three.at(w, A.float), tp = L.three.at(w, A.tap);
+      s.bx = r1(b.x); s.by = r1(b.y); s.ready = true;
+      s.labels = { plug: [r1(pl.x), r1(pl.y)], float: [r1(fl.x), r1(fl.y)], tap: [r1(tp.x), r1(tp.y)] };
+      // name tags, on the free right-hand side and above the tank; lit while that part is working
+      partTag(ctx, 'tap', 330, 250, tp.x, tp.y, C.mint, s.tap > 0);
+      partTag(ctx, 'float', 330, 420, fl.x - 14, fl.y, C.gold, filling);
+      partTag(ctx, 'plug', 1360, 560, pl.x + 30, pl.y, C.pink, flushing);
+      // the tank gauge and what is happening
+      gauge(ctx, R1.gauge, s.tank, flushing ? 'Whoosh!' : (filling ? 'Filling…' : 'Full!'), flushing ? 'rushing down' : (filling ? 'tap open' : 'tap shut'), flushing ? C.waterDark : (filling ? P.ink : C.blueDark));
+      // the button: an invitation until the first touch, a ring when a touch lands
+      if (!s.touched) {
+        invite(ctx, s.bx, s.by, 96, t);
+        L.arrow(ctx, s.bx + 250, s.by + 210, s.bx + 95, s.by + 60, P.sun, 14);
+        L.sticker(ctx, 'Tap me!', clamp(s.bx + 330, 260, W - 260), s.by + 280, 1, { bg: P.sun, size: 64, rot: -0.04 });
+      }
+      ring(ctx, s.bx, s.by, 80 + 60 * (1 - s.hit / 0.5), s.hit / 0.5);
+      if (s.nope > 0) L.sticker(ctx, s.nopeWhy, clamp(s.bx + 330, 300, W - 300), s.by + 280, clamp((1.2 - s.nope) / 0.2, 0, 1) * clamp(s.nope / 0.2, 0, 1), { bg: C.panel, size: 52, rot: 0.03 });
+      if (s.wow > 0 && s.lastCue === 'stop') L.sticker(ctx, 'Stop!', 1630, 330, clamp((2.2 - s.wow) / 0.25, 0, 1) * clamp(s.wow / 0.2, 0, 1), { bg: P.sun, size: 84 });
+    },
+    pointer: (s, type, x, y) => {
+      if (!s.ready || type !== 'down') return;
+      if (Math.hypot(x - s.bx, y - s.by) > 120) return;
+      s.touched = true; s.hit = 0.5;
+      if (!s.plugOpen && s.tank >= 0.3) { startFlush(s); s.wow = Math.max(s.wow, 1.6); }
+      else { s.nope = 1.2; s.nopeWhy = s.plugOpen ? 'Already flushing!' : 'Wait, filling up!'; snd(S => S.tone(520, 0.08, { type: 'triangle', vol: 0.06 })); }   // nothing harmful: it just says so
+    },
+    cues: {
+      rush: 'Whoosh! The water up high rushes down!',
+      fill: 'The float dropped, so the tap opened. The tank fills up!',
+      stop: 'The float came up and shut the tap. Stop!'
+    }
+  };
+
+  // =====================================================================================================
+  // Try it 2: Hold the float
+  // The tank starts nearly empty with the tap open, filling slowly. Drag the gold float up and hold it: at the top the arm
+  // shuts the tap and no water comes in (the level stays). Let go: the float falls back to the water (or to its low stop),
+  // the tap opens and the tank fills until the floating ball shuts the tap at full. Flush empties the tank for another go.
+  // =====================================================================================================
+  const S2 = { p: [1.0, 2.9, 4.7], l: [0.3, 2.0, -0.6], fov: 31 };
+  const R2 = { flush: { x: 1440, y: 790, w: 420, h: 220 }, gauge: { x: 1400, y: 50, w: 470, h: 200 } };
+  const FILL2 = 0.11;
+  const task2 = {
+    title: 'Hold the float',
+    hint: 'Drag the gold float up and hold it there: does water still come in? (Tap Flush to empty the tank.)',
+    init: s => {
+      initWater(s, 0.12); s.stuff = null; s.touched = false; s.ready = false; s.wow = 0; s.drag = false; s.gy = 0; s.gf = 0; s.fv = 0;
+      s.heldT = 0; s.released = false; s.fx = 0; s.fy = 0; s.fy0 = 0; s.fy1 = 0; s.flushF = 0; s.nope = 0; s.grabs = 0;
+      s.saw = { held: false, letgo: false, full: false }; s.queue = []; s.quiet = 99; s.lastCue = '';
+    },
+    update: (s, dt, cue) => {
+      dt = clamp(dt, 0, 0.05);
+      // a float the child let go of falls back (faster and faster) until it sits on the water or on its low stop
+      if (!s.drag && s.fo != null) { s.fv += 7 * dt; s.fo -= s.fv * dt; const nat = fracOf(natTh(s.tank)); if (s.fo <= nat) { s.fo = null; s.fv = 0; snd(S => S.tone(300, 0.12, { type: 'sine', vol: 0.06, glide: 220 })); } }
+      const ev = stepWater(s, dt, FILL2);
+      // held high with the tap shut (and the tank not full anyway): "held"
+      if (s.drag && s.tap === 0 && s.tank < 0.95) { s.heldT += dt; if (s.heldT > 0.5 && !s.saw.held) { ask(s, 'held'); s.wow = 2.2; } } else s.heldT = 0;
+      // let go after that and the water comes again: "letgo"
+      if (s.saw.held && s.released && !s.drag && s.tap > 0.05 && s.inRate > 0) { s.released = false; ask(s, 'letgo'); }
+      // the float, on the water, shut the tap at full by itself: "full"
+      if (ev.tapShut && s.fo == null && s.tank === 1) { ask(s, 'full'); s.wow = Math.max(s.wow, 2.2); }
+      s.wow = Math.max(0, s.wow - dt); s.flushF = Math.max(0, s.flushF - dt); s.nope = Math.max(0, s.nope - dt);
+      cues(s, dt, cue);
+    },
+    draw: (ctx, s, t) => {
+      const w = L.three.frame(ctx, 'ep27:try2', build, w => {
+        setStage(w, S2);
+        poseToilet(w, s, { float: s.drag ? 1 : (s.touched ? 0.35 : 0.55 + 0.4 * Math.sin(t * 4)), tap: s.tap > 0 ? 0.8 : 0.2, plug: s.plugOpen ? 0.9 : 0 });
+        poseCurie(w, s, t, { x: -2.1, z: -1.9, ry: 0.6, s: 0.4, lookY: s.drag ? 0.5 : 0.1 });
+      });
+      if (!w) { s.ready = false; return; }
+      const A = w.toilet.userData.anchor, f = L.three.at(w, A.float), tp = L.three.at(w, A.tap), pl = L.three.at(w, A.plug);
+      // the float's on-screen path: its lowest stop and its full (top) position, for the finger
+      const ballAt = th => L.three.project(w, K.FPX + K.FARM * Math.cos(th), w.floorY + K.FPY + K.FARM * Math.sin(th), K.ZA + K.BALL);
+      const lo = ballAt(K.THMIN), hi = ballAt(K.THFULL);
+      s.fx = r1(f.x); s.fy = r1(f.y); s.fy0 = r1(lo.y); s.fy1 = r1(hi.y); s.ready = true;
+      partTag(ctx, s.tap > 0 ? 'tap open' : 'tap shut', 300, 200, tp.x, tp.y, C.mint, s.tap > 0);
+      partTag(ctx, 'plug', 1330, 520, pl.x + 30, pl.y, C.pink, s.plugOpen);
+      const full = s.tap === 0 && s.tank === 1 && s.fo == null;
+      gauge(ctx, R2.gauge, s.tank, s.tap > 0 ? 'Water in' : (full ? 'Full!' : 'No water'), s.tap > 0 ? 'tap open' : 'tap shut', s.tap > 0 ? C.waterDark : (full ? C.blueDark : P.ink));
+      if (s.drag) ring(ctx, s.fx, s.fy, 70, 1);
+      if (!s.touched) {
+        invite(ctx, s.fx, s.fy, 78, t);
+        L.arrow(ctx, s.fx - 150, s.fy + 30, s.fx - 150, s.fy1 + 10, P.sun, 14);
+        L.sticker(ctx, 'Drag me up!', clamp(s.fx - 150, 250, W - 250), s.fy + 120, 1, { bg: P.sun, size: 60, rot: -0.04 });
+      }
+      if (s.wow > 0 && s.lastCue === 'held' && s.drag) L.sticker(ctx, 'No water!', 1630, 330, clamp((2.2 - s.wow) / 0.25, 0, 1), { bg: P.sun, size: 76 });
+      button(ctx, R2.flush, 'Flush', C.blue, C.blueDark, s.flushF > 0, s.touched && s.tank === 1 && !s.plugOpen && !s.drag ? 0.5 + 0.5 * Math.sin(t * 4) : 0);
+      if (s.nope > 0) L.sticker(ctx, 'Already flushing!', R2.flush.x + R2.flush.w / 2, R2.flush.y - 60, clamp(s.nope / 0.2, 0, 1), { bg: C.panel, size: 48 });
+    },
+    pointer: (s, type, x, y) => {
+      if (!s.ready) return;
+      if (type === 'down') {
+        if (inRect(R2.flush, x, y, 12)) {
+          s.touched = true; s.flushF = 0.25;
+          if (!s.plugOpen && s.tank >= 0.2) startFlush(s); else { s.nope = 1.2; snd(S => S.tone(520, 0.08, { type: 'triangle', vol: 0.06 })); }
+        } else if (Math.hypot(x - s.fx, y - s.fy) < 115) {
+          s.drag = true; s.touched = true; s.released = false; s.grabs++; s.gy = y; s.fv = 0;
+          s.gf = fracOf(thOf(s.tank, s.fo)); s.fo = s.gf;                                   // hold it where it is
+          snd(S => S.tone(620, 0.08, { type: 'triangle', vol: 0.08 }));
+        }
+      } else if (type === 'move' && s.drag) {
+        const span = Math.max(60, s.fy0 - s.fy1);                                          // pixels from the low stop to the top
+        s.fo = Math.max(clamp01(s.gf + (s.gy - y) / span), fracOf(natTh(s.tank)));         // the water does not let it go lower
+      } else if (type === 'up' && s.drag) { s.drag = false; s.released = true; s.fv = 0; }
+    },
+    cues: {
+      held: "I'm holding the float up high. The tap is shut. No water!",
+      letgo: 'Let go... the float drops, and the water comes again!',
+      full: 'The water lifted the float, and the float shut the tap. Full!'
+    }
+  };
+
+  return [task1, task2];
+}
+
+
+  L.episodes.ep27 = {
+    id: 'ep27', num: 27, three: true, curie: 'rainbow', title: 'How does a toilet flush?', short: 'Toilet flush', phrase: 'Water up high rushes down!',
+    // YouTube thumbnail (render/art.js): big word, small text above/below, and the background drawn behind Curie (Curie stands at x 560, y 760 unless pip is set)
+    thumb: { big: 'FLUSH?', small1: 'How does a toilet', small2: '', pip: false, bg: (ctx, t) => thumbBg(ctx, t) },
+    // text = the caption on screen (and the site); say = what Curie speaks, with direction tags (docs/PIPELINE.md, "Narration markup")
+    lines: [
+      { id: 'hello', text: "Hello, little scientists! I'm Curie. Welcome to the Little Scientists Club!", say: "Hello, little scientists! I'm *Curie*! Welcome... to the Little Scientists Club!", hold: 0.3 },
+      { id: 'q', text: "Today's big question: how does a toilet flush?", say: "Today's big question... How does a toilet *flush*?", hold: 0.6 },
+      { id: 's1', text: "I'm in the bathroom with my rubber duck, Quacky. I press the button and... whoosh! The water goes gurgle, gurgle!", say: "I'm in the *bathroom* with my rubber duck, Quacky. I press the button and... {sfx:whoosh}whoosh! The water goes *gurgle*, gurgle!", hold: 0.6 },
+      { id: 's2', text: "Where does all that water come from? And how does the toilet know when to stop? Let's find out in my workshop!", say: "Where does all that water come *from*? And how does the toilet know when to *stop*? Let's find out... in my workshop!", hold: 0.8 },
+      { id: 'look', text: "Peek-Inside Goggles on! Let's look inside the tank, step by step.", say: "{sfx:pop}Peek-Inside Goggles... *on*! Let's look inside the tank... step by step.", hold: 0.6 },
+      { id: 'e1', text: "Step one. The tank on top is full of water, waiting up high.", say: "Step *one*. The tank on top is full of water... waiting up *high*.", hold: 0.6 },
+      { id: 'e2', text: "Step two. I press the button. It lifts a plug at the bottom of the tank. The water rushes down!", say: "Step *two*. I press the button. It lifts a *plug* at the bottom of the tank. {sfx:whoosh}The water rushes down!", hold: 0.6 },
+      { id: 'e3', text: "Step three. The water swirls round the bowl and carries everything down the bendy pipe. Bye-bye!", say: "Step *three*. The water *swirls* round the bowl... and carries everything down the bendy pipe. Bye-bye!", hold: 0.8 },
+      { id: 'e4', text: "Step four. The plug drops shut. The float went down with the water, like Quacky, and that opened a tap. The tank fills up again.", say: "Step *four*. The plug drops shut. The *float* went down with the water, like Quacky... and that opened a tap. The tank fills up again.", hold: 0.6 },
+      { id: 'stop', text: "As the water rises, the float rises too. When it is high enough, it pushes the tap shut. Stop!", say: "As the water rises, the float rises too. When it is high enough... it pushes the tap *shut*. Stop!", hold: 0.8 },
+      { id: 'recap', text: "Up high, rush down, fill up again. Gravity pulls the water down, and the float tells it when to stop!", say: "Up high... rush down... fill up again. *Gravity* pulls the water down... and the float tells it when to stop!", hold: 0.8 },
+      { id: 'trap', text: "And look at the bendy pipe. It keeps a little water inside, like a door that stops smells coming back up!", say: "And look at the bendy pipe. It keeps a little water inside... like a *door* that stops smells coming back up!", hold: 0.8 },
+      { id: 'test', text: "Scientists test it! What if I hold the float up high, even when the tank is empty?", say: "{sfx:ding}Scientists *test* it! What if I hold the float up high... even when the tank is empty?", hold: 0.4 },
+      { id: 'result', text: "The tap stays shut. No water! When I let go, the float drops, and the water comes again.", say: "The tap stays *shut*. No water! When I let go... the float drops, and the water comes again.", hold: 1.0 },
+      { id: 'sayit', text: 'Say it with me: water up high rushes down!', say: 'Say it with me... {sfx:ding}Water up high rushes down! {pause 0.9} {slow}Water up high rushes down!{/slow}', hold: 1.4 },
+      { id: 'try1', text: "Let's try it at home! Ask a grown-up to flush the toilet. You stand back, and listen carefully. Shh!", say: "{sfx:tada}Let's try it at home! Ask a grown-up to flush the toilet. You stand back... and *listen* carefully. Shh!", hold: 0.4 },
+      { id: 'try2', text: "First a whoosh, then a hiss as the tank fills up. Then it goes quiet! What made the water stop?", say: "First a *whoosh*... then a *hiss* as the tank fills up. Then it goes quiet! {sfx:ding}What made the water stop?", hold: 1.6 },
+      { id: 'bye', text: 'Great job, little scientist! Remember: water up high rushes down. And wash your hands! See you next time at the Little Scientists Club! Bye-bye!', say: '{sfx:tada}Great job, little scientist! Remember... water up high rushes down. And wash your *hands*! See you next time, at the Little Scientists Club! {hi}Bye-bye!{/hi}', hold: 0.5 }
+    ],
+    // extra sound effects not written into `say` as {sfx:name}: anchored to a line (+offset s) or to a chunk ('chunk': words)
+    sfx: [
+      
+    ],
+    // scenes: each starts when its `from` line starts (minus optional lead) and lasts until the next scene; transition 'cut' = no wipe
+    scenes: [
+      { from: 'hello', draw: (ctx, t, Lt) => sceneBath(ctx, t, Lt) },              // hello + q + s1 + s2: one continuous bathroom shot
+      { from: 'look', draw: (ctx, t, Lt) => sceneMech(ctx, t, Lt) },               // look + e1..e4 + stop + recap: one flush, step by step
+      { from: 'trap', draw: (ctx, t, Lt) => sceneTrap(ctx, t, Lt) },
+      { from: 'test', draw: (ctx, t, Lt) => sceneTest(ctx, t, Lt) },               // test + result
+      { from: 'sayit', draw: (ctx, t, Lt) => sceneSay(ctx, t, Lt) },
+      { from: 'try1', draw: (ctx, t, Lt) => sceneTry(ctx, t, Lt) },                // try1 + try2
+      { from: 'bye', draw: (ctx, t, Lt) => sceneBye(ctx, t, Lt) }
+    ],
+    // for tests and tools: the camera shots and the closed-form kinematics (see the staging block above)
+    props: { shots: SH, bathShots: BS, kin: { bath: kinBath, mech: kinMech, test: kinTest, say: kinSay, bye: kinBye, tryit: kinTry }, floatOf, dims: TD },
+    interactives: ep27Interactives(L)
+  };
+})(typeof window !== 'undefined' ? window : globalThis);
+
 LSC.three.src = ['three.min.js', 'htw.js'];
