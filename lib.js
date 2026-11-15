@@ -109,36 +109,47 @@
 
   // ---------- Curie the mascot ----------
   // opt: x,y, s (scale), mood: 'happy'|'talk'|'think'|'wow'|'sad'|'wink', t, lookX,lookY (-1..1), armL, armR (angles rad; default resting), bulb(0..1), flip, blink
+  // Curie's skin: L.curie (set per episode by the player from the episode's `curie` field, e.g. 'rainbow' for the
+  // "How things work" series). null = the classic orange Curie (every published episode before Nov 2026).
+  const CURIE_SKINS = {
+    rainbow: { dark: '#5A4FA0', cheek: 'rgba(255,110,150,0.6)', stops: ['#FF6B6B', '#FFA94D', '#FFD43B', '#69DB7C', '#4DABF7', '#9775FA'] }
+  };
+  function curieFill(ctx, sk, R) {
+    const g = ctx.createLinearGradient(-R * 0.6, -R, R * 0.6, R);
+    sk.stops.forEach((c, i) => g.addColorStop(i / (sk.stops.length - 1), c)); return g;
+  }
   function pip(ctx, o) {
     const t = o.t || 0, s = o.s || 1, mood = o.mood || 'happy';
     ctx.save(); ctx.translate(o.x, o.y); ctx.scale(s * (o.flip ? -1 : 1), s);
     const bob = o.bob === false ? 0 : Math.sin(t * 2.2) * 4; ctx.translate(0, bob);
     const R = 100;
+    const skinName = o.skin || (global.LSC && global.LSC.curie); const SK = skinName ? CURIE_SKINS[skinName] : null;
+    const BODY = SK ? curieFill(ctx, SK, R) : P.pip, DARK = SK ? SK.dark : P.pipDark, CHEEK = SK ? SK.cheek : 'rgba(255,120,150,0.55)';
     // feet
-    ellipse(ctx, -42, R - 4, 34, 16, P.pipDark); ellipse(ctx, 42, R - 4, 34, 16, P.pipDark);
+    ellipse(ctx, -42, R - 4, 34, 16, DARK); ellipse(ctx, 42, R - 4, 34, 16, DARK);
     // antenna
-    ctx.strokeStyle = P.pipDark; ctx.lineWidth = 9; ctx.lineCap = 'round';
+    ctx.strokeStyle = DARK; ctx.lineWidth = 9; ctx.lineCap = 'round';
     ctx.beginPath(); ctx.moveTo(0, -R + 8); ctx.quadraticCurveTo(10, -R - 40, 28 + Math.sin(t * 3) * 3, -R - 60); ctx.stroke();
     const bulb = o.bulb || 0;
     if (bulb > 0) { const g = ctx.createRadialGradient(28, -R - 70, 5, 28, -R - 70, 60 * bulb + 20); g.addColorStop(0, 'rgba(255,230,80,' + (0.8 * bulb) + ')'); g.addColorStop(1, 'rgba(255,230,80,0)'); ctx.fillStyle = g; ctx.beginPath(); ctx.arc(28, -R - 70, 60 * bulb + 20, 0, Math.PI * 2); ctx.fill(); }
-    circle(ctx, 28, -R - 70, 16, bulb > 0.3 ? P.sun : P.red, P.pipDark, 5);
+    circle(ctx, 28, -R - 70, 16, bulb > 0.3 ? P.sun : P.red, DARK, 5);
     // arms
     const armL = o.armL == null ? 0.5 : o.armL, armR = o.armR == null ? 0.5 : o.armR; // angle: 0 = pointing sideways, +ve down, -ve up (radians)
-    ctx.strokeStyle = P.pip; ctx.lineWidth = 26; ctx.lineCap = 'round';
+    ctx.strokeStyle = BODY; ctx.lineWidth = 26; ctx.lineCap = 'round';
     ctx.beginPath(); ctx.moveTo(-R + 18, 10); ctx.lineTo(-R + 18 - Math.cos(armL) * 70, 10 + Math.sin(armL) * 70); ctx.stroke();
     ctx.beginPath(); ctx.moveTo(R - 18, 10); ctx.lineTo(R - 18 + Math.cos(armR) * 70, 10 + Math.sin(armR) * 70); ctx.stroke();
-    ctx.strokeStyle = P.pipDark; ctx.lineWidth = 32; ctx.globalCompositeOperation = 'destination-over';
+    ctx.strokeStyle = DARK; ctx.lineWidth = 32; ctx.globalCompositeOperation = 'destination-over';
     ctx.beginPath(); ctx.moveTo(-R + 18, 10); ctx.lineTo(-R + 18 - Math.cos(armL) * 70, 10 + Math.sin(armL) * 70); ctx.stroke();
     ctx.beginPath(); ctx.moveTo(R - 18, 10); ctx.lineTo(R - 18 + Math.cos(armR) * 70, 10 + Math.sin(armR) * 70); ctx.stroke();
     ctx.globalCompositeOperation = 'source-over';
     // body
     const sq = o.squash || 0;
     ctx.save(); ctx.scale(1 + sq, 1 - sq);
-    circle(ctx, 0, 0, R, P.pip, P.pipDark, 8);
+    circle(ctx, 0, 0, R, BODY, DARK, 8);
     // belly highlight
     ctx.fillStyle = 'rgba(255,255,255,0.18)'; ctx.beginPath(); ctx.ellipse(-30, -35, 34, 22, -0.6, 0, Math.PI * 2); ctx.fill();
     // cheeks
-    circle(ctx, -58, 22, 14, 'rgba(255,120,150,0.55)'); circle(ctx, 58, 22, 14, 'rgba(255,120,150,0.55)');
+    circle(ctx, -58, 22, 14, CHEEK); circle(ctx, 58, 22, 14, CHEEK);
     // eyes
     const lx = (o.lookX || 0) * 8, ly = (o.lookY || 0) * 6;
     const blinkCycle = (t * 0.5 + (o.blinkSeed || 0)) % 1; const blink = o.blink != null ? o.blink : (blinkCycle > 0.92 ? 1 : 0);
@@ -2456,6 +2467,7 @@
     scenes.forEach((s, i) => { s.endT = i + 1 < scenes.length ? scenes[i + 1].start : timeline.duration; });
     scenes[0].start = timeline.titleEnd;
     function drawFrame(t) {
+      L.curie = EP.curie || null;   // Curie's skin for this episode (lib/lsc.js CURIE_SKINS)
       ctx.save();
       if (t < timeline.titleEnd) { L.titleCard(ctx, t, t / timeline.titleEnd, EP.title); ctx.restore(); return; }
       const Lt = L.tl(t, T);
@@ -2470,6 +2482,93 @@
     }
     return { drawFrame, scenes, episode: EP, timeline };
   };
+})(typeof window !== 'undefined' ? window : globalThis);
+
+/* LSC 3D layer ("How things work", from Episode 26). Real 3D scenes (three.js r160, lib/three/three.min.js) drawn into the
+   normal 2D episode canvas, so captions, wipes, the website player and the renderer keep working unchanged.
+
+   An episode scene does:   const w = L.three.frame(ctx, 'ep26:shop', build, update);   then draws 2D labels on top.
+     build(T, L3)  -> returns a "world" { scene, camera, ... } (built once per key, cached)
+     update(w)     -> pose everything for this frame as a PURE function of the episode time (no state kept between frames)
+   frame() renders the world and paints it over the whole 1920 x 1080 canvas. It returns the world, or null while
+   three.js is not available (website: still loading; Node: never): then it has painted a placeholder, and the scene should
+   skip its 3D-dependent labels.
+
+   Shared 3D assets register a factory in L.three.kits (lib/htw/*.js): kits.name = function (T, L3) { return ... }.
+   Nothing here touches document/window at load time (the episode files also run in Node's vm). */
+(function (global) {
+  const L = global.LSC; const L3 = L.three = { kits: {}, src: null };
+  let R = null;                     // { renderer, canvas, w, h }
+  const worlds = {}; let envTex = null, loading = false, loaded = 0, tries = 0;
+  // ready only when EVERY script in L3.src has arrived (three.min.js alone, without the kits in htw.js, is not enough)
+  L3.ok = () => typeof document !== 'undefined' && !!global.THREE && !loading && !L3.failed;
+  L3.failed = '';                   // website: why 3D cannot be shown here ('webgl': no WebGL on this device)
+  const redraw = () => { try { global.dispatchEvent(new Event('resize')); } catch (e) { /* old browser */ } };
+  // website: load three.js on demand (L3.src is set by the page); a resize event makes the player redraw when it arrives.
+  // A script that fails is tried again (from where it stopped) up to 3 times, 3 s apart, so a paused page does not stay on the placeholder.
+  L3.load = function () {
+    if (loading || L3.ok() || L3.failed || typeof document === 'undefined' || !L3.src) return; loading = true;
+    const urls = [].concat(L3.src);
+    const next = () => {
+      if (loaded >= urls.length) { loading = false; redraw(); return; }
+      const s = document.createElement('script'); s.src = urls[loaded];
+      s.onload = () => { loaded++; next(); };
+      s.onerror = () => { s.remove(); loading = false; if (++tries <= 3) setTimeout(redraw, 3000); };
+      document.head.appendChild(s);
+    };
+    next();
+  };
+  function renderer(w, h) {
+    const T = global.THREE;
+    if (!R) {
+      const canvas = document.createElement('canvas'); canvas.width = w; canvas.height = h;
+      const r = new T.WebGLRenderer({ canvas, antialias: true, preserveDrawingBuffer: true, powerPreference: 'high-performance' });
+      r.shadowMap.enabled = true; r.shadowMap.type = T.PCFSoftShadowMap; r.toneMapping = T.ACESFilmicToneMapping; r.toneMappingExposure = 0.85; r.outputColorSpace = T.SRGBColorSpace;
+      r.setSize(w, h, false); R = { renderer: r, canvas, w, h };
+    } else if (R.w !== w || R.h !== h) { R.renderer.setSize(w, h, false); R.w = w; R.h = h; }
+    return R.renderer;
+  }
+  // A soft studio environment for reflections (one per page). Kits set material.envMap = L3.env() (r160 has no scene.environmentIntensity).
+  L3.env = function () {
+    if (envTex) return envTex; const T = global.THREE; const r = renderer(R ? R.w : 1920, R ? R.h : 1080);
+    const s = new T.Scene(); const room = new T.Mesh(new T.BoxGeometry(20, 12, 20), new T.MeshStandardMaterial({ color: '#9aa4b0', side: T.BackSide, roughness: 1 })); room.position.y = 5; s.add(room);
+    const lamp = (x, y, z, w, h, c, k) => { const m = new T.Mesh(new T.PlaneGeometry(w, h), new T.MeshBasicMaterial({ color: new T.Color(c).multiplyScalar(k), side: T.DoubleSide })); m.position.set(x, y, z); m.lookAt(0, 3, 0); s.add(m); };
+    lamp(0, 10.9, 0, 9, 9, '#ffffff', 22); lamp(-9.9, 5, 2, 6, 5, '#fff2dc', 16); lamp(9.9, 5, -2, 6, 5, '#cfe4ff', 10); lamp(0, 5, 9.9, 8, 4, '#ffffff', 6);
+    const pl = new T.PointLight('#ffffff', 60, 0, 2); pl.position.set(0, 9, 0); s.add(pl);
+    const pm = new T.PMREMGenerator(r); envTex = pm.fromScene(s, 0.04).texture; pm.dispose(); return envTex;
+  };
+  function placeholder(ctx) {
+    ctx.save(); ctx.fillStyle = '#F4E3C3'; ctx.fillRect(0, 0, L.W, L.H);
+    if (L3.failed) {
+      L.text(ctx, 'This 3D picture cannot be shown here.', L.W / 2, L.H / 2 - 60, { size: 64, weight: 700, color: '#7A5A2E' });
+      L.text(ctx, 'It needs WebGL: try another browser, or watch the episode on YouTube.', L.W / 2, L.H / 2 + 30, { size: 44, weight: 600, color: '#7A5A2E' });
+    } else L.text(ctx, 'Getting the workshop ready…', L.W / 2, L.H / 2 - 40, { size: 64, weight: 700, color: '#7A5A2E' });
+    ctx.restore();
+  }
+  L3.frame = function (ctx, key, build, update) {
+    if (!L3.ok()) { placeholder(ctx); L3.load(); return null; }
+    const T = global.THREE; const cv = ctx.canvas;
+    const w = Math.max(320, Math.min(1920, cv.width || 1920)), h = Math.round(w * 9 / 16);
+    if (!R && L3.src) { let gl = null; try { const c = document.createElement('canvas'); gl = c.getContext('webgl2') || c.getContext('webgl'); } catch (e) { /* none */ } if (!gl) { L3.failed = 'webgl'; placeholder(ctx); return null; } const lose = gl.getExtension('WEBGL_lose_context'); if (lose) lose.loseContext(); }   // website: check quietly first
+    let r; try { r = renderer(w, h); } catch (e) { if (!L3.src) throw e; L3.failed = 'webgl'; placeholder(ctx); return null; }   // website without WebGL: say so, no error every frame (the renderer still fails loudly)
+    let world = worlds[key]; if (!world) world = worlds[key] = build(T, L3);
+    update(world);
+    world.camera.aspect = 16 / 9; world.camera.updateProjectionMatrix(); world.camera.updateMatrixWorld();
+    r.render(world.scene, world.camera);
+    ctx.drawImage(R.canvas, 0, 0, L.W, L.H);
+    return world;
+  };
+  // 3D point -> canvas units (1920 x 1080). vis is false behind the camera.
+  L3.project = function (world, x, y, z) {
+    const T = global.THREE; const v = (x && x.isVector3) ? x.clone() : new T.Vector3(x, y, z); v.project(world.camera);
+    return { x: (v.x + 1) / 2 * L.W, y: (1 - v.y) / 2 * L.H, vis: v.z < 1 };
+  };
+  // world position of an object (for labels that follow a moving part)
+  L3.at = function (world, obj, dx, dy, dz) { const T = global.THREE; obj.updateWorldMatrix(true, false); const v = new T.Vector3(dx || 0, dy || 0, dz || 0); obj.localToWorld(v); return L3.project(world, v); };
+  // camera shot helpers: a shot is { p: [x, y, z], l: [x, y, z], fov }; mix(a, b, k) blends two shots (k eased 0..1)
+  L3.mix = (a, b, k) => ({ p: a.p.map((v, i) => v + (b.p[i] - v) * k), l: a.l.map((v, i) => v + (b.l[i] - v) * k), fov: a.fov + (b.fov - a.fov) * k });
+  L3.shoot = function (world, s) { const c = world.camera; c.fov = s.fov; c.position.set(s.p[0], s.p[1], s.p[2]); c.lookAt(s.l[0], s.l[1], s.l[2]); };
+  L3.dispose = function (key) { delete worlds[key]; };
 })(typeof window !== 'undefined' ? window : globalThis);
 
 /* Episode 1 — Why does ice cream melt? */
@@ -12936,3 +13035,796 @@
     ]
   };
 })(typeof window !== 'undefined' ? window : globalThis);
+
+/* Episode 26 — How does a bicycle work?
+   Scaffold made by ./lsc.sh new. It already runs end to end (audio, preview, render, site), so build it up step by step.
+   Replace every TODO (tools/check.py refuses TODOs) and read docs/STYLE_GUIDE.md + docs/PIPELINE.md first.
+   The closest published episode is the best model for scene and interactive code: ep6.js (pie, pots, panels, drag-and-drop),
+   ep5.js (sorting into water), ep4.js (light and shadows), ep3.js (cycle), ep2.js (throwing/falling), ep1.js (melting, zoom-in).
+
+   Coordinates: a 1920 x 1080 canvas. Keep anything important above y = 800: the caption box covers the bottom.
+   Everything is a pure function of time t: draw(ctx, t, Lt) must not keep state between frames (frames are rendered out of order).
+   Lt (lib/scenes.js L.tl) anchors animation to the narration:
+     Lt.p('line')                      0..1 across the spoken part of a line
+     Lt.win('line', offset, dur)       0..1 over [line start + offset, + dur]
+     Lt.cwin('line', 'words', dur, ease, offset)   0..1 starting when the chunk containing 'words' is spoken (+offset)
+     Lt.cafter('line', 'words', offset) true once that chunk has started
+     Lt.chunk('line', 'words')         start time of that chunk; Lt.after('line') / Lt.done('line'); Lt.span('a', 'b')
+   A chunk is a sentence, or a piece of one split at "...". Needles must match the spoken (say) text: ./lsc.sh check verifies them. */
+(function (global) {
+  const L = global.LSC; const LSC = L; const { W, H, P, E, seg, clamp, lerp, circle, ellipse, text, roundRect } = L;
+  L.episodes = L.episodes || {};
+
+  // ---------- props: draw functions for this episode's objects ----------
+
+  // ==== EP26 3D STAGING: BEGIN (animation director's block; scenes below call into it) ====
+  // Everything here is a pure function of the episode time (Lt.t). Worlds: 'ep26:street' and 'ep26:shop', built once.
+  const TAU = Math.PI * 2, L3 = L.three, PI = Math.PI;
+  // bike dimensions (lib/htw/bike.js userData.info): wheel radius, chainring pitch radius, chain length, crank angle per chain loop
+  const RW = 0.84, RB = 32 * 0.075 / TAU, CHAINLEN = 58 * 0.075, LOOP = CHAINLEN / RB;
+  const C = { blue: '#3B82F6', gold: '#FFC233', chain: '#5B4BFF', pink: '#FF4D8D', mint: '#19C2A8', orange: '#FF7A1A', green: '#2FBF71' };
+  const io = (t, a, b) => seg(t, a, b, E.inOut);
+  const pulse = (t, a, d) => seg(t, a, a + 0.35, E.out) * (1 - seg(t, a + d - 0.35, a + d, E.inOut));   // 0 -> 1 -> 0 over [a, a + d]
+  // constant speed with a smooth start and stop: 0..1 over [a, b], ramps of length r (seconds)
+  function trap(t, a, b, r) { const T = b - a, v = 1 / (T - r), u = clamp(t - a, 0, T); return u < r ? v * u * u / (2 * r) : u < T - r ? v * (u - r / 2) : 1 - v * (T - u) * (T - u) / (2 * r); }
+  // cubic Hermite through (t0, p0, v0) and (t1, p1, v1)
+  function herm(t, t0, t1, p0, p1, v0, v1) { const h = t1 - t0, s = clamp((t - t0) / h, 0, 1), s2 = s * s, s3 = s2 * s; return (2 * s3 - 3 * s2 + 1) * p0 + (s3 - 2 * s2 + s) * h * v0 + (-2 * s3 + 3 * s2) * p1 + (s3 - s2) * h * v1; }
+
+  // ---------- kinematics (closed form) ----------
+  // street ride (q, s1, s2): coasting at speed V, then a constant deceleration to a stop. Wheel angle = distance / wheel radius.
+  function kinRide(Lt) {
+    const t = Lt.t, t0 = Lt.chunk('q', 'how does a bicycle'), tb = Lt.chunk('s1', 'off i go') + 0.7, D = 1.1, V = 2.0, X0 = -11.4;
+    const u = Math.min(t, tb) - t0, w = clamp(t - tb, 0, D), x = X0 + V * u + V * w - V * w * w / (2 * D);
+    // pedalling: crank = wheel angle / 2 (the drive ratio, exact) until tf = 1.5 s before braking; then the pedals ease to
+    // a stop over EZ s (she stops pedalling and coasts on the freewheel) and rest at crank 1.9
+    const tf = tb - 1.5, EZ = 0.4, wc = V / RW / 2, cF = 1.9 - wc * EZ / 2, s = clamp(t - tf, 0, EZ);
+    const crank = t <= tf ? cF - wc * (tf - t) : cF + wc * (s - s * s / (2 * EZ));
+    return { x, ang: (x - X0) / RW, crank, tf, pedalling: 1 - io(t, tf, tf + EZ), speed: t < tb ? V : V * (1 - w / D), tb, tStop: tb + D, brake: io(t, tb - 0.1, tb + 0.3) * (1 - io(t, tb + D + 0.5, tb + D + 1.0)) };
+  }
+  // workshop, look .. recap: the crank rests, starts on "I push the pedal down" and then turns at one steady speed. The speed
+  // (about 1.3 rad/s) is trimmed so that the pink follow-me link is just leaving the little wheel when "and pull it along" starts.
+  function kinShop(Lt) {
+    const t = Lt.t, tp = Lt.chunk('e1', 'push the pedal') + 0.2, R = 0.9, tl = Lt.chunk('e2', 'pull it along') + 0.1, cA = 1.0, D = tl - tp - R / 2, tgt = (0.04 - 4.5 * 0.075) / RB;
+    // crank = c0 + w * ramp, c0 = cA + whole turns (the same pedal position): choose the pair (chain loops n, turns m) whose speed is nearest 1.3
+    let w = 1.3, c0 = cA, best = 9; for (let n = 0; n < 9; n++) for (let m = 0; m < 9; m++) { const c = (tgt + LOOP * n - cA - TAU * m) / D, e = Math.abs(c - 1.3); if (e < best) { best = e; w = c; c0 = cA + TAU * m; } }
+    const u = t - tp, crank = c0 + w * (u <= 0 ? 0 : u < R ? u * u / (2 * R) : u - R / 2);
+    return { crank, w, tp, tl, linkS: (((4.5 * 0.075 + crank * RB) % CHAINLEN) + CHAINLEN) % CHAINLEN };
+  }
+  // road: pedalled at a steady speed; back wheel = 2 x crank; x = wheel angle x wheel radius (no slipping)
+  function kinRoad(Lt) { const t = Lt.t, w = 1.3, u = t - (Lt.start('road') - 0.6), crank = 0.6 + w * u, wheel = 2 * w * u, X0 = -11; return { crank, wheel, x: X0 + RW * wheel, front: wheel }; }
+  // count: exactly one crank turn; the wheel's first turn ends on the spoken "one", its second on "two times"
+  function kinCount(Lt) {
+    const t = Lt.t, a = Lt.chunk('test', 'one time round') + 1.3, b = Lt.chunk('count', 'turns one') + 1.0, c = Lt.chunk('count', 'two times') + 0.4, v = 2.4;
+    const crank = t <= a ? 0 : t < b ? herm(t, a, b, 0, PI, 0, v) : t < c ? herm(t, b, c, PI, TAU, v, 0) : TAU;
+    return { crank, wheel: 2 * crank, a, b, c };
+  }
+  // brake: the wheel coasts at W rad/s, then slows evenly to a stop once the pads touch
+  // The rubbing builds up as she squeezes harder: the deceleration ramps from 0 at the touch (tb) to A over R s, then stays
+  // at A until the stop (speed and angle stay smooth). Total time from touch to stop = R / 2 + W / A.
+  function kinBrake(Lt) {
+    const t = Lt.t, t0 = Lt.start('brake') - 1, sq = Lt.chunk('brake', 'squeeze the brake') + 0.25, hug = Lt.chunk('brake', 'two rubber pads') + 0.15, tb = hug + 0.85, W = 2.8, R = 1.2, TS = 3.5, A = W / (TS - R / 2);
+    const u = Math.min(t, tb) - t0, v1 = W - A * R / 2, thR = W * R - A * R * R / 6, s = clamp(t - tb - R, 0, v1 / A), r = clamp(t - tb, 0, R);
+    const wheel = W * u + (t - tb < R ? W * r - A * r * r * r / (6 * R) : thR + v1 * s - A * s * s / 2);
+    const speed = t < tb ? W : t - tb < R ? W - A * r * r / (2 * R) : Math.max(0, v1 - A * s);
+    return { wheel, speed, brake: 0.6 * io(t, sq, sq + 0.5) + 0.4 * io(t, hug, hug + 0.85), sq, hug, tb, tEnd: tb + TS };
+  }
+  // try at home: one slow turn of the pedal by hand
+  function kinTry(Lt) { const t = Lt.t, a = Lt.chunk('try2', 'the grown-up turns one pedal') + 0.5, b = Lt.chunk('try2', 'how many times') - 0.3, crank = TAU * trap(t, a, b, 0.8); return { crank, wheel: 2 * crank, a, b }; }
+
+  // ---------- 3D helpers ----------
+  let V_ = null;
+  const wpos = (T, o) => { const v = new T.Vector3(); o.getWorldPosition(v); return v; };
+  // Curie: pose() plus optional arm targets (world Vector3): the arm turns to the target and stretches a little to reach it
+  function poseCurie(T, c, o, t) {
+    c.userData.pose(o, t); const A = c.userData.anchor; let upd = false;
+    // backL / backR (radians): swing that arm backwards (behind her body) about her shoulder's x axis
+    A.handL.parent.rotation.x = o.backL || 0; A.handR.parent.rotation.x = o.backR || 0;
+    for (const [key, tgt, k0] of [['handL', o.aimL, o.aimLk], ['handR', o.aimR, o.aimRk]]) {
+      const hand = A[key], arm = hand.parent; arm.scale.set(1, 1, 1); hand.scale.set(1, 1, 1);
+      const k = tgt ? (k0 == null ? 1 : clamp(k0, 0, 1)) : 0; if (k <= 0) continue;
+      if (!upd) { c.updateMatrixWorld(true); upd = true; }
+      const v = tgt.clone(); arm.parent.worldToLocal(v); v.sub(arm.position); const d = v.length(), q = new T.Quaternion().setFromUnitVectors(new T.Vector3(0, -1, 0), v.normalize());
+      arm.quaternion.slerp(q, k); const st = lerp(1, clamp(d / 0.63, 0.7, o.stretch || 1.6), k); arm.scale.y = st; hand.scale.y = 1 / st;
+    }
+  }
+  function camFold(keys, t) { let s = keys[0].s; for (let i = 1; i < keys.length; i++) { const k = keys[i], p = io(t, k.t, k.t + k.d); if (p > 0) s = L3.mix(s, k.s, p); } return s; }
+  // clockwise arc arrow (seen from +z) round (cx, cy): starts at angle a0 on radius R
+  const placeArc = (ar, cx, cy, z, R, a0) => { ar.position.set(cx + R * Math.cos(a0), cy + R * Math.sin(a0), z); ar.rotation.set(0, 0, a0 - PI / 2); };
+  const arcArrow = (T, color, R, sweep, width) => { const a = L3.kits.arrow(T, L3, { color, length: R * sweep, width: width || 0.1, curve: -sweep }); a.userData.R = R; return a; };
+
+  function buildStreet(T) {
+    const w = L3.kits.street(T, L3), K = L3.kits;
+    w.bike = K.bike(T, L3); w.scene.add(w.bike); w.curie = K.curie(T, L3); w.scene.add(w.curie);
+    const f = w.fx = { hPedal: K.halo(T, L3, '#5AA2FF', 0.3), hWheelR: K.halo(T, L3, '#34E0C2', 0.9), hWheelF: K.halo(T, L3, '#34E0C2', 0.9), hContact: K.halo(T, L3, C.orange, 0.2),
+      aBack: K.arrow(T, L3, { color: C.orange, length: 1.0, width: 0.15 }), aFwd: K.arrow(T, L3, { color: C.green, length: 2.4, width: 0.26 }) };
+    for (const k in f) w.scene.add(f[k]);
+    return w;
+  }
+  function buildShop(T) {
+    const w = L3.kits.workshop(T, L3), K = L3.kits;
+    w.bike = K.bike(T, L3); w.bike.position.set(0, w.floorY, 0); w.turntable.add(w.bike); w.curie = K.curie(T, L3); w.scene.add(w.curie);
+    const f = w.fx = { tok: [K.token(T, L3, 1, C.blue, 0.2), K.token(T, L3, 2, C.chain, 0.2), K.token(T, L3, 3, '#FFB400', 0.2), K.token(T, L3, 4, C.mint, 0.2)],
+      hPedal: K.halo(T, L3, '#5AA2FF', 0.26), hRing: K.halo(T, L3, C.gold, 0.5), hSpr: K.halo(T, L3, C.gold, 0.3), hWheel: K.halo(T, L3, '#34E0C2', 0.92), hBrake: K.halo(T, L3, C.orange, 0.17), hLink: K.halo(T, L3, C.pink, 0.13),
+      aPush: K.arrow(T, L3, { color: C.blue, length: 0.5, width: 0.14 }), aRing: arcArrow(T, C.gold, 0.6, 1.5, 0.1), aChain: K.arrow(T, L3, { color: C.pink, length: 0.62, width: 0.09 }),
+      aSpr: arcArrow(T, C.gold, 0.36, 1.7, 0.075), aWheel: arcArrow(T, C.mint, 1.06, 1.15, 0.13) };
+    for (const t of f.tok) w.scene.add(t); for (const k in f) if (k !== 'tok') w.scene.add(f[k]);
+    return w;
+  }
+  const hideFx = f => { for (const k in f) { if (k === 'tok') f.tok.forEach(t => t.userData.show(0)); else if (f[k].userData.show) f[k].userData.show(0, 0); } };
+
+  // ---------- 2D overlay helpers ----------
+  // a friendly label with a leader line to (tx, ty)
+  function label(ctx, str, x, y, tx, ty, p, o) {
+    if (p <= 0) return; o = o || {}; const size = o.size || 54, s = E.outBack(clamp(p, 0, 1));
+    ctx.save(); ctx.font = `700 ${size}px Fredoka`; const w = ctx.measureText(str).width + size * 1.1, h = size * 1.55;
+    if (o.keepIn) { x = clamp(x, w * 0.56 + 40, W - w * 0.56 - 40); y = clamp(y, h * 0.56 + 40, 800 - h * 0.56); }   // allows for the pop-in overshoot   // the whole pill inside the frame (40 px margin)
+    for (const q of tx != null ? [[tx, ty]].concat(o.t2 ? [o.t2] : []) : []) { const a = Math.atan2(q[1] - y, q[0] - x), ex = q[0] - Math.cos(a) * (o.gap || 16), ey = q[1] - Math.sin(a) * (o.gap || 16); ctx.globalAlpha = clamp(p * 1.5, 0, 1); ctx.lineCap = 'round';
+      ctx.strokeStyle = P.ink; ctx.lineWidth = 13; ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(ex, ey); ctx.stroke(); ctx.strokeStyle = o.bg || P.white; ctx.lineWidth = 6; ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(ex, ey); ctx.stroke();
+      circle(ctx, ex, ey, 11, o.bg || P.white, P.ink, 5); ctx.globalAlpha = 1; }
+    ctx.translate(x, y); ctx.scale(s, s); ctx.rotate(o.rot || 0); ctx.fillStyle = o.bg || P.white; roundRect(ctx, -w / 2, -h / 2, w, h, h / 2); ctx.fill(); ctx.strokeStyle = P.ink; ctx.lineWidth = 7; ctx.stroke();
+    text(ctx, str, 0, 3, { size, weight: 700, color: o.color || P.ink }); ctx.restore();
+  }
+  // a counter card: title + big number (bump 0..1 makes the number jump when it ticks)
+  function counter(ctx, x, y, title, val, color, p, bump) {
+    if (p <= 0) return; const s = 0.86 * E.outBack(clamp(p, 0, 1)); ctx.save(); ctx.translate(x, y); ctx.scale(s, s);
+    ctx.fillStyle = P.white; roundRect(ctx, -170, -120, 340, 240, 44); ctx.fill(); ctx.strokeStyle = P.ink; ctx.lineWidth = 8; ctx.stroke();
+    ctx.fillStyle = color; roundRect(ctx, -170, -120, 340, 84, 44); ctx.fill(); ctx.fillRect(-170, -76, 340, 40); ctx.strokeStyle = P.ink; ctx.lineWidth = 8; roundRect(ctx, -170, -120, 340, 240, 44); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(-170, -36); ctx.lineTo(170, -36); ctx.lineWidth = 6; ctx.stroke();
+    text(ctx, title, 0, -76, { size: 50, weight: 700, color: P.white, stroke: P.ink, strokeWidth: 9 });
+    const k = 1 + 0.35 * Math.sin(PI * clamp(bump || 0, 0, 1)); ctx.translate(0, 44); ctx.scale(k, k); text(ctx, String(val), 0, 0, { size: 124, weight: 700, color: P.ink }); ctx.restore();
+  }
+  // a screen-space arrow with a dark outline (for "this way" hints over the 3D picture)
+  function arrow2(ctx, x1, y1, x2, y2, color, lw, p) {
+    if (p <= 0) return; const k = clamp(p, 0, 1), ex = lerp(x1, x2, k), ey = lerp(y1, y2, k), a = Math.atan2(y2 - y1, x2 - x1), hd = lw * 2.4;
+    const path = () => { ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(ex - Math.cos(a) * hd * 0.6, ey - Math.sin(a) * hd * 0.6); ctx.stroke(); ctx.beginPath(); ctx.moveTo(ex, ey); ctx.lineTo(ex - Math.cos(a - 0.5) * hd, ey - Math.sin(a - 0.5) * hd); ctx.lineTo(ex - Math.cos(a + 0.5) * hd, ey - Math.sin(a + 0.5) * hd); ctx.closePath(); ctx.fill(); ctx.stroke(); };
+    ctx.save(); ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.strokeStyle = P.ink; ctx.fillStyle = P.ink; ctx.lineWidth = lw + 10; path(); ctx.strokeStyle = color; ctx.fillStyle = color; ctx.lineWidth = lw; path(); ctx.restore();
+  }
+  // a screen-space arc arrow round (cx, cy), radius r, from angle a0 sweeping clockwise (canvas angles) by sw; p grows it
+  function arcArrow2(ctx, cx, cy, r, a0, sw, color, lw, p) {
+    if (p <= 0) return; const k = clamp(p, 0, 1), a1 = a0 + sw * k, hd = lw * 2.4, ha = hd * 0.75 / r;
+    const tipX = cx + r * Math.cos(a1), tipY = cy + r * Math.sin(a1), dx = -Math.sin(a1), dy = Math.cos(a1), nx = Math.cos(a1), ny = Math.sin(a1);
+    const path = () => { ctx.beginPath(); ctx.arc(cx, cy, r, a0, Math.max(a0, a1 - ha)); ctx.stroke(); ctx.beginPath(); ctx.moveTo(tipX + dx * hd * 0.5, tipY + dy * hd * 0.5);
+      ctx.lineTo(tipX - dx * hd * 0.7 + nx * hd * 0.75, tipY - dy * hd * 0.7 + ny * hd * 0.75); ctx.lineTo(tipX - dx * hd * 0.7 - nx * hd * 0.75, tipY - dy * hd * 0.7 - ny * hd * 0.75); ctx.closePath(); ctx.fill(); ctx.stroke(); };
+    ctx.save(); ctx.globalAlpha = clamp(p * 3, 0, 1); ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.strokeStyle = P.ink; ctx.fillStyle = P.ink; ctx.lineWidth = lw + 10; path(); ctx.strokeStyle = color; ctx.fillStyle = color; ctx.lineWidth = lw; path(); ctx.restore();
+  }
+  // a big, friendly grown-up hand gripping a pedal at (x, y) (seen from the side: sleeve from the upper left, fingers curled over)
+  function grownHand(ctx, x, y, p) {
+    if (p <= 0) return; const s = E.outBack(clamp(p, 0, 1)); ctx.save(); ctx.translate(x, y - 28); ctx.scale(s, s); ctx.globalAlpha = clamp(p * 2, 0, 1);
+    ctx.lineJoin = 'round'; ctx.lineCap = 'round'; ctx.strokeStyle = P.ink; ctx.lineWidth = 7;
+    ctx.save(); ctx.rotate(-0.75); ctx.fillStyle = '#6C8FD8'; roundRect(ctx, -250, -46, 190, 92, 30); ctx.fill(); ctx.stroke(); ctx.fillStyle = '#5476C4'; roundRect(ctx, -84, -52, 34, 104, 14); ctx.fill(); ctx.stroke(); ctx.restore();
+    ctx.fillStyle = '#E9B48A'; ctx.beginPath(); ctx.ellipse(0, -14, 78, 58, -0.15, 0, TAU); ctx.fill(); ctx.stroke();
+    for (let i = 0; i < 4; i++) { const fx = -48 + i * 31; roundRect(ctx, fx - 14, 4, 28, 58 - Math.abs(i - 1.5) * 6, 14); ctx.fill(); ctx.stroke(); }
+    ctx.beginPath(); ctx.ellipse(-70, -34, 34, 20, -0.9, 0, TAU); ctx.fill(); ctx.stroke(); ctx.restore();
+  }
+  const logoAt = (ctx, x, y, s, p, t) => { if (p <= 0) return; ctx.save(); ctx.translate(x, y); ctx.scale(p, p); L.logo(ctx, 0, 0, s, t); ctx.restore(); };
+
+  // =====================================================================================================================
+  // STREET: hello
+  function sceneHello(ctx, t, Lt) {
+    const cheer = Lt.cwin('hello', 'welcome', 0.5, E.inOut, 0.9);
+    const w = L3.frame(ctx, 'ep26:street', buildStreet, w => {
+      const T = global.THREE; hideFx(w.fx); w.bike.visible = false; w.aimSun(0, 0.5, -1.5, 7);
+      L3.shoot(w, L3.mix({ p: [0.5, 1.75, 7.4], l: [0, 1.38, -2.7], fov: 32 }, { p: [0.25, 1.65, 5.6], l: [0, 1.3, -2.7], fov: 32 }, io(t, Lt.start('hello') - 0.5, Lt.end('hello') + 0.6)));
+      const wv = pulse(t, Lt.start('hello'), 2.0);
+      poseCurie(T, w.curie, { x: 0, y: 0.16, z: -2.7, ry: 0.05, s: 1, mood: 'talk', armR: lerp(0.25, 2.25 + 0.3 * Math.sin(t * 9), wv) + 0.9 * cheer, armL: 0.25 + 0.3 * pulse(t, Lt.chunk('hello', "i'm curie"), 1.0) + 0.9 * cheer,
+        bulb: 0.55 + 0.45 * pulse(t, Lt.chunk('hello', "i'm curie"), 1.1) + 0.3 * cheer, lookX: 0, lookY: 0.05, squash: -0.08 * pulse(t, Lt.chunk('hello', "i'm curie"), 0.7) }, t);
+    });
+    if (!w) return;
+    logoAt(ctx, 330, 250, 0.8, Lt.cwin('hello', 'welcome', 0.7, E.outBack, 0.6), t);
+  }
+
+  // STREET: q + s1 + s2 (one continuous shot: she coasts in, rides along, brakes, hops off and wonders)
+  function sceneRide(ctx, t, Lt) {
+    const k = kinRide(Lt), hop = io(t, k.tStop + 0.05, k.tStop + 0.9), tq = Lt.chunk('q', 'how does a bicycle');
+    const cPed = Lt.chunk('s2', 'but how does pushing'), gPed = pulse(t, cPed + 0.95, 1.3), gWh = pulse(t, cPed + 2.05, 1.6), away = Lt.cwin('s2', "let's take it", 0.5, E.inOut), find = Lt.cwin('s2', 'and find out', 0.4, E.inOut);
+    let pedalPt = null, wheelPt = null, frontPt = null;
+    const w = L3.frame(ctx, 'ep26:street', buildStreet, w => {
+      const T = global.THREE, B = w.bike, f = w.fx; hideFx(f); B.visible = true; B.position.set(k.x, 0, 0);
+      B.userData.set({ crank: k.crank, wheel: k.ang, front: k.ang, brake: k.brake, steer: 0.05 * Math.sin(t * 1.3) * clamp(k.speed / 2, 0, 1), glow: { pedal: gPed, wheel: gWh } }); B.updateMatrixWorld(true);
+      w.aimSun(k.x - 1.2 * hop, 0.5, 0, 7);
+      // camera: wide as she rolls in, then tracking beside her, then settling on Curie + bike
+      const x = k.x, dd = x + 3.2, sw = 1.6, cx = -3.2 + (dd < -sw ? 0 : dd > sw ? dd : (dd + sw) * (dd + sw) / (4 * sw));   // the camera waits near x = -3.2 until she reaches it, then eases into travelling with her (smooth in position and speed)
+      const A = { p: [cx + 0.6, 2.0, 12.8], l: [cx + 0.4, 1.72, 0], fov: 32 }, Bs = { p: [cx + 1.6, 1.95, 9.9], l: [cx + 0.4, 1.95, 0], fov: 32 }, Cs = { p: [cx - 1.0, 1.75, 10.2], l: [cx - 1.25, 1.45, 0], fov: 32 };
+      L3.shoot(w, L3.mix(L3.mix(A, Bs, io(t, Lt.start('s1') - 0.3, Lt.start('s1') + 2.2)), Cs, io(t, k.tb + 0.2, k.tStop + 1.2)));
+      // Curie: on the saddle (arms on the handlebar), then hops off behind the bike and steadies it with a hand on the back tyre
+      const an = B.userData.anchor, sad = wpos(T, an.saddle), bars = wpos(T, an.bars), wh = wpos(T, an.wheel);
+      const s = lerp(0.78, 0.95, hop), ride = 1 - hop, land = pulse(t, k.tStop + 0.8, 0.5);
+      const sx = sad.x + 0.2, sy = sad.y - 0.1 - 0.09 * 0.78, gx = k.x - 3.3, gz = 0.45;
+      const talk = (t > Lt.start('s1') && t < Lt.end('s1')) || (t > Lt.start('s2') && t < Lt.end('s2'));
+      const mood = t < Lt.start('s1') ? 'happy' : t < Lt.chunk('s1', 'i love my') ? 'wow' : hop > 0 && hop < 1 ? 'wow' : find > 0 ? 'wow' : talk ? 'talk' : 'happy';
+      // the question (s2): she looks sideways and up at the bike, lights her bulb and lifts her free arm (no sleepy 'think' face)
+      const wq = hop >= 1 ? pulse(t, cPed - 0.3, 3.6) : 0;
+      // pedalling: a little bob and sway of her body in time with the crank (her feet can't reach the pedals in this rig)
+      const pb = k.pedalling * ride, bobY = 0.035 * pb * Math.pow(Math.sin(k.crank), 2), sway = 0.05 * pb * Math.sin(k.crank);
+      poseCurie(T, w.curie, { x: lerp(sx, gx, hop), y: lerp(sy, 0, hop) + 1.5 * Math.sin(PI * hop) + bobY, z: lerp(0, gz, hop), ry: lerp(PI / 2 - 0.8, 0.4, hop) + sway, s, mood, bob: hop, squash: 0.25 * land - 0.1 * Math.sin(PI * hop),
+        armL: lerp(0.3, 1.35, hop) * (1 - away) + away * 1.3 + find * 1.3, armR: 0.3 + 1.0 * wq * (1 - find) + 2.3 * find, aimL: hop < 0.5 ? new T.Vector3(bars.x - 0.05, bars.y, -0.42) : new T.Vector3(wh.x - 0.8, wh.y + 0.3, 0.12), aimLk: (hop < 0.5 ? 1 - io(hop, 0, 0.3) : io(hop, 0.75, 1)) * (1 - away),
+        aimR: new T.Vector3(bars.x - 0.05, bars.y, 0.42), aimRk: 1 - io(hop, 0, 0.3), stretch: 1.9,
+        lookX: hop >= 1 ? lerp(0.85, 0.2, away) : 0.2, lookY: hop >= 1 ? (gPed > 0.3 ? -0.3 : 0.1 + 0.45 * wq) : 0.1, bulb: 0.4 + 0.6 * Math.max(find, wq) + 0.3 * pulse(t, Lt.start('s1'), 0.8) }, t);
+      f.hPedal.position.copy(wpos(T, an.pedal)).z += 0.12; f.hPedal.userData.show(gPed, t);
+      f.hWheelR.position.set(k.x - 1.25, RW, 0.2); f.hWheelR.userData.show(gWh * 0.6, t); f.hWheelF.position.set(k.x + 1.25, RW, 0.2); f.hWheelF.userData.show(gWh * 0.6, t);
+      pedalPt = an.pedal; wheelPt = an.wheel; frontPt = an.front;
+    });
+    if (!w) return;
+    L.sticker(ctx, "Today's big question", 960, 150, Lt.win('q', 0.1, 0.5) * (1 - Lt.win('s1', 0, 0.3)), { bg: P.white, size: 64, rot: -0.02 });
+    L.sticker(ctx, 'How?', 1500, 330, seg(t, tq + 0.5, tq + 1.0) * (1 - Lt.win('s1', 0, 0.3)), { bg: P.sun, size: 110, rot: 0.06 });
+    L.sticker(ctx, 'Wheee!', 1480, 230, Lt.win('s1', 0, 0.4) * (1 - Lt.cwin('s1', 'i love my', 0.3)), { bg: P.pink, size: 88, rot: 0.07 });
+    const pp = L3.at(w, pedalPt), wp = L3.at(w, wheelPt), fp = L3.at(w, frontPt);
+    label(ctx, 'pedals', pp.x + 20, pp.y - 470, pp.x + 4, pp.y - 36, gPed, { bg: '#CFE3FF', size: 60 });
+    label(ctx, 'wheels', (wp.x + fp.x) / 2, wp.y - 470, wp.x + 70, wp.y - 205, gWh, { bg: '#C9F7EC', size: 60, t2: [fp.x - 70, fp.y - 205] });
+    L.sticker(ctx, 'How?', 400, 190, seg(t, k.tStop + 0.9, k.tStop + 1.4) * (1 - away), { bg: P.sun, size: 100, rot: -0.06 });
+    L.sticker(ctx, 'To the workshop!', 1300, 200, away, { bg: P.green, color: P.white, size: 76, rot: -0.03 });
+  }
+
+  // =====================================================================================================================
+  // WORKSHOP shots (bike on the turntable at the origin, on its stand)
+  const SH = {
+    wide: { p: [-1.5, 2.3, 11.0], l: [-1.25, 1.5, 0], fov: 32 },
+    drive: { p: [-0.65, 1.2, 6.6], l: [-0.65, 1.0, 0], fov: 24 },
+    pedal: { p: [0.45, 1.2, 5.4], l: [0.3, 1.0, 0.2], fov: 24 },
+    teeth: { p: [-0.1, 1.6, 3.6], l: [-0.2, 1.32, 0.16], fov: 24 },
+    run: { p: [-0.55, 1.4, 5.2], l: [-0.6, 1.12, 0.16], fov: 24 },
+    spr: { p: [-1.05, 1.35, 3.8], l: [-1.15, 1.05, 0.16], fov: 24 },
+    wheel: { p: [-1.85, 1.4, 8.3], l: [-1.85, 1.22, 0], fov: 24 },
+    recap: { p: [-1.35, 1.5, 10.2], l: [-1.35, 1.3, 0], fov: 24 },
+    count: { p: [-1.35, 1.5, 10.2], l: [-1.35, 1.3, 0], fov: 24 },
+    brake: { p: [-0.2, 1.15, 1.0], l: [-0.82, 1.58, 0], fov: 20 },   // from inside the frame triangle, looking up along the rim: both pads and the gap read
+    brakeW: { p: [-0.9, 1.6, 5.6], l: [-1.0, 1.38, 0], fov: 24 },
+    say: { p: [-1.6, 2.3, 11.6], l: [-1.4, 1.75, 0], fov: 32 },
+    tryit: { p: [-0.2, 1.7, 10.4], l: [-0.2, 1.55, 0], fov: 26 },
+    thumb: { p: [1.1, 1.35, 6.5], l: [-2.0, 1.3, 0], fov: 30 }
+  };
+  // fx placement shared by the workshop scenes; v = { tok: [p1..p4], glow..., arrows } (all 0..1)
+  function shopFx(T, w, t, v, tokScale) {
+    const f = w.fx, an = w.bike.userData.anchor, ring = wpos(T, an.ring), spr = wpos(T, an.sprocket), ped = wpos(T, an.pedal), top = wpos(T, an.chainTop), wh = wpos(T, an.wheel), k = tokScale || 1;
+    // tokens sit beside their part in EVERY shot: placed in screen space at a fixed direction from the part's anchor, just
+    // outside the part (part radius + token radius), kept inside the frame (and above the captions), then pulled towards the
+    // camera along the same sight line (so they stay in front of the model) and scaled to the same size on screen
+    const TK = [[ring, 30, 0.8], [top, 270, 0.03], [spr, 215, 0.24], [wh, 55, 0.9]];   // 2 just under the middle of the top chain run   // [anchor, direction (deg, screen, anticlockwise from right), part radius]
+    const cam = w.camera, th = Math.tan(cam.fov * PI / 360), rpx = k * 0.2 * 1080 / (8.5 * 2 * th);
+    f.tok.forEach((tk, i) => {
+      const [A, d0, rp] = TK[i], deg = (v.tokDir && v.tokDir[i] != null) ? v.tokDir[i] : d0, a = deg * PI / 180, q = A.clone().applyMatrix4(cam.matrixWorldInverse), d = -q.z, ppu = 1080 / (2 * d * th), R = (rp * ppu + rpx + 14) / ppu;
+      q.x += R * Math.cos(a); q.y += R * Math.sin(a); const P = q.applyMatrix4(cam.matrixWorld).project(cam);
+      const mx = (rpx + 30) / 960, my = (rpx + 30) / 540; P.x = clamp(P.x, -1 + mx, 1 - mx); P.y = clamp(P.y, 1 - 2 * 790 / 1080 + my, 1 - my);
+      P.unproject(cam); P.sub(cam.position).multiplyScalar(0.8).add(cam.position); tk.position.copy(P);
+      tk.scale.setScalar(k * clamp(P.distanceTo(cam.position) / 8.5, 0.3, 1.4)); tk.userData.face(cam); tk.userData.show((v.tok || [])[i] || 0); });
+    f.hPedal.position.set(ped.x, ped.y, ped.z + 0.08); f.hPedal.userData.show(v.hPedal || 0, t);
+    f.hRing.position.set(ring.x, ring.y, ring.z + 0.05); f.hRing.userData.show(v.hRing || 0, t);
+    f.hSpr.position.set(spr.x, spr.y, spr.z + 0.05); f.hSpr.userData.show(v.hSpr || 0, t);
+    f.hWheel.position.set(wh.x, wh.y, 0.14); f.hWheel.userData.show(v.hWheel || 0, t);
+    f.aPush.position.set(ped.x, ped.y + 0.66, ped.z + 0.05); f.aPush.rotation.set(0, 0, -PI / 2); f.aPush.userData.show(v.aPush || 0);
+    placeArc(f.aRing, ring.x, ring.y, ring.z + 0.2, 0.6, 2.5); f.aRing.userData.show(v.aRing || 0);
+    f.aChain.position.set(top.x - 0.3, top.y + 0.16, 0.3); f.aChain.rotation.set(0, 0, Math.atan2(ring.y + RB - spr.y - RB / 2, ring.x - spr.x)); f.aChain.userData.show(v.aChain || 0);
+    placeArc(f.aSpr, spr.x, spr.y, spr.z + 0.12, 0.36, 2.6); f.aSpr.userData.show(v.aSpr || 0);
+    placeArc(f.aWheel, wh.x, wh.y, 0.3, 1.06, 2.75); f.aWheel.userData.show(v.aWheel || 0);
+    if (v.link) { const m = wpos(T, an.marker); f.hLink.position.set(m.x, m.y, m.z + 0.05); } f.hLink.userData.show(v.link || 0, t);
+    if (v.hBrake) { const b = wpos(T, an.brake); f.hBrake.position.set(b.x, b.y, b.z + 0.1); f.hBrake.quaternion.copy(w.camera.quaternion); } f.hBrake.userData.show(v.hBrake || 0, t);
+  }
+  const CUR = { x: -4.15, z: 1.3, s: 0.86 };   // Curie's spot beside the turntable (clear of the back wheel)
+  const CUB = { x: -3.95, z: -0.9, s: 0.8 };   // her spot for the wider diagram shots: behind and left of the back wheel, small, fully in frame
+
+  // WORKSHOP: look + e1..e4 + recap (one continuous shot with eased camera moves between the steps)
+  function sceneMech(ctx, t, Lt) {
+    const K = kinShop(Lt), gog = Lt.cwin('look', 'peek-inside', 0.9, null, 0.55), ghost = Lt.cwin('look', 'step by step', 1.1, E.inOut, 0.1);
+    const c1 = Lt.chunk('e1', 'step one'), c2 = Lt.chunk('e2', 'step two'), c3 = Lt.chunk('e3', 'step three'), c4 = Lt.chunk('e4', 'step four'), cr = Lt.start('recap');
+    const tok = [seg(t, c1, c1 + 0.5), seg(t, c2, c2 + 0.5), seg(t, c3, c3 + 0.5), seg(t, c4, c4 + 0.5)];
+    const push = Lt.chunk('e1', 'push the pedal'), big = Lt.chunk('e1', 'the pedal turns this big'), teeth = Lt.chunk('e1', 'with teeth'), catchT = Lt.chunk('e2', 'the teeth catch'), pull = Lt.chunk('e2', 'pull it along'), watch = Lt.chunk('e2', 'watch the pink');
+    const e3b = Lt.chunk('e3', 'the chain pulls'), back = Lt.chunk('e3', 'at the back'), e4b = Lt.chunk('e4', 'the little wheel turns'), round = Lt.chunk('e4', 'round it goes');
+    const rp = Lt.chunk('recap', 'pedal... chain'), rw = Lt.chunk('recap', 'back wheel'), rc = Lt.chunk('recap', 'the chain carries'), ra = Lt.chunk('recap', 'all the way');
+    // glows
+    const wave = (d) => pulse(t, rc + 0.3 + d, 1.0) + pulse(t, ra + 0.1 + d, 1.0);   // the push runs pedal -> chain -> back wheel (twice)
+    const g = {
+      pedal: Math.max(pulse(t, push, c2 - push - 0.2) * 0.9, pulse(t, rp, 1.1), wave(0)),
+      ring: Math.max(pulse(t, big + 0.5, c2 - big - 0.6), pulse(t, catchT, pull - catchT), wave(0.25) * 0.8),
+      chain: Math.max(pulse(t, catchT + 0.5, c3 - catchT - 0.7) * 0.8, pulse(t, e3b, 1.6) * 0.8, pulse(t, rp + 1.0, 1.2), wave(0.5)),
+      sprocket: Math.max(pulse(t, e3b + 0.9, c4 - e3b - 1.1), pulse(t, e4b, 1.4), wave(0.8) * 0.8),
+      wheel: Math.max(pulse(t, e4b + 1.2, cr - e4b - 1.6), pulse(t, rw, 1.1), wave(1.05))
+    };
+    const marker = seg(t, K.tl, K.tl + 0.4), linkHalo = pulse(t, K.tl, 3.4);
+    const fxv = { tok, hPedal: pulse(t, push, 1.7), hRing: pulse(t, big + 0.5, 3.0), hSpr: pulse(t, e3b + 0.9, 3.3), hWheel: pulse(t, e4b + 1.2, 3.6) * 0.9,
+      aPush: pulse(t, push + 0.05, 1.7), aRing: pulse(t, big + 0.2, c2 - big - 0.6), aChain: pulse(t, pull + 0.1, c3 - pull - 0.5), aSpr: pulse(t, e3b + 1.0, c4 - e3b - 1.4), aWheel: pulse(t, round - 0.2, cr - round - 0.2), link: linkHalo };
+    const keys = [{ s: SH.wide }, { t: Lt.chunk('look', "let's look closer") - 0.15, d: 2.2, s: SH.drive }, { t: c1 - 0.5, d: 1.5, s: SH.pedal }, { t: c2 - 0.5, d: 1.5, s: SH.teeth }, { t: pull - 0.2, d: 1.4, s: SH.run },
+      { t: c3 - 0.5, d: 1.6, s: SH.spr }, { t: c4 - 0.75, d: 2.1, s: SH.wheel }, { t: cr - 0.6, d: 1.6, s: SH.recap }];
+    let pts = null;
+    const w = L3.frame(ctx, 'ep26:shop', buildShop, w => {
+      const T = global.THREE, B = w.bike; w.upper.visible = true; w.turntable.rotation.y = 0;
+      B.userData.set({ crank: K.crank, stand: 1, ghost, glow: g, marker }); B.updateMatrixWorld(true);
+      L3.shoot(w, camFold(keys, t)); w.camera.updateMatrixWorld(true);
+      shopFx(T, w, t, fxv, 1);
+      const an = B.userData.anchor, look = t >= cr ? (t >= rw ? 0.45 : 0.7) : t >= c4 ? 0.5 : t >= c3 ? 0.55 : 0.75;
+      const speaking = ['look', 'e1', 'e2', 'e3', 'e4', 'recap'].some(id => t > Lt.start(id) && t < Lt.end(id));
+      const wow = pulse(t, Lt.chunk('look', 'peek-inside') + 1.3, 1.2) + pulse(t, watch, 1.4) + pulse(t, round, 1.2) + pulse(t, ra, 1.3) > 0.5;
+      const tgt = t >= c4 ? an.wheel : t >= c3 ? an.sprocket : t >= c2 ? an.chainTop : an.pedal, tv = wpos(T, tgt);
+      const sb = t > c3;   // she changes spot while the close-ups keep her out of frame (both spots are off-screen at c3)
+      const settle = c4 - 0.75 + 2.1;   // the wide e4 frame has settled: only then her arm comes up
+      // during the e3 close-ups she waits further left (fully out of frame, no stray hand at the edge) and hops into her spot
+      // while the camera pulls out for step four
+      const hopIn = io(t, c4 - 0.75, c4 + 0.9), cubX = lerp(-4.75, CUB.x, hopIn), hopY = 0.45 * Math.sin(PI * hopIn);
+      poseCurie(T, w.curie, { x: sb ? cubX : CUR.x, y: sb ? hopY : 0, z: sb ? CUB.z : CUR.z, ry: sb ? 0.75 : 0.5, s: sb ? CUB.s : CUR.s, mood: wow ? 'wow' : speaking ? 'talk' : 'happy', goggles: gog, lookX: look, lookY: -0.1,
+        armL: sb ? 0.3 * (1 - io(t, c3, c3 + 0.4)) + 1.25 * io(t, settle, settle + 0.5) : 0.3 + 0.95 * io(t, Lt.chunk('look', "let's look closer"), Lt.chunk('look', "let's look closer") + 0.5), armR: 0.3 + 2.2 * pulse(t, Lt.chunk('look', 'peek-inside') + 1.2, 1.3) + 2.2 * pulse(t, round, 1.3),
+        aimL: tv, aimLk: (sb ? io(t, settle + 0.2, settle + 0.8) : io(t, c1 - 0.3, c1 + 0.3)) * 0.75, stretch: 1.0, bulb: 0.45 + 0.5 * (wow ? 1 : 0), squash: -0.1 * pulse(t, Lt.chunk('look', 'peek-inside') + 1.3, 0.6) }, t);
+      pts = { ped: L3.at(w, an.pedal), ring: L3.at(w, an.ring), top: L3.at(w, an.chainTop), spr: L3.at(w, an.sprocket), wh: L3.at(w, an.wheel), mk: L3.at(w, an.marker) };
+    });
+    if (!w) return;
+    const A = pts;
+    L.sticker(ctx, 'Peek-Inside Goggles: ON!', 1180, 150, seg(t, Lt.chunk('look', 'peek-inside') + 1.3, Lt.chunk('look', 'peek-inside') + 1.8) * (1 - Lt.cwin('look', "let's look closer", 0.3)), { bg: P.sun, size: 70, rot: -0.02 });
+    // e1
+    label(ctx, 'pedal', A.ped.x + 330, A.ped.y - 40, A.ped.x + 60, A.ped.y - 10, pulse(t, push + 0.3, big - push - 0.2), { bg: '#CFE3FF', size: 60 });
+    label(ctx, 'big wheel with teeth', A.ring.x - 470, A.ring.y - 330, A.ring.x - 150, A.ring.y - 150, pulse(t, big + 0.9, c2 - big - 1.2), { bg: '#FFE9A8', size: 56 });
+    // e2
+    label(ctx, 'chain', A.top.x - 340, A.top.y + 220, A.top.x - 210, A.top.y + 18, pulse(t, catchT + 0.6, pull - catchT - 0.5), { bg: '#DAD6FF', size: 60 });
+    label(ctx, 'pink link', A.ring.x + 60, A.ring.y - 420, A.mk.x, A.mk.y - 6, pulse(t, watch - 0.1, c3 - watch - 0.4), { bg: '#FFD0E2', size: 56, gap: 34 });
+    // e3
+    label(ctx, 'little wheel with teeth', A.spr.x + 420, A.spr.y - 400, A.spr.x + 110, A.spr.y + 20, pulse(t, e3b + 1.3, c4 - e3b - 1.7), { bg: '#FFE9A8', size: 56 });
+    // e4
+    label(ctx, 'back wheel', A.wh.x - 90, A.wh.y - 395, A.wh.x - 40, A.wh.y - 262, pulse(t, e4b + 1.5, round - e4b - 1.5), { bg: '#C9F7EC', size: 60 });
+    L.sticker(ctx, 'Round it goes!', 1420, 130, seg(t, round, round + 0.5) * (1 - seg(t, cr - 0.5, cr - 0.2)), { bg: P.sun, size: 76, rot: 0.04 });
+    // recap: the three words on their parts
+    const out = 1 - seg(t, Lt.end('recap') + 0.5, Lt.end('recap') + 0.8), lo = 1 - seg(t, rc - 0.1, rc + 0.2);
+    label(ctx, 'pedal', A.ring.x + 400, A.ring.y - 10, A.ped.x + 30, A.ped.y, seg(t, rp, rp + 0.4) * lo, { bg: '#CFE3FF', size: 60 });
+    label(ctx, 'chain', A.top.x + 200, A.top.y - 330, A.top.x + 110, A.top.y - 2, seg(t, rp + 1.0, rp + 1.4) * lo, { bg: '#DAD6FF', size: 60 });
+    label(ctx, 'back wheel', A.wh.x - 60, A.wh.y - 430, A.wh.x - 40, A.wh.y - 215, seg(t, rw, rw + 0.4) * lo, { bg: '#C9F7EC', size: 60 });
+    L.sticker(ctx, 'The chain carries the push!', 960, 110, seg(t, rc + 0.2, rc + 0.7) * out, { bg: P.sun, size: 72, rot: -0.015 });
+  }
+
+  // STREET: road (a diagram shot: the back half of the bike, low, no rider in frame)
+  function sceneRoad(ctx, t, Lt) {
+    const k = kinRoad(Lt), grip = Lt.chunk('road', 'on the road'), pushes = Lt.chunk('road', 'and pushes'), fwd = Lt.chunk('road', 'so the bicycle rolls'), fr = Lt.chunk('road', 'the front wheel just');
+    const gW = pulse(t, grip + 1.0, fwd - grip - 1.0), back = pulse(t, pushes - 0.1, fwd - pushes + 1.3), go = pulse(t, fwd + 0.3, fr - fwd + 0.3), gF = seg(t, fr + 0.5, fr + 0.9);
+    let pts = null;
+    const w = L3.frame(ctx, 'ep26:street', buildStreet, w => {
+      const T = global.THREE, B = w.bike, f = w.fx, x = k.x; hideFx(f); w.curie.visible = false; B.visible = true; B.position.set(x, 0, 0);
+      B.userData.set({ crank: k.crank, wheel: k.wheel, front: k.front, glow: { wheel: gW * 0.9, pedal: 0.25 * gW } }); B.updateMatrixWorld(true); w.aimSun(x, 0.5, 0, 6);
+      const S1 = { p: [x - 0.75, 0.7, 6.0], l: [x - 0.85, 0.55, 0], fov: 26 }, S2 = { p: [x + 0.1, 0.72, 7.6], l: [x, 0.62, 0], fov: 26 }, S3 = { p: [x + 1.0, 0.75, 5.6], l: [x + 1.1, 0.62, 0], fov: 26 };
+      L3.shoot(w, L3.mix(L3.mix(S1, S2, io(t, fwd - 0.3, fwd + 1.2)), S3, io(t, fr - 0.3, fr + 1.2)));
+      f.hContact.position.set(x - 1.25, 0.17, 0.25); f.hContact.userData.show(pulse(t, grip + 1.4, fwd - grip - 1.2), t);
+      f.aBack.position.set(x - 1.3, 0.14, 0.32); f.aBack.rotation.set(0, PI, 0); f.aBack.userData.show(back);
+      f.aFwd.position.set(x - 1.3, 1.38, 0.6); f.aFwd.rotation.set(0, 0, 0); f.aFwd.userData.show(go);
+      f.hWheelF.position.set(x + 1.25, RW, 0.2); f.hWheelF.userData.show(gF * (1 - seg(t, Lt.end('road') + 0.4, Lt.end('road') + 0.7)), t);
+      const an = B.userData.anchor; pts = { con: L3.at(w, an.contact), wh: L3.at(w, an.wheel), fr: L3.at(w, an.front), tip: L3.at(w, f.aBack.userData.tip) };
+    });
+    if (!w) return;
+    label(ctx, 'grips the ground', pts.con.x - 420, pts.con.y - 300, pts.con.x - 45, pts.con.y - 50, pulse(t, grip + 1.5, pushes - grip - 1.2), { bg: '#FFE0C2', size: 56, keepIn: true });
+    label(ctx, 'pushes backwards on the road', pts.con.x - 420, pts.con.y - 300, pts.tip.x + 150, pts.tip.y - 50, pulse(t, pushes + 0.1, fwd - pushes - 0.2), { bg: '#FFE0C2', size: 56, keepIn: true });
+    L.sticker(ctx, 'rolls forward!', 960, 95, pulse(t, fwd + 0.5, fr - fwd - 0.3), { bg: P.green, color: P.white, size: 80, rot: -0.02 });
+    label(ctx, 'front wheel: just rolls along', pts.fr.x - 420, 150, pts.fr.x - 130, pts.fr.y - 330, gF * (1 - seg(t, Lt.end('road') + 0.4, Lt.end('road') + 0.7)), { bg: '#C9F7EC', size: 56 });
+  }
+
+  // WORKSHOP: test + count
+  function sceneCount(ctx, t, Lt) {
+    const k = kinCount(Lt), dot = Lt.cwin('test', "let's count", 0.5), twice = Lt.chunk('count', 'twice as many'), little = Lt.chunk('count', 'as the little one');
+    const nP = Math.floor(k.crank / TAU + 1e-6), nW = Math.floor(k.wheel / TAU + 1e-6), cnt = seg(t, Lt.chunk('test', "let's count") + 0.4, Lt.chunk('test', "let's count") + 0.9) * (1 - seg(t, twice + 1.05, twice + 1.35));
+    const teethP = seg(t, twice + 1.5, twice + 1.9), teethS = seg(t, little + 0.1, little + 0.5);
+    let pts = null;
+    const w = L3.frame(ctx, 'ep26:shop', buildShop, w => {
+      const T = global.THREE, B = w.bike; w.upper.visible = true; w.turntable.rotation.y = 0; hideFx(w.fx);
+      B.userData.set({ crank: k.crank, wheel: k.wheel, stand: 1, ghost: 1, dot, glow: { ring: pulse(t, twice + 1.2, 2.6), sprocket: pulse(t, little, 2.2), pedal: 0.5 * pulse(t, k.a - 0.5, k.c - k.a + 1), wheel: 0.6 * pulse(t, k.b - 0.2, 0.7) + 0.6 * pulse(t, k.c - 0.2, 0.9) } }); B.updateMatrixWorld(true);
+      L3.shoot(w, L3.mix(SH.count, SH.wheel, io(t, twice + 0.3, twice + 1.9))); w.camera.updateMatrixWorld(true);
+      const an = B.userData.anchor, ring = wpos(T, an.ring);
+      shopFx(T, w, t, { hRing: pulse(t, twice + 1.3, 2.2), hSpr: pulse(t, little, 2.2) }, 1);
+      const speaking = (t > Lt.start('test') && t < Lt.end('test')) || (t > Lt.start('count') && t < Lt.end('count'));
+      const wow = pulse(t, Lt.chunk('count', 'two times'), 1.3) > 0.5 || pulse(t, Lt.start('test'), 1.4) > 0.5;
+      poseCurie(T, w.curie, { x: CUB.x, y: 0, z: CUB.z, ry: 0.75, s: CUB.s, mood: wow ? 'wow' : speaking ? 'talk' : 'happy', goggles: 1, lookX: 0.7, lookY: -0.05, armL: 1.2, aimL: ring, aimLk: 0.75 * (1 - io(t, twice, twice + 0.5)), stretch: 1.0,
+        armR: 0.3 + 2.2 * pulse(t, Lt.chunk('count', 'two times'), 1.4) + 2.0 * pulse(t, Lt.start('test') + 0.2, 1.3), bulb: wow ? 1 : 0.45 }, t);
+      // pixel radius of the blue "one turn" arrow round the crank (just outside the pedal's circle)
+      const rc = L3.project(w, ring.x + 0.66, ring.y, ring.z), rc0 = L3.project(w, ring.x, ring.y, ring.z);
+      pts = { dotP: L3.at(w, an.pedal), dotW: L3.at(w, an.dot), ring: L3.at(w, an.ring), spr: L3.at(w, an.sprocket), rr: Math.hypot(rc.x - rc0.x, rc.y - rc0.y) };
+    });
+    if (!w) return;
+    // the pedal's one turn: a blue clockwise arrow round the crank, drawn from "one time round" until the count ends
+    const tr = Lt.chunk('test', 'one time round');
+    arcArrow2(ctx, pts.ring.x, pts.ring.y, pts.rr, -PI / 2 + 0.25, 1.78 * PI, C.blue, 18, seg(t, tr, tr + 0.8, E.inOut) * (1 - seg(t, twice + 1.05, twice + 1.35)));
+    L.sticker(ctx, 'Scientists test it!', 960, 110, Lt.win('test', 0.1, 0.5) * (1 - Lt.cwin('test', "let's count", 0.3)), { bg: P.purple, color: P.white, size: 80, rot: -0.02 });
+    // "Pedal" card left, "Wheel" card right: reads like the sticker under them
+    counter(ctx, 620, 175, 'Pedal', nP, C.blue, cnt, seg(t, k.c, k.c + 0.4));
+    counter(ctx, 1500, 175, 'Wheel', nW, C.mint, cnt, nW >= 2 ? seg(t, k.c, k.c + 0.4) : nW >= 1 ? seg(t, k.b, k.b + 0.4) : 0);
+    L.sticker(ctx, '1 pedal turn = 2 wheel turns!', 1060, 330, seg(t, k.c + 0.15, k.c + 0.55) * (1 - seg(t, twice + 1.05, twice + 1.35)), { bg: P.sun, size: 58, rot: -0.015 });
+    label(ctx, '32 teeth', pts.ring.x + 100, pts.ring.y - 400, pts.ring.x + 40, pts.ring.y - 130, teethP, { bg: '#FFE9A8', size: 72 });
+    label(ctx, '16 teeth', pts.spr.x - 130, pts.spr.y - 400, pts.spr.x - 20, pts.spr.y - 70, teethS, { bg: '#FFE9A8', size: 72 });
+  }
+
+  // WORKSHOP: brake
+  function sceneBrake(ctx, t, Lt) {
+    const k = kinBrake(Lt), stop = Lt.chunk('brake', 'and how do i stop'), rub = Lt.chunk('brake', 'and the rubbing'), sqw = Lt.chunk('brake', 'i squeeze');
+    let pts = null;
+    const w = L3.frame(ctx, 'ep26:shop', buildShop, w => {
+      const T = global.THREE, B = w.bike; w.upper.visible = true; w.turntable.rotation.y = 0;
+      B.userData.set({ crank: 2.0, wheel: k.wheel, stand: 1, ghost: 0, brake: k.brake, dot: 1 - pulse(t, stop + 0.5, k.tb + 0.3 - stop - 0.5), glow: { brake: Math.max(io(t, k.sq, k.sq + 0.5), 0), wheel: 0.35 * pulse(t, stop + 0.3, 1.4) } }); B.updateMatrixWorld(true);
+      // close-up on the pads: the move ends before "I squeeze the brake!"; the pull-out ends (camera still) before the wheel
+      // really slows (the rubbing builds up from the touch, kinBrake), so the slowing and stopping read on the pink tyre dot
+      L3.shoot(w, camFold([{ s: SH.wheel }, { t: stop + 0.3, d: sqw - 0.05 - stop - 0.3, s: SH.brake }, { t: k.tb, d: 1.25, s: SH.wheel }], t)); w.camera.updateMatrixWorld(true);
+      shopFx(T, w, t, {}, 1);   // no halo: in the close-up it would hide the closing gap (the pads glow orange instead)
+      const speaking = t > Lt.start('brake') && t < Lt.end('brake'), done = t > k.tEnd - 0.2, ask = pulse(t, stop - 0.2, sqw - stop + 0.1);
+      // her arm stays down while the camera is in the pad close-up (it comes up once the pull-out has settled)
+      poseCurie(T, w.curie, { x: CUB.x, y: 0, z: CUB.z, ry: 0.75, s: CUB.s, mood: done ? 'wow' : speaking ? 'talk' : 'happy', goggles: 1, lookX: 0.7 - 0.3 * ask, lookY: 0.15 + 0.45 * ask,
+        armL: 0.3 + 0.95 * (1 - io(t, stop + 0.3, stop + 0.8)) + 0.95 * io(t, k.tb + 1.3, k.tb + 1.8), armR: 0.3 + 0.9 * ask * (1 - io(t, stop + 0.3, stop + 0.8)) + 2.2 * io(t, k.tEnd - 0.2, k.tEnd + 0.3), bulb: done ? 1 : 0.45 + 0.55 * ask }, t);
+      const an = B.userData.anchor; pts = { br: L3.at(w, an.brake), wh: L3.at(w, an.wheel) };
+    });
+    if (!w) return;
+    L.questionMark(ctx, 1790, 470, 1.1 * seg(t, stop + 0.3, stop + 0.7, E.outBack) * (1 - seg(t, stop + 1.3, stop + 1.6)), t, P.red);
+    label(ctx, 'brake pads', pts.br.x + 420, pts.br.y - 210, pts.br.x + 70, pts.br.y - 30, pulse(t, k.hug, rub - k.hug), { bg: '#FFD9B8', size: 64 });
+    L.sticker(ctx, 'Squeeze!', 480, 150, pulse(t, k.sq, k.hug - k.sq), { bg: P.sun, size: 84, rot: -0.04 });
+    L.sticker(ctx, 'slower... slower...', 1360, 150, seg(t, rub + 0.5, rub + 0.9) * (1 - seg(t, k.tEnd - 0.3, k.tEnd)), { bg: P.white, size: 68, rot: 0.02 });
+    L.sticker(ctx, 'Stop!', 1400, 160, seg(t, k.tEnd - 0.1, k.tEnd + 0.3), { bg: P.red, color: P.white, size: 100, rot: 0.04 });
+  }
+
+  // WORKSHOP: say it
+  function sceneSay(ctx, t, Lt) {
+    const c0 = Lt.chunk('sayit', 'the chain carries'), crank = 1.0 + 1.3 * (t - Lt.start('sayit') + 1), ph = ((t - c0) % 1.8 + 1.8) % 1.8, on = t > c0 ? 1 : 0;
+    const g = d => on * (0.25 + 0.75 * Math.pow(0.5 + 0.5 * Math.cos(TAU * (ph - d) / 1.8), 3));
+    const w = L3.frame(ctx, 'ep26:shop', buildShop, w => {
+      const T = global.THREE, B = w.bike; w.upper.visible = true; w.turntable.rotation.y = 0; hideFx(w.fx);
+      B.userData.set({ crank, stand: 1, ghost: 0, marker: 1, glow: { pedal: g(0), ring: g(0.2) * 0.8, chain: g(0.45), sprocket: g(0.7) * 0.8, wheel: g(0.95) } }); B.updateMatrixWorld(true);
+      L3.shoot(w, SH.say);
+      const said = io(t, c0 - 0.1, c0 + 0.3), sw = 0.25 * Math.sin(t * 8) * said;
+      poseCurie(T, w.curie, { x: -4.2, y: 0, z: 2.6, ry: 0.25, s: 1.0, mood: t > Lt.end('sayit') ? 'happy' : 'talk', goggles: 0, armL: lerp(0.9, 2.1, said) + sw, armR: lerp(0.9, 2.1, said) - sw, lookX: 0.1, lookY: 0.1, bulb: 0.5 + 0.5 * said }, t);
+    });
+    if (!w) return;
+    L.sayItSticker(ctx, 'The chain carries the push!', Lt.cwin('sayit', 'the chain carries', 0.8), t);
+  }
+
+  // WORKSHOP: try at home (try1 + try2)
+  function sceneTry(ctx, t, Lt) {
+    const k = kinTry(Lt), stick = Lt.cwin('try1', 'the grown-up puts a sticker', 0.5, null, 0.9), off = Lt.chunk('try1', 'ask a grown-up to hold'), keep = Lt.chunk('try2', 'you keep your hands'), many = Lt.chunk('try2', 'how many times');
+    const warn = pulse(t, keep, many - keep - 0.1);
+    let pts = null;
+    const w = L3.frame(ctx, 'ep26:shop', buildShop, w => {
+      const T = global.THREE, B = w.bike; w.upper.visible = true; w.turntable.rotation.y = 0;
+      B.userData.set({ crank: k.crank, wheel: k.wheel, stand: 1, ghost: 0, dot: stick, glow: { chain: warn, wheel: 0.5 * pulse(t, off + 2.3, 2.0), pedal: 0.6 * pulse(t, k.a - 0.6, 1.6) } }); B.updateMatrixWorld(true);
+      L3.shoot(w, SH.tryit); w.camera.updateMatrixWorld(true);
+      shopFx(T, w, t, { hPedal: pulse(t, k.a - 0.5, 1.5) }, 1);
+      const an = B.userData.anchor;
+      const speaking = (t > Lt.start('try1') && t < Lt.end('try1')) || (t > Lt.start('try2') && t < Lt.end('try2'));
+      // Curie never touches the bike here: hands behind her back (the grown-up turns the pedal), eyes on the sticker; she only
+      // points (arm on the side away from the bike) at "back wheel off the ground", and wonders at the end (bulb, look up)
+      const point = pulse(t, off + 2.2, 2.0), wonder = seg(t, many + 0.2, many + 0.7, E.inOut), nod = 0.04 * Math.sin(PI * 2 * clamp((t - k.a) / (k.b - k.a), 0, 1) * 2) * (t > k.a && t < k.b ? 1 : 0);
+      poseCurie(T, w.curie, { x: 1.55, y: 0.15, z: 1.25, ry: -0.35, s: 0.8, mood: speaking ? 'talk' : 'happy', goggles: 0, lookX: lerp(-0.75, -0.3, wonder), lookY: lerp(-0.15, 0.55, wonder),
+        armR: 0.2, backR: 0.75, armL: 0.2 + 1.0 * point + 1.1 * wonder, backL: 0.75 * (1 - Math.max(point, wonder)), bulb: 0.5 + 0.5 * wonder, squash: nod }, t);
+      pts = { dot: L3.at(w, an.dot), top: L3.at(w, an.chainTop), ped: L3.at(w, an.pedal), con: L3.at(w, an.contact), wh: L3.at(w, an.wheel) };
+    });
+    if (!w) return;
+    L.tryBanner(ctx, Lt.win('try1', 0, 0.6) * (1 - Lt.win('try2', 0, 0.4)));
+    // "with a grown-up": the hand badge (pulsing while the grown-up turns the pedal) with its own big, phone-readable label
+    const turn = seg(t, k.a - 0.5, k.a - 0.1) * (1 - seg(t, k.b + 0.2, k.b + 0.6));
+    { const gp = Lt.win('try1', 1.5, 0.6); if (gp > 0) { const bs = 1 + 0.09 * turn * Math.sin(TAU * (t - k.a) / 0.9) ** 2; ctx.save(); ctx.translate(150, 330); ctx.scale(bs, bs);
+        const s0 = E.outBack(clamp(gp, 0, 1)); ctx.save(); ctx.scale(s0, s0); circle(ctx, 0, 0, 84, P.white, P.ink, 7); L.hand(ctx, -8, 10, 0.55, 0.2); ctx.restore(); ctx.restore();
+        label(ctx, 'with a grown-up', 434, 330, null, null, gp, { size: 50, bg: P.white }); } }
+    // the grown-up's hand turns the pedal (a friendly 2D hand riding the pedal)
+    grownHand(ctx, pts.ped.x, pts.ped.y, turn);
+    label(ctx, 'back wheel off the ground', pts.wh.x - 330, 465, pts.con.x + 6, pts.con.y - 14, pulse(t, off + 2.4, 2.4), { bg: '#C9F7EC', size: 50, keepIn: true });
+    label(ctx, 'sticker', pts.dot.x - 280, pts.dot.y + 90, pts.dot.x - 22, pts.dot.y + 8, pulse(t, Lt.chunk('try1', 'the grown-up puts a sticker') + 1.1, Lt.start('try2') - Lt.chunk('try1', 'the grown-up puts a sticker') - 1.0), { bg: '#FFD0E2', size: 56 });
+    L.sticker(ctx, 'Hands behind your back. Just count!', 960, 120, warn, { bg: P.sun, size: 76, rot: -0.02 });
+    L.sticker(ctx, 'Turn it slowly, one time round', 960, 120, seg(t, Lt.start('try2') + 0.4, Lt.start('try2') + 0.8) * (1 - seg(t, keep - 0.3, keep)), { bg: P.white, size: 64, rot: -0.015 });
+    const q = seg(t, many + 0.3, many + 0.8);
+    counter(ctx, 930, 330, 'Sticker', '?', C.pink, q, 0);
+    L.questionMark(ctx, 1560, 260, q, t, P.red);
+  }
+
+  // WORKSHOP: bye
+  function sceneBye(ctx, t, Lt) {
+    const rem = Lt.chunk('bye', 'remember'), now = Lt.chunk('bye', 'now you know'), see = Lt.chunk('bye', 'see you next'), bye = Lt.chunk('bye', 'bye-bye');
+    const crank = 0.5 + 1.3 * (t - Lt.start('bye') + 1);
+    const g = d => pulse(t, rem + 0.9 + d, 1.3) + pulse(t, rem + 3.0 + d, 1.3);   // "the chain carries the push" ... "from the pedals to the back wheel"
+    const w = L3.frame(ctx, 'ep26:shop', buildShop, w => {
+      const T = global.THREE, B = w.bike; w.upper.visible = true; w.turntable.rotation.y = 0; hideFx(w.fx);
+      B.userData.set({ crank, stand: 1, ghost: 0, marker: 0, glow: { pedal: g(0), ring: g(0.2) * 0.8, chain: g(0.45), sprocket: g(0.7) * 0.8, wheel: g(0.95) } }); B.updateMatrixWorld(true);
+      L3.shoot(w, L3.mix({ p: [-1.6, 2.0, 11.6], l: [-1.4, 1.2, 0], fov: 32 }, { p: [-1.9, 1.95, 10.6], l: [-1.7, 1.2, 0], fov: 32 }, io(t, Lt.start('bye'), Lt.end('bye'))));
+      const hap = pulse(t, now, 1.6), big = io(t, bye - 0.1, bye + 0.25), wv = pulse(t, Lt.start('bye'), 1.9);
+      poseCurie(T, w.curie, { x: -4.2, y: 0, z: 2.6, ry: 0.25, s: 1.0, mood: t > Lt.end('bye') ? 'happy' : hap > 0.5 ? 'wow' : 'talk', goggles: 0,
+        armR: lerp(lerp(0.3, 2.2 + 0.3 * Math.sin(t * 9), wv) + 2.0 * hap, 2.3 + 0.35 * Math.sin(t * 9), big), armL: 0.3 + 1.0 * pulse(t, rem + 0.8, 4.2) + 2.0 * hap + 0.5 * big, lookX: pulse(t, rem + 0.8, 4.2) * 0.6, lookY: 0.05,
+        bulb: 0.5 + 0.5 * hap + 0.5 * big, squash: -0.1 * hap }, t);
+    });
+    if (!w) return;
+    if (t > now) { ctx.save(); ctx.globalAlpha = seg(t, now, now + 0.4); L.confetti(ctx, t, 21, 60); ctx.restore(); }
+    logoAt(ctx, 1560, 250, 0.82, Lt.win('bye', 0, 0.6, E.outBack), t);
+    const pp = Lt.cwin('bye', 'remember', 0.6, E.outBack, 0.3);
+    if (pp > 0) { const phrase = 'The chain carries the push!'; ctx.save(); ctx.translate(820, 120); ctx.scale(pp, pp); ctx.fillStyle = P.white; ctx.font = '700 60px Fredoka'; const ww = ctx.measureText(phrase).width + 100; roundRect(ctx, -ww / 2, -60, ww, 120, 40); ctx.fill(); ctx.strokeStyle = P.ink; ctx.lineWidth = 8; ctx.stroke(); text(ctx, phrase, 0, 4, { size: 60, weight: 700, color: P.ink }); ctx.restore(); }
+    L.sticker(ctx, 'Bye-bye!', 1500, 520, Lt.cwin('bye', 'bye-bye', 0.6, E.outBack), { bg: P.sun, rot: 0.05, size: 84 });
+  }
+
+  // THUMBNAIL background: the workshop with the glowing drive train (2D fallback while three.js is not loaded)
+  function thumbBg(ctx, t) {
+    if (!L3 || !L3.ok || !L3.ok()) {
+      const g = ctx.createLinearGradient(0, 0, 0, H); g.addColorStop(0, '#F6E3BD'); g.addColorStop(1, '#E9C98F'); ctx.fillStyle = g; ctx.fillRect(0, 0, W, H); ctx.fillStyle = '#C99655'; ctx.fillRect(0, 820, W, H - 820);
+      const wheel = (x, y, r) => { circle(ctx, x, y, r, null, P.ink, 34); circle(ctx, x, y, r - 22, null, '#DDE2EA', 10); ctx.strokeStyle = '#B8BFCC'; ctx.lineWidth = 5; for (let i = 0; i < 12; i++) { const a = i / 12 * TAU; ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + Math.cos(a) * (r - 24), y + Math.sin(a) * (r - 24)); ctx.stroke(); } };
+      const gear = (x, y, r, n) => { ctx.save(); ctx.translate(x, y); ctx.fillStyle = C.gold; ctx.strokeStyle = P.ink; ctx.lineWidth = 7; ctx.beginPath(); for (let i = 0; i < n * 2; i++) { const a = i / (n * 2) * TAU, rr = i % 2 ? r : r * 0.86; ctx.lineTo(Math.cos(a) * rr, Math.sin(a) * rr); } ctx.closePath(); ctx.fill(); ctx.stroke(); circle(ctx, 0, 0, r * 0.2, P.white, P.ink, 6); ctx.restore(); };
+      wheel(1040, 610, 250); wheel(1640, 610, 250); ctx.strokeStyle = '#D81428'; ctx.lineWidth = 30; ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.beginPath(); ctx.moveTo(1040, 610); ctx.lineTo(1330, 630); ctx.lineTo(1230, 330); ctx.lineTo(1040, 610); ctx.moveTo(1330, 630); ctx.lineTo(1540, 300); ctx.lineTo(1230, 330); ctx.moveTo(1540, 300); ctx.lineTo(1640, 610); ctx.stroke();
+      ctx.strokeStyle = C.chain; ctx.lineWidth = 16; ctx.beginPath(); ctx.moveTo(1040, 552); ctx.lineTo(1330, 520); ctx.moveTo(1040, 668); ctx.lineTo(1330, 740); ctx.stroke(); gear(1040, 610, 62, 12); gear(1330, 630, 116, 22);
+      ctx.strokeStyle = C.blue; ctx.lineWidth = 26; ctx.beginPath(); ctx.moveTo(1330, 630); ctx.lineTo(1400, 500); ctx.stroke(); ctx.fillStyle = C.blue; roundRect(ctx, 1350, 470, 110, 40, 12); ctx.fill(); ctx.strokeStyle = P.ink; ctx.lineWidth = 6; ctx.stroke();
+      return;
+    }
+    L3.frame(ctx, 'ep26:shop', buildShop, w => {
+      const T = global.THREE, B = w.bike; w.upper.visible = true; w.turntable.rotation.y = 0; w.curie.visible = true;
+      w.curie.userData.pose({ x: -1.55, y: 0.15, z: 2.2, ry: 0.6, s: 0.5, mood: 'wow', armL: 2.3, armR: 0.5, lookX: 0.7, lookY: 0.1, bulb: 1, goggles: 0, bob: 0 }, t);
+      B.userData.set({ crank: 1.1, stand: 1, ghost: 0, marker: 1, glow: { pedal: 0.7, ring: 0.5, chain: 0.8, sprocket: 0.5, wheel: 0.75 } }); B.updateMatrixWorld(true);
+      L3.shoot(w, SH.thumb); w.camera.updateMatrixWorld(true); shopFx(T, w, 0, { tok: [1, 1, 1, 1], tokDir: [null, null, 100, null], aRing: 1, aWheel: 1 }, 1.25);   // 3 above the sprocket here (Curie's hand is below-left)
+    });
+  }
+  // ==== EP26 3D STAGING: END ====
+
+  // ---------- Try it (website): two live 3D activities ----------
+/* Episode 26 "How does a bicycle work?": the two Try-it activities, in live 3D.
+   Paste into episodes/ep26.js as   interactives: ep26Interactives(L)
+   Self-contained: needs only L (lib/lsc.js), L.three (lib/lsc3d.js) and the kits workshop, bike and curie (lib/htw/).
+   Nothing touches the DOM or THREE when this function runs: only inside draw, through L.three.frame.
+   State is plain JSON. Cue ids: push, two, free (task 1); hug, coast (task 2). */
+function ep26Interactives(L) {
+  const { W, H, P, E, seg, clamp, lerp, circle, ellipse, text, roundRect } = L;
+  const TAU = Math.PI * 2;
+  const C = { blue: '#3B82F6', gold: '#FFC233', chain: '#4338CA', pink: '#FF4D8D', pad: '#FF7A1A', green: '#34B36B', greenDark: '#1F8A4C', padDark: '#C9540A', panel: '#FFFDF6' };
+  const wrap = a => { a = (a + Math.PI) % TAU; if (a < 0) a += TAU; return a - Math.PI; };   // -> (-PI, PI]
+  const snd = f => { try { if (L.sound && L.sound.ctx) f(L.sound); } catch (e) { /* no sound is fine */ } };
+  const inRect = (r, x, y, m) => x >= r.x - (m || 0) && x <= r.x + r.w + (m || 0) && y >= r.y - (m || 0) && y <= r.y + r.h + (m || 0);
+
+  // ---------- the 3D world (one per task: separate keys, so each keeps its own camera and poses)
+  function build(T, L3) {
+    const w = L3.kits.workshop(T, L3);
+    w.bike = L3.kits.bike(T, L3); w.bike.position.y = w.floorY; w.turntable.add(w.bike);
+    w.curie = L3.kits.curie(T, L3); w.scene.add(w.curie);
+    return w;
+  }
+
+  // ---------- 2D pieces
+  function panel(ctx, x, y, w, h, r) {
+    ctx.save(); ctx.fillStyle = 'rgba(43,45,66,0.22)'; roundRect(ctx, x + 4, y + 10, w, h, r); ctx.fill();
+    ctx.fillStyle = C.panel; roundRect(ctx, x, y, w, h, r); ctx.fill(); ctx.strokeStyle = P.ink; ctx.lineWidth = 6; ctx.stroke(); ctx.restore();
+  }
+  // a counter: an icon with a progress ring (the part-turn so far), a label and a big number that pops when it changes
+  function counter(ctx, x, y, w, h, label, n, frac, color, pop, icon) {
+    panel(ctx, x, y, w, h, 40);
+    const ix = x + 84, iy = y + h / 2, r = 50;
+    ctx.save(); ctx.lineCap = 'round';
+    ctx.strokeStyle = '#E3E6EE'; ctx.lineWidth = 14; ctx.beginPath(); ctx.arc(ix, iy, r, 0, TAU); ctx.stroke();
+    if (frac > 0.004) { ctx.strokeStyle = color; ctx.beginPath(); ctx.arc(ix, iy, r, -Math.PI / 2, -Math.PI / 2 + TAU * clamp(frac, 0, 1)); ctx.stroke(); }
+    icon(ctx, ix, iy); ctx.restore();
+    text(ctx, label, x + 158, iy + 2, { size: 44, weight: 600, align: 'left' });
+    const k = 1 + 0.35 * E.out(clamp(pop / 0.35, 0, 1));
+    ctx.save(); ctx.translate(x + w - 78, iy + 4); ctx.scale(k, k); text(ctx, String(n), 0, 0, { size: 100, weight: 700, color }); ctx.restore();
+  }
+  function pedalIcon(ctx, x, y) { ctx.fillStyle = C.blue; ctx.strokeStyle = P.ink; ctx.lineWidth = 4; roundRect(ctx, x - 28, y - 13, 56, 26, 8); ctx.fill(); ctx.stroke(); circle(ctx, x + 16, y, 7, C.pink); }
+  function wheelIcon(ctx, x, y) { ctx.strokeStyle = '#2B2D42'; ctx.lineWidth = 9; ctx.beginPath(); ctx.arc(x, y, 24, 0, TAU); ctx.stroke(); ctx.lineWidth = 3; for (let i = 0; i < 4; i++) { const a = i * Math.PI / 4; ctx.beginPath(); ctx.moveTo(x - Math.cos(a) * 20, y - Math.sin(a) * 20); ctx.lineTo(x + Math.cos(a) * 20, y + Math.sin(a) * 20); ctx.stroke(); } circle(ctx, x, y - 24, 8, C.pink); }
+  // a chunky curved arrow around (cx, cy): from angle a0 to a1 (0 = up, clockwise), radius r
+  function arcArrow(ctx, cx, cy, r, a0, a1, color, lw) {
+    const pt = a => [cx + Math.sin(a) * r, cy - Math.cos(a) * r], hl = lw * 2.4, ae = a1 - hl * 0.7 / r;
+    const stroke = (c, w) => { ctx.strokeStyle = c; ctx.lineWidth = w; ctx.beginPath(); ctx.arc(cx, cy, r, a0 - Math.PI / 2, ae - Math.PI / 2); ctx.stroke(); };
+    const head = (c, g) => { const [x, y] = pt(a1), [bx, by] = pt(ae), dx = x - bx, dy = y - by, d = Math.hypot(dx, dy) || 1, ux = dx / d, uy = dy / d; ctx.fillStyle = c; ctx.beginPath(); ctx.moveTo(x + ux * g, y + uy * g); ctx.lineTo(bx - uy * (hl * 0.75 + g) - ux * g, by + ux * (hl * 0.75 + g) - uy * g); ctx.lineTo(bx + uy * (hl * 0.75 + g) - ux * g, by - ux * (hl * 0.75 + g) - uy * g); ctx.closePath(); ctx.fill(); };
+    ctx.save(); ctx.lineCap = 'round'; stroke(P.ink, lw + 10); head(P.ink, 7); stroke(color, lw); head(color, 0); ctx.restore();
+  }
+  // a big press button: it sinks when held
+  function button(ctx, r, label, sub, fill, lip, down, glow) {
+    const d = down ? 10 : 0; ctx.save();
+    if (glow > 0) { ctx.fillStyle = 'rgba(255,255,255,' + (0.5 * glow).toFixed(3) + ')'; roundRect(ctx, r.x - 14, r.y - 14, r.w + 28, r.h + 28, 58); ctx.fill(); }
+    ctx.fillStyle = lip; roundRect(ctx, r.x, r.y + 14, r.w, r.h - 14, 46); ctx.fill(); ctx.strokeStyle = P.ink; ctx.lineWidth = 7; ctx.stroke();
+    ctx.fillStyle = fill; roundRect(ctx, r.x, r.y + d, r.w, r.h - 14, 46); ctx.fill(); ctx.stroke();
+    const cy = r.y + d + (r.h - 14) / 2;
+    text(ctx, label, r.x + r.w / 2, cy + (sub ? -18 : 4), { size: 88, weight: 700, color: P.white, stroke: P.ink, strokeWidth: 12 });
+    if (sub) text(ctx, sub, r.x + r.w / 2, cy + 52, { size: 36, weight: 600, color: P.white, stroke: P.ink, strokeWidth: 7 });
+    ctx.restore();
+  }
+  function tag(ctx, str, x, y, size, bg, color) {
+    ctx.save(); ctx.font = '700 ' + size + 'px Fredoka'; const w = ctx.measureText(str).width + size * 0.9, h = size * 1.5;
+    ctx.fillStyle = bg; roundRect(ctx, x - w / 2, y - h / 2, w, h, h / 2); ctx.fill(); ctx.strokeStyle = P.ink; ctx.lineWidth = 5; ctx.stroke();
+    text(ctx, str, x, y + 3, { size, weight: 700, color: color || P.ink }); ctx.restore();
+  }
+
+  // =====================================================================================================
+  // Try it 1: Turn the pedal
+  // crank = pedal angle (0 = the pedal with the pink dot at the top; it follows the finger both ways).
+  // fwd = how far the pedal has been pushed FORWARDS in all. The back wheel is driven only forwards (this bicycle has a
+  // freewheel, like most children's bicycles: backwards, pedals, chain and little toothed wheel turn, the wheel rests),
+  // and it is always exactly  wheel = 2 x fwd  (32 teeth pull 16 teeth).
+  // =====================================================================================================
+  const S1 = { p: [-1.12, 1.14, 7.3], l: [-1.12, 1.0, 0], fov: 26 };
+  const R1 = { pedal: { x: 380, y: 878, w: 560, h: 160 }, wheel: { x: 980, y: 878, w: 560, h: 160 } };
+  const task1 = {
+    title: 'Turn the pedal',
+    hint: 'Drag the blue pedal round and round. Count the turns: how many times does the back wheel go round?',
+    init: s => {
+      s.crank = 0; s.target = 0; s.fwd = 0; s.wheel = 0; s.back = 0; s.drag = false; s.fa = 0; s.touched = false; s.ready = false;
+      s.cx = 0; s.cy = 0; s.px = 0; s.py = 0; s.pr = 0; s.mv = 0; s.wow = 0; s.pop1 = 0; s.pop2 = 0; s.n1 = 0; s.n2 = 0; s.tick = 0;
+      s.saw = { push: false, two: false, free: false }; s.pend = ''; s.quiet = 99; s.lastCue = '';
+    },
+    update: (s, dt, cue) => {
+      dt = clamp(dt, 0, 0.05);
+      // the pedal chases the finger's angle (quick, but never a jump)
+      let d = (s.target - s.crank) * (1 - Math.exp(-22 * dt)); d = clamp(d, -16 * dt, 16 * dt);
+      if (Math.abs(s.target - s.crank) < 0.0005) d = s.target - s.crank;
+      s.crank += d;
+      if (d > 0) s.fwd += d; else s.back -= d;
+      s.wheel = 2 * s.fwd;                                        // exactly two wheel turns for one pedal turn
+      s.mv = clamp(s.mv + (d > 0.0004 ? 6 : -3) * dt, 0, 1);
+      // counters (whole turns) and their little pops
+      const n1 = Math.floor(s.fwd / TAU + 1e-6), n2 = Math.floor(s.wheel / TAU + 2e-6);
+      if (n1 !== s.n1) { s.n1 = n1; s.pop1 = 0.35; s.wow = 2.2; snd(S => S.tone(660, 0.22, { type: 'triangle', vol: 0.16 })); }
+      if (n2 !== s.n2) { s.n2 = n2; s.pop2 = 0.35; snd(S => S.tone(880, 0.16, { type: 'triangle', vol: 0.12 })); }
+      s.pop1 = Math.max(0, s.pop1 - dt); s.pop2 = Math.max(0, s.pop2 - dt); s.wow = Math.max(0, s.wow - dt); s.quiet += dt;
+      // a soft tick as the chain links pass (every fourth link; a lighter click when the freewheel runs backwards)
+      const tk = Math.floor(s.crank * 32 / TAU / 4);
+      if (tk !== s.tick) { const fw = tk > s.tick; s.tick = tk; snd(S => S.tone(fw ? 1500 : 2100, 0.035, { type: 'triangle', vol: fw ? 0.05 : 0.035 })); }
+      // cues: each once; a cue that would cut into the one before waits until Curie has finished
+      if (!s.saw.push && s.fwd > 0.45) { s.saw.push = true; s.pend = 'push'; }
+      else if (!s.saw.two && s.saw.push && s.fwd >= TAU - 1e-6) { s.saw.two = true; s.pend = 'two'; }
+      else if (!s.saw.free && s.back > 1.2 && !s.pend) { s.saw.free = true; s.pend = 'free'; }
+      if (s.pend && s.quiet > 4.5) { const id = s.pend; s.pend = ''; s.lastCue = id; s.quiet = 0; s.wow = Math.max(s.wow, 2.2); cue(id); }
+    },
+    draw: (ctx, s, t) => {
+      const w = L.three.frame(ctx, 'ep26:try1', build, w => {
+        L.three.shoot(w, S1); w.turntable.rotation.y = 0; w.upper.visible = true;
+        const invite = s.touched ? 0 : 0.45 + 0.35 * Math.sin(t * 4);
+        w.bike.userData.set({ crank: s.crank, wheel: s.wheel, stand: 1, marker: 1, dot: 1,
+          glow: { pedal: s.drag ? 0.7 : invite, chain: 0.75 * s.mv, sprocket: 0.5 * s.mv, wheel: 0.3 * s.mv } });
+        const wow = s.wow > 0;
+        w.curie.userData.pose({ x: -3.12, y: 0, z: 0.45, ry: 0.7, s: 0.38, mood: wow ? 'wow' : 'happy', armL: wow ? 2.5 : 1.15, armR: wow ? 2.5 : 0.15,
+          lookX: 0.7, lookY: wow ? 0.2 : -0.1, bulb: wow ? 1 : 0.35 + 0.4 * s.mv, goggles: 1, squash: wow ? -0.12 * Math.sin(clamp(s.wow / 2.2, 0, 1) * Math.PI) : 0 }, t);
+      });
+      if (!w) { s.ready = false; return; }
+      // where the parts are on the canvas (for the finger)
+      // the centre of the pedal's circle is the crank axle at the PEDAL's depth (the pedal is nearer the camera than the toothed wheel)
+      const A = w.bike.userData.anchor, p = L.three.at(w, A.pedal);
+      const c = L.three.at(w, A.ring, 0, 0, A.pedal.matrixWorld.elements[14] - A.ring.matrixWorld.elements[14]);
+      s.cx = Math.round(c.x * 10) / 10; s.cy = Math.round(c.y * 10) / 10; s.px = Math.round(p.x * 10) / 10; s.py = Math.round(p.y * 10) / 10;
+      s.pr = Math.round(Math.hypot(p.x - c.x, p.y - c.y) * 10) / 10; s.ready = true;
+      const pa = Math.atan2(s.px - s.cx, s.cy - s.py);
+      if (s.drag) { ctx.save(); ctx.strokeStyle = 'rgba(255,255,255,0.9)'; ctx.lineWidth = 8; ctx.beginPath(); ctx.arc(s.px, s.py, 62, 0, TAU); ctx.stroke(); ctx.restore(); }
+      if (!s.touched) {
+        const k = 0.5 + 0.5 * Math.sin(t * 4);
+        ctx.save(); ctx.strokeStyle = 'rgba(255,255,255,' + (0.55 + 0.4 * k).toFixed(3) + ')'; ctx.lineWidth = 8; ctx.setLineDash([18, 16]); ctx.beginPath(); ctx.arc(s.px, s.py, 66 + 8 * k, 0, TAU); ctx.stroke(); ctx.restore();
+        arcArrow(ctx, s.cx, s.cy, s.pr + 70, pa + 0.42, pa + 1.55 + 0.1 * k, P.sun, 22);
+        const lx = clamp(s.cx + Math.sin(pa - 0.12) * (s.pr + 150), 230, W - 230), ly = clamp(s.cy - Math.cos(pa - 0.12) * (s.pr + 150), 90, 800);
+        L.sticker(ctx, 'Drag me!', lx, ly, 1, { bg: P.sun, size: 64, rot: -0.04 });
+      }
+      counter(ctx, R1.pedal.x, R1.pedal.y, R1.pedal.w, R1.pedal.h, 'Pedal turns', s.n1, s.fwd / TAU - s.n1, C.blue, s.pop1, pedalIcon);
+      counter(ctx, R1.wheel.x, R1.wheel.y, R1.wheel.w, R1.wheel.h, 'Wheel turns', s.n2, s.wheel / TAU - s.n2, C.pink, s.pop2, wheelIcon);
+    },
+    pointer: (s, type, x, y) => {
+      if (!s.ready) return;
+      const dc = Math.hypot(x - s.cx, y - s.cy), a = Math.atan2(x - s.cx, s.cy - y);
+      if (type === 'down') {
+        const onPedal = Math.hypot(x - s.px, y - s.py) < 115, onRing = Math.abs(dc - s.pr) < 95 && dc > 45;
+        if (onPedal || onRing) {
+          s.drag = true; s.touched = true; s.fa = a;
+          if (onPedal && dc > 45) s.target = s.crank + wrap(a - Math.atan2(s.px - s.cx, s.cy - s.py));   // the pedal comes under the finger
+          snd(S => S.tone(520, 0.1, { type: 'triangle', vol: 0.1 }));
+        }
+      } else if (type === 'move' && s.drag) {
+        if (dc > 45) { s.target += wrap(a - s.fa); s.fa = a; }                                           // too near the middle: the angle is not reliable
+      } else if (type === 'up') { s.drag = false; }
+    },
+    cues: {
+      push: 'You pushed the pedal! The chain carries your push to the back wheel.',
+      two: 'One turn of the pedal... and the wheel went round two times!',
+      free: 'On my bicycle, the pedals spin free backwards. Only a forward push turns the wheel!'
+    }
+  };
+
+  // =====================================================================================================
+  // Try it 2: Squeeze the brake
+  // The back wheel is off the ground on the stand. Spin! gives it a push; it coasts and slows only very slowly by itself.
+  // Brake (press and hold) squeezes the lever: the pads close on the rim and the rubbing slows the wheel to a stop.
+  // =====================================================================================================
+  const S2 = { p: [-3.43, 1.75, 4.3], l: [-1.15, 1.12, 0], fov: 25 };
+  const R2 = { spin: { x: 1440, y: 560, w: 420, h: 200 }, brake: { x: 1440, y: 800, w: 420, h: 230 }, speed: { x: 1440, y: 50, w: 420, h: 170 } };
+  const WMAX = 11, PUSH = 6.5;
+  const task2 = {
+    title: 'Squeeze the brake',
+    hint: 'Tap Spin! to spin the back wheel. Then press and hold Brake. What do the rubber pads do?',
+    init: s => {
+      s.ang = 0; s.w = 0; s.brake = 0; s.hold = false; s.touched = false; s.braked = false; s.ready = false; s.spinF = 0; s.rub = false; s.rubT = 0;
+      s.coastT = 0; s.stopT = 0; s.wow = 0; s.tk = 0; s.bx = 0; s.by = 0; s.saw = { hug: false, coast: false }; s.pend = ''; s.quiet = 99; s.lastCue = '';
+    },
+    update: (s, dt, cue) => {
+      dt = clamp(dt, 0, 0.05);
+      s.brake = clamp(s.brake + (s.hold ? 6 : -7) * dt, 0, 1);                       // the lever and the pads
+      const press = clamp((s.brake - 0.72) / 0.28, 0, 1);                            // the pads touch the rim near the end of the squeeze
+      if (press > 0 && s.w > 0.8) s.rub = true;
+      if (s.w > 0) {
+        s.w -= (0.06 + 0.02 * s.w + 7 * press) * dt;                                // by itself: a very gentle slowing; with the pads: a strong one
+        if (s.w <= 0) {
+          s.w = 0;
+          if (s.rub) { s.stopT = 1.6; s.wow = 2.4; snd(S => S.tone(300, 0.2, { type: 'sine', vol: 0.14, glide: 200 })); if (!s.saw.hug) { s.saw.hug = true; s.pend = 'hug'; } }
+        }
+      }
+      if (press === 0 || s.w === 0) s.rub = false;
+      s.ang = (s.ang + s.w * dt) % (TAU * 64);
+      // sounds: a soft tick from the freewheel while it coasts, a soft "shhh" while the pads rub
+      s.tk += s.w * dt; if (s.tk > 0.9) { s.tk = 0; if (press === 0) snd(S => S.tone(1900, 0.03, { type: 'triangle', vol: 0.03 })); }
+      s.rubT -= dt; if (press > 0 && s.w > 0.3 && s.rubT <= 0) { s.rubT = 0.16; snd(S => S.noise(0.2, 0.05 + 0.04 * press, { hp: 1500, lp: 5000 })); }
+      // spinning for a while without the brake
+      if (s.w > 1.5 && !s.hold) s.coastT += dt; else if (s.w === 0 || s.hold) s.coastT = 0;
+      if (!s.saw.coast && !s.saw.hug && s.coastT > 6 && !s.pend) { s.saw.coast = true; s.pend = 'coast'; }
+      s.spinF = Math.max(0, s.spinF - dt); s.stopT = Math.max(0, s.stopT - dt); s.wow = Math.max(0, s.wow - dt); s.quiet += dt;
+      if (s.pend && s.quiet > 4.5) { const id = s.pend; s.pend = ''; s.lastCue = id; s.quiet = 0; cue(id); }
+    },
+    draw: (ctx, s, t) => {
+      const press = clamp((s.brake - 0.72) / 0.28, 0, 1);
+      const w = L.three.frame(ctx, 'ep26:try2', build, w => {
+        L.three.shoot(w, S2); w.turntable.rotation.y = 0; w.upper.visible = true;
+        w.bike.userData.set({ crank: 0.9, wheel: s.ang, stand: 1, marker: 0, dot: 1, brake: s.brake,
+          glow: { brake: Math.max(0.35 + 0.25 * Math.sin(t * 3), s.brake) } });
+        const wow = s.wow > 0;
+        w.curie.userData.pose({ x: -1.9, y: 0, z: -2.6, ry: 0.15, s: 0.5, mood: wow ? 'wow' : 'happy', armL: wow ? 2.5 : 1.1, armR: wow ? 2.5 : 0.2,
+          lookX: 0.6, lookY: s.hold ? 0.5 : 0.15, bulb: wow ? 1 : 0.35, goggles: 1, squash: wow ? -0.12 * Math.sin(clamp(s.wow / 2.4, 0, 1) * Math.PI) : 0 }, t);
+      });
+      if (!w) { s.ready = false; return; }
+      const b = L.three.at(w, w.bike.userData.anchor.brake); s.bx = Math.round(b.x * 10) / 10; s.by = Math.round(b.y * 10) / 10; s.ready = true;
+      // the pads: a name tag with a pointer, so the child knows where to look
+      const tx = clamp(s.bx - 20, 200, 1230), ty = clamp(s.by - 185, 70, 700);
+      ctx.save(); ctx.strokeStyle = P.ink; ctx.lineWidth = 12; ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(tx, ty + 30); ctx.lineTo(s.bx + 8, s.by - 34); ctx.stroke();
+      ctx.strokeStyle = C.pad; ctx.lineWidth = 6; ctx.stroke(); ctx.restore();
+      tag(ctx, press > 0 ? (s.w > 0 ? 'rubbing!' : 'hugging the wheel') : 'rubber pads', tx, ty, 46, press > 0 ? C.pad : C.panel, press > 0 ? P.white : P.ink);
+      if (s.stopT > 0) { L.sticker(ctx, 'Stopped!', 520, 150, clamp((1.6 - s.stopT) / 0.25, 0, 1) * clamp(s.stopT / 0.2, 0, 1), { bg: P.sun, size: 84 }); }
+      // speed: five bars and a word
+      const R = R2.speed; panel(ctx, R.x, R.y, R.w, R.h, 40);
+      const lv = s.w <= 0 ? 0 : Math.max(1, Math.ceil(s.w / WMAX * 5 - 1e-9));
+      text(ctx, s.w <= 0 ? 'Wheel: still' : (lv >= 3 ? 'Wheel: fast' : 'Wheel: slow'), R.x + R.w / 2, R.y + 48, { size: 44, weight: 600 });
+      for (let i = 0; i < 5; i++) { ctx.fillStyle = i < lv ? (press > 0 ? C.pad : C.green) : '#E3E6EE'; roundRect(ctx, R.x + 42 + i * 70, R.y + 150 - (40 + i * 12), 56, 40 + i * 12 - 22, 12); ctx.fill(); }
+      // buttons
+      const hintSpin = !s.touched ? 0.5 + 0.5 * Math.sin(t * 4) : 0, hintBrake = (s.touched && !s.braked && s.w > 1.5 && !s.hold) ? 0.5 + 0.5 * Math.sin(t * 4) : 0;
+      button(ctx, R2.spin, 'Spin!', '', C.green, C.greenDark, s.spinF > 0, hintSpin);
+      button(ctx, R2.brake, 'Brake', 'press and hold', C.pad, C.padDark, s.hold, hintBrake);
+      if (!s.touched) { L.sticker(ctx, 'Tap me!', R2.spin.x + 120, R2.spin.y - 62, 1, { bg: P.sun, size: 56, rot: -0.05 }); }
+    },
+    pointer: (s, type, x, y) => {
+      if (!s.ready) return;
+      if (type === 'down') {
+        if (inRect(R2.spin, x, y, 12)) { s.touched = true; s.spinF = 0.25; s.w = Math.min(WMAX, s.w + PUSH); s.coastT = 0; snd(S => S.noise(0.35, 0.12, { lp: 1400, hp: 200 })); snd(S => S.tone(330, 0.3, { type: 'sine', vol: 0.12, glide: 660 })); }
+        else if (inRect(R2.brake, x, y, 12)) { s.hold = true; s.touched = true; s.braked = true; snd(S => S.tone(440, 0.08, { type: 'triangle', vol: 0.1 })); }
+      } else if (type === 'up') { s.hold = false; }
+    },
+    cues: {
+      hug: 'The pads hugged the wheel. The rubbing slowed it down!',
+      coast: 'Look, the wheel keeps on spinning! Squeeze the brake to stop it.'
+    }
+  };
+
+  return [task1, task2];
+}
+
+
+  L.episodes.ep26 = {
+    id: 'ep26', num: 26, three: true, curie: 'rainbow', title: 'How does a bicycle work?', short: 'Bicycle', phrase: 'The chain carries the push!',
+    // YouTube thumbnail (render/art.js): big word, small text above/below, and the background drawn behind Curie (Curie stands at x 560, y 760 unless pip is set)
+    thumb: { big: 'BICYCLE', small1: 'How does a', small2: 'work?', pip: false, bg: (ctx, t) => thumbBg(ctx, t) },
+    // text = the caption on screen (and the site); say = what Curie speaks, with direction tags (docs/PIPELINE.md, "Narration markup")
+    lines: [
+      { id: 'hello', text: "Hello, little scientists! I'm Curie. Welcome to the Little Scientists Club!", say: "Hello, little scientists! I'm *Curie*! Welcome... to the Little Scientists Club!", hold: 0.3 },
+      { id: 'q', text: "Today's big question: how does a bicycle work?", say: "Today's big question... How does a *bicycle* work?", hold: 0.6 },
+      { id: 's1', text: "Wheee! I love my bicycle. The wheels go round and round, and off I go!", say: "Wheee! I *love* my bicycle. The wheels go round and round... and off I go!", hold: 0.4 },
+      { id: 's2', text: "But how does pushing the pedals make the wheels turn? Let's take it to my workshop and find out!", say: "But *how* does pushing the pedals make the wheels turn? Let's take it to my workshop... and find out!", hold: 0.8 },
+      { id: 'look', text: "Peek-Inside Goggles on! Let's look closer, step by step.", say: "{sfx:pop}Peek-Inside Goggles... *on*! Let's look closer... step by step.", hold: 0.6 },
+      { id: 'e1', text: "Step one. I push the pedal down. The pedal turns this big wheel with teeth.", say: "Step *one*. I push the pedal down. The pedal turns this big wheel... with *teeth*.", hold: 0.6 },
+      { id: 'e2', text: "Step two. The teeth catch the chain and pull it along. Watch the pink link go!", say: "Step *two*. The teeth catch the chain... and *pull* it along. Watch the pink link go!", hold: 0.8 },
+      { id: 'e3', text: "Step three. The chain pulls a little wheel with teeth, at the back.", say: "Step *three*. The chain pulls a *little* wheel with teeth... at the back.", hold: 0.6 },
+      { id: 'e4', text: "Step four. The little wheel turns the back wheel. Round it goes!", say: "Step *four*. The little wheel turns the *back* wheel. {sfx:ding}Round it goes!", hold: 0.8 },
+      { id: 'recap', text: "Pedal, chain, back wheel. The chain carries my push all the way to the back!", say: "Pedal... chain... back wheel. The chain *carries* my push... all the way to the back!", hold: 0.8 },
+      { id: 'road', text: "On the road, the back wheel grips the ground and pushes backwards. So the bicycle rolls forward! The front wheel just rolls along.", say: "On the road, the back wheel *grips* the ground... and pushes *backwards*. So the bicycle rolls *forward*! The front wheel just rolls along.", hold: 0.8 },
+      { id: 'test', text: "Scientists test it! Let's count. I turn the pedals one time round.", say: "{sfx:ding}Scientists *test* it! Let's count. I turn the pedals *one* time round.", hold: 0.3 },
+      { id: 'count', text: "The back wheel turns one... two times! The big wheel with teeth has twice as many teeth as the little one.", say: "The back wheel turns one... *two* times! The big wheel with teeth has *twice* as many teeth... as the little one.", hold: 1.0 },
+      { id: 'brake', text: "And how do I stop? I squeeze the brake! Two rubber pads hug the wheel, and the rubbing, called friction, slows it down.", say: "And how do I *stop*? I squeeze the brake! Two rubber pads *hug* the wheel... and the rubbing, called *friction*, slows it down.", hold: 0.8 },
+      { id: 'sayit', text: 'Say it with me: the chain carries the push!', say: 'Say it with me... {sfx:ding}The chain carries the push! {pause 0.9} {slow}The chain carries the push!{/slow}', hold: 1.4 },
+      { id: 'try1', text: "Let's try it at home! Ask a grown-up to hold a bicycle, with its back wheel off the ground. The grown-up puts a sticker on the back tyre.", say: "{sfx:tada}Let's try it at home! Ask a grown-up to hold a bicycle... with its back wheel off the ground. The grown-up puts a sticker on the back tyre.", hold: 0.4 },
+      { id: 'try2', text: "The grown-up turns one pedal slowly, one time round. You keep your hands behind your back, and count! How many times does the sticker go round?", say: "The grown-up turns one pedal *slowly*... one time round. You keep your hands behind your back... and count! {sfx:ding}How many times does the sticker go round?", hold: 1.6 },
+      { id: 'bye', text: 'Great job, little scientist! Remember: the chain carries the push to the back wheel. Now you know how it works! See you next time at the Little Scientists Club! Bye-bye!', say: '{sfx:tada}Great job, little scientist! Remember... the chain carries the push, to the back wheel. Now you know how it works! See you next time, at the Little Scientists Club! {hi}Bye-bye!{/hi}', hold: 0.5 }
+    ],
+    // extra sound effects not written into `say` as {sfx:name}: anchored to a line (+offset s) or to a chunk ('chunk': words)
+    sfx: [
+      
+    ],
+    // scenes: each starts when its `from` line starts (minus optional lead) and lasts until the next scene; transition 'cut' = no wipe
+    scenes: [
+      { from: 'hello', draw: (ctx, t, Lt) => sceneHello(ctx, t, Lt) },
+      { from: 'q', draw: (ctx, t, Lt) => sceneRide(ctx, t, Lt) },                 // q + s1 + s2: one continuous street shot
+      { from: 'look', draw: (ctx, t, Lt) => sceneMech(ctx, t, Lt) },              // look + e1..e4 + recap: one continuous workshop shot
+      { from: 'road', draw: (ctx, t, Lt) => sceneRoad(ctx, t, Lt) },
+      { from: 'test', draw: (ctx, t, Lt) => sceneCount(ctx, t, Lt) },             // test + count
+      { from: 'brake', draw: (ctx, t, Lt) => sceneBrake(ctx, t, Lt) },
+      { from: 'sayit', draw: (ctx, t, Lt) => sceneSay(ctx, t, Lt) },
+      { from: 'try1', draw: (ctx, t, Lt) => sceneTry(ctx, t, Lt) },               // try1 + try2
+      { from: 'bye', draw: (ctx, t, Lt) => sceneBye(ctx, t, Lt) }
+    ],
+    // for tests and tools: the camera shots and the closed-form kinematics (see the staging block above)
+    props: { shots: SH, kin: { ride: kinRide, shop: kinShop, road: kinRoad, count: kinCount, brake: kinBrake, tryit: kinTry }, dims: { RW, RB, CHAINLEN } },
+    interactives: ep26Interactives(L)
+  };
+})(typeof window !== 'undefined' ? window : globalThis);
+
+LSC.three.src = ['three.min.js', 'htw.js'];
