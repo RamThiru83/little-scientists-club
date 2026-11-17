@@ -557,7 +557,7 @@
     const ER = 0.325, eyes = [];
     const lidGeo = new T.SphereGeometry(1, 36, 12, 0, P * 2, 0, P / 2), lashGeo = new T.TorusGeometry(1, 0.034, 8, 40); lashGeo.rotateX(P / 2);
     for (const s of [-1, 1]) {
-      const eg = new T.Group(); eg.position.set(s * 0.375, 1.46, 0.775); eg.rotation.y = s * 0.1; eg.scale.set(1, 1.13, 0.62); root.add(eg);
+      const eg = new T.Group(); const EK = 2 / 3; eg.position.set(s * 0.35, 1.45, 0.83); eg.rotation.y = s * 0.1; eg.scale.set(EK, EK * 1.13, 0.62 * 0.8); root.add(eg);   // eyes at 2/3 size (Ram, 17 Nov 2026)
       const gz = new T.Group(); eg.add(gz); const ball = mesh(new T.SphereGeometry(ER, 48, 32), eyeM, 0, 0, 0, true); ball.rotation.y = -P / 2; gz.add(ball);
       const up = mesh(lidGeo, lidM, 0, 0, 0, true); up.scale.setScalar(ER * 1.035); up.add(mesh(lashGeo, lashM, 0, 0, 0, true)); eg.add(up);
       const lo = mesh(lidGeo, lidM, 0, 0, 0, true); lo.scale.setScalar(ER * 1.06); const loLash = mesh(lashGeo, lashM, 0, 0, 0, true); lo.add(loLash); eg.add(lo);
