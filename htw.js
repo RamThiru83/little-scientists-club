@@ -1932,6 +1932,154 @@
   };
 })(typeof window !== 'undefined' ? window : globalThis);
 
+/* "How things work" asset: toy rain (Episode 30, "How does an umbrella work?"), for the street set and for the workshop.
+
+   const rain = L.three.kits.rain(T, L3, opts);
+     opts = { count: 260 falling drops, rollers: 72 drops that run down the umbrella, seed: 30,
+              color: '#49AEFF', cloud: true (build the friendly rain cloud prop; set({ cloud }) shows it) }
+   Add the group to the scene WITHOUT moving, turning or scaling it (its own frame is the frame of every number below; in
+   the two sets that is the world frame). Everything is posed ONLY by
+
+     rain.userData.set({ t, rate, area: { x, z, w, d }, top, floor, umbrella, splash, cloud, blockers, size })
+
+   set() is pure and deterministic: every drop is a function of (its seeded constants, t, the other arguments); nothing is
+   remembered between calls, there is no Math.random and no Date.
+     t         seconds: drives the falling, rolling and dripping drops.
+     rate      0..1 how many of the drops are switched on (default 1; 0 = no rain).
+     area      { x, z, w, d }: the rectangle that is rained on, centred on (x, z), w wide along x and d deep along z
+               (default { x: 0, z: 0, w: 9, d: 5 }).
+     top       the height the drops start from (default 7); with the cloud, its flat underside.
+     floor     the height they land on (default 0).
+     umbrella  optional: an umbrella group from kits.umbrella (or { group, open, holes } to override the open state and
+               the holes it reports in userData.state). Call umbrella.userData.set(...) (and hold(...), and position it)
+               BEFORE rain.userData.set(...). Then: a falling drop that meets the cloth stops there;
+               `rollers` drops land on the cloth, run down it (following the real cloth surface, info.canopyPoint) to the
+               nearest rib tip of their panel (the lower one when the umbrella is tilted), hang there for a moment and
+               drip off to the floor. With holes > 0, a share of the drops (0.45 x holes of those over the canopy) fall
+               straight through the holes and carry on down. Nothing rolls while the umbrella is less than 0.9 open:
+               the drops that meet the slack cloth just stop.
+     splash    0..1 size of the little splash rings where drops land (default 1; 0 = none).
+     cloud     0..1 pops the friendly cloud in, centred over the area with its underside at `top` (default 1 when
+               opts.cloud is set, else 0). It is 3 wide x 1.9 deep at area { w: 3, d: 1.9 } and scales with the area.
+     blockers  optional [{ x, y, z, r }]: spheres that stop the drops too (for example Curie: { x, y: 1.15, z, r: 1.02 }),
+               so a drop through a hole splashes on her and not through her.
+     size      drop size factor (default 1: a drop is 0.11 across and 0.2 long).
+
+   rain.userData.dripPoints() -> [{ x, y, z, kind: 'tip' | 'hole', index }]: where water leaves the umbrella for the
+     arguments of the LAST set(): the 8 rib tips (just under each tip ball) and, when holes > 0, the 32 holes.
+   rain.userData.info = { count, rollers, fallSpeed, gravity, dropRadius, cloud: { w, d, h }, defaults,
+     state: the last arguments (after defaults), stats: { falling, onCanopy, dripping, through } counted in the last set() }
+   rain.userData.debug = { drops, beads, rings, cloud } (InstancedMeshes and the cloud group, for the numeric check).
+
+   Cost: three InstancedMeshes (drops, beads on the cloth, splash rings), about 50 000 small triangles, no shadows, no
+   transparency except the rings. No DOM or THREE access at load time. */
+(function (global) {
+  const L = global.LSC; if (!L || !L.three) return;
+  L.three.kits.rain = function (T, L3, opts) {
+    opts = opts || {};
+    const PI = Math.PI, clamp01 = v => Math.max(0, Math.min(1, +v || 0)), num = (v, d) => (typeof v === 'number' && isFinite(v)) ? v : d, lerp = (a, b, k) => a + (b - a) * k;
+    const mod = (a, n) => ((a % n) + n) % n;
+    function rng(seed) { let a = seed >>> 0; return () => { a = (a + 0x6D2B79F5) | 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
+    const N = Math.max(1, Math.round(num(opts.count, 260))), NRL = Math.max(0, Math.round(num(opts.rollers, 72))), rnd = rng(num(opts.seed, 30) * 7919 + 13);
+    const V = 7.5, GRAV = 13, DR = 0.055, SPL = 0.26, HANG = 0.24;
+    // seeded constants. Fallers: place in the area, phase, speed, two hashes. Rollers: where they land on the cloth (panel, u, v), phase, period.
+    const F = []; for (let k = 0; k < N; k++) F.push({ fx: rnd(), fz: rnd(), ph: rnd(), sp: 0.88 + 0.24 * rnd(), h: rnd(), h2: rnd(), on: (k + 0.5) / N });
+    for (let k = N - 1; k > 0; k--) { const j = Math.floor(rnd() * (k + 1)), t = F[k].on; F[k].on = F[j].on; F[j].on = t; }
+    const RL = []; for (let k = 0; k < NRL; k++) RL.push({ i: k % 8, u: 0.08 + 0.62 * Math.sqrt(rnd()), v: 0.08 + 0.84 * rnd(), ph: rnd(), per: 2.7 + 0.9 * rnd(), on: ((k * 37) % NRL + 0.5) / NRL, s: 0.85 + 0.3 * rnd() });
+
+    const g = new T.Group(), U = g.userData;
+    // teardrop: round below, pointed above (origin at the centre of the round part)
+    const dropGeo = (function () { const pts = []; for (let k = 0; k <= 4; k++) { const a = -PI / 2 + (PI * 0.62) * k / 4; pts.push(new T.Vector2(Math.max(0, DR * Math.cos(a)), DR * Math.sin(a))); } pts.push(new T.Vector2(DR * 0.3, DR * 1.75)); pts.push(new T.Vector2(0, DR * 2.6)); return new T.LatheGeometry(pts, 8); })();
+    const color = new T.Color(opts.color || '#49AEFF');
+    const dropM = new T.MeshPhongMaterial({ color, specular: '#ffffff', shininess: 90, emissive: color.clone().multiplyScalar(0.45) });
+    const beadM = new T.MeshPhongMaterial({ color: color.clone().lerp(new T.Color('#ffffff'), 0.25), specular: '#ffffff', shininess: 120, emissive: color.clone().multiplyScalar(0.4) });
+    const ringM = new T.MeshBasicMaterial({ color: '#EAF6FF', transparent: true, opacity: 0.85, depthWrite: false, side: T.DoubleSide });
+    const drops = new T.InstancedMesh(dropGeo, dropM, N + NRL), beads = new T.InstancedMesh(new T.SphereGeometry(DR, 9, 6), beadM, Math.max(1, NRL));
+    const ringGeo = new T.RingGeometry(0.72, 1, 14); ringGeo.rotateX(-PI / 2); const rings = new T.InstancedMesh(ringGeo, ringM, N + NRL);
+    for (const m of [drops, beads, rings]) { m.frustumCulled = false; m.castShadow = false; m.receiveShadow = false; g.add(m); } rings.renderOrder = 4;
+
+    // the friendly cloud (origin: middle of its flat underside)
+    const cloud = new T.Group(); g.add(cloud); const CW = 3, CD = 1.9;
+    if (opts.cloud) (function () {
+      const cm = new T.MeshPhongMaterial({ color: '#F7FAFF', specular: '#ffffff', shininess: 8, emissive: '#AFC3E6', emissiveIntensity: 0.42 }), under = new T.MeshLambertMaterial({ color: '#C9D8F2', emissive: '#8FA6D0', emissiveIntensity: 0.3 });
+      const sg = new T.SphereGeometry(1, 24, 16), puff = (x, y, z, r, sy) => { const m = new T.Mesh(sg, cm); m.position.set(x, y, z); m.scale.set(r, r * (sy || 0.92), r * 0.95); cloud.add(m); };
+      puff(0, 0.62, 0, 0.78); puff(-0.72, 0.5, 0.05, 0.6); puff(0.74, 0.5, 0.02, 0.62); puff(-1.2, 0.34, 0, 0.38); puff(1.22, 0.34, 0, 0.4); puff(-0.3, 0.42, 0.42, 0.52); puff(0.38, 0.4, 0.4, 0.5); puff(-0.25, 0.5, -0.4, 0.55); puff(0.4, 0.48, -0.42, 0.5);
+      const base = new T.Mesh(new T.CylinderGeometry(1, 1, 0.16, 40), under); base.scale.set(1.36, 1, 0.74); base.position.y = 0.1; cloud.add(base);
+      // face on the +z side: two eyes, cheeks, a smile
+      const dark = new T.MeshPhongMaterial({ color: '#2B2D42', specular: '#ffffff', shininess: 60 }), pink = new T.MeshLambertMaterial({ color: '#FF9DB8' });
+      for (const s of [-1, 1]) { const e = new T.Mesh(new T.SphereGeometry(0.075, 14, 10), dark); e.position.set(s * 0.27, 0.62, 0.86); e.scale.set(1, 1.25, 0.6); cloud.add(e); const hl = new T.Mesh(new T.SphereGeometry(0.024, 8, 6), new T.MeshBasicMaterial({ color: '#ffffff' })); hl.position.set(s * 0.27 - 0.025, 0.655, 0.905); cloud.add(hl);
+        const ch = new T.Mesh(new T.SphereGeometry(0.09, 12, 8), pink); ch.position.set(s * 0.47, 0.47, 0.82); ch.scale.set(1, 0.6, 0.3); cloud.add(ch); }
+      const sm = new T.Mesh(new T.TorusGeometry(0.13, 0.026, 8, 20, PI * 0.8), dark); sm.rotation.z = -PI * 0.9; sm.position.set(0, 0.5, 0.9); cloud.add(sm);
+    })();
+
+    const M4 = new T.Matrix4(), MU = new T.Matrix4(), MI = new T.Matrix4(), MR = new T.Matrix4(), Q = new T.Quaternion(), Q0 = new T.Quaternion(), P = new T.Vector3(), SCL = new T.Vector3(), W = new T.Vector3(), UP = new T.Vector3(0, 1, 0), DIR = new T.Vector3(), TMP = {};
+    const ZERO = new T.Matrix4().makeScale(0, 0, 0);
+    let last = null, lastDrip = [];
+    const DEF = { t: 0, rate: 1, area: { x: 0, z: 0, w: 9, d: 5 }, top: 7, floor: 0, splash: 1, size: 1 };
+
+    U.set = function (o) {
+      o = o || {}; const t = num(o.t, 0), rate = clamp01(o.rate == null ? 1 : o.rate), ar = o.area || DEF.area, ax = num(ar.x, 0), az = num(ar.z, 0), aw = num(ar.w, 9), ad = num(ar.d, 5), top = num(o.top, 7), floor = num(o.floor, 0), spl = clamp01(o.splash == null ? 1 : o.splash), size = num(o.size, 1);
+      const bl = o.blockers || [], cl = clamp01(o.cloud == null ? (opts.cloud ? 1 : 0) : o.cloud), stats = { falling: 0, onCanopy: 0, dripping: 0, through: 0 };
+      // cloud
+      cloud.visible = !!opts.cloud && cl > 0.001;
+      if (cloud.visible) { const k = cl * (1 + 0.12 * Math.sin(PI * cl)), sx = aw / CW, sz = ad / CD, sy = Math.min(1.25, Math.sqrt(sx * sz)); cloud.position.set(ax, top + 0.03 * Math.sin(t * 1.7), az); cloud.scale.set(sx * k * 1.12, sy * k, sz * k * 1.2); }
+      // umbrella: its frame in ours, state and helper functions
+      let um = o.umbrella || null, ovO, ovH, uo = 0, uh = 0, I = null; if (um && um.group) { ovO = um.open; ovH = um.holes; um = um.group; }
+      if (um && um.userData && um.userData.info && um.userData.body) { I = um.userData.info; const st = um.userData.state || {}; uo = clamp01(num(ovO, num(st.open, 0))); uh = clamp01(num(ovH, num(st.holes, 0)));
+        g.updateWorldMatrix(true, false); um.userData.body.updateWorldMatrix(true, false); MR.copy(g.matrixWorld).invert(); MU.multiplyMatrices(MR, um.userData.body.matrixWorld); MI.copy(MU).invert(); } else um = null;
+      const us = um ? Math.cbrt(Math.abs(MU.determinant())) : 1;
+      const toRain = (q, out) => out.set(q.x, q.y, q.z).applyMatrix4(MU);
+      // where the vertical line through (x, z) meets the cloth: a few fixed-point steps in the umbrella frame
+      let yGuess = 0; if (um) { toRain({ x: 0, y: I.hubY, z: 0 }, W); yGuess = W.y; }
+      function hitCloth(x, z) { let y = yGuess, s = null; for (let n = 0; n < 8; n++) { W.set(x, y, z).applyMatrix4(MI); s = I.surface(W.x, W.z, uo); y += ((s ? s.y : I.rimY) - W.y) * us; } return s ? { y, s } : null; }
+      function blockY(x, z, y0) { let y = y0; for (const b of bl) { const d2 = (x - b.x) * (x - b.x) + (z - b.z) * (z - b.z); if (d2 < b.r * b.r) y = Math.max(y, b.y + Math.sqrt(b.r * b.r - d2)); } return y; }
+      const holesW = []; if (um && uh > 0) for (let k = 0; k < I.holes.length; k++) holesW.push(toRain(I.holePos(k, uo), new T.Vector3()));
+      const tipsW = []; if (um) for (let i = 0; i < 8; i++) { const tp = I.tipPos(i, uo); tp.y -= 0.075; tipsW.push(toRain(tp, new T.Vector3())); }
+      const inArea = (x, z) => Math.abs(x - ax) <= aw / 2 + 1e-9 && Math.abs(z - az) <= ad / 2 + 1e-9;
+      let nr = 0; const ring = (x, y, z, k, sc) => { if (spl <= 0 || k <= 0 || k >= 1) return; const r = spl * sc * (0.06 + 0.2 * Math.sqrt(k)) * (1 - 0.35 * k); P.set(x, y + 0.012, z); SCL.set(r, 1, r); M4.compose(P, Q0, SCL); rings.setMatrixAt(nr++, M4); };
+      const drop = (idx, x, y, z, sx, sy) => { P.set(x, y, z); SCL.set(sx * size, sy * size, sx * size); M4.compose(P, Q0, SCL); drops.setMatrixAt(idx, M4); };
+
+      // ---- falling drops
+      for (let k = 0; k < N; k++) { const f = F[k]; if (f.on > rate) { drops.setMatrixAt(k, ZERO); continue; }
+        let x = ax + (f.fx - 0.5) * aw, z = az + (f.fz - 0.5) * ad, yEnd = floor, onCloth = false, sc = 1;
+        if (um) { const h = hitCloth(x, z);
+          if (h && h.y < top) { if (uh > 0 && f.h < 0.45 * uh && holesW.length) { const hw = holesW[Math.floor(f.h2 * holesW.length) % holesW.length]; if (inArea(hw.x, hw.z) && hw.y < top) { x = hw.x; z = hw.z; stats.through++; } else { yEnd = h.y; onCloth = true; } } else { yEnd = h.y; onCloth = true; } } }
+        if (!onCloth) yEnd = blockY(x, z, floor); else sc = 0.55;
+        const v = V * f.sp, per = (top - floor) / v + SPL + 0.12, tau = mod(t + f.ph * per, per), dur = Math.max(0, (top - yEnd) / v);
+        if (tau < dur) { const grow = Math.min(1, tau / 0.08); drop(k, x, top - v * tau, z, 0.9 * grow, 1.25 * grow); stats.falling++; }
+        else { drops.setMatrixAt(k, ZERO); if (!onCloth) ring(x, yEnd, z, (tau - dur) / SPL, sc); }
+      }
+      // ---- drops that run down the cloth and drip from the tips
+      let nb = 0;
+      for (let k = 0; k < NRL; k++) { const r = RL[k], di = N + k; let shown = false;
+        if (um && uo >= 0.9 && r.on <= rate) { toRain(I.canopyPoint(r.i, r.u, r.v, uo, TMP), W);
+          if (inArea(W.x, W.z) && W.y < top) {
+            const a = r.i, b = (r.i + 1) % 8; let vT = r.v < 0.5 ? 0 : 1; if (Math.abs(tipsW[a].y - tipsW[b].y) > 0.04 * us) vT = tipsW[a].y < tipsW[b].y ? 0 : 1; const tip = tipsW[vT ? b : a];
+            const roll = 0.45 + 1.25 * (1 - r.u), tau = mod(t + r.ph * r.per, r.per), s = r.s * size;
+            if (tau < roll) { const q = tau / roll, e = 0.25 * q + 0.75 * q * q, e2 = e * e; toRain(I.canopyPoint(r.i, lerp(r.u, 1, e), lerp(r.v, vT, e2), uo, TMP), W); const land = Math.min(1, tau / 0.1);
+              P.set(W.x, W.y + 0.028 * us * s, W.z); SCL.set(s * us * (1.25 - 0.25 * land), s * us * 0.62 * land, s * us * (1.25 - 0.25 * land)); M4.compose(P, Q0, SCL); beads.setMatrixAt(nb++, M4); stats.onCanopy++; }
+            else if (tau < roll + HANG) { const q = (tau - roll) / HANG; drop(di, tip.x, tip.y - 0.03 * q, tip.z, s * (0.45 + 0.55 * q), s * (0.45 + 0.75 * q)); shown = true; stats.dripping++; }
+            else { const tf = tau - roll - HANG, y0 = tip.y - 0.03, yEnd = blockY(tip.x, tip.z, floor), y = y0 - 0.5 * GRAV * tf * tf;
+              if (y > yEnd) { drop(di, tip.x, y, tip.z, s * 0.95, s * 1.2); shown = true; stats.dripping++; } else { const tl = Math.sqrt(2 * Math.max(0, y0 - yEnd) / GRAV); ring(tip.x, yEnd, tip.z, (tf - tl) / SPL, 1); } }
+          } }
+        if (!shown) drops.setMatrixAt(di, ZERO);
+      }
+      for (let k = nb; k < beads.count; k++) beads.setMatrixAt(k, ZERO);
+      for (let k = nr; k < rings.count; k++) rings.setMatrixAt(k, ZERO);
+      drops.instanceMatrix.needsUpdate = true; beads.instanceMatrix.needsUpdate = true; rings.instanceMatrix.needsUpdate = true;
+      drops.visible = rate > 0; beads.visible = nb > 0; rings.visible = nr > 0;
+      lastDrip = tipsW.map((p, i) => ({ x: p.x, y: p.y, z: p.z, kind: 'tip', index: i })).concat(holesW.map((p, i) => ({ x: p.x, y: p.y, z: p.z, kind: 'hole', index: i })));
+      last = { t, rate, area: { x: ax, z: az, w: aw, d: ad }, top, floor, splash: spl, cloud: cl, size, open: uo, holes: uh, umbrella: !!um }; U.info.state = last; U.info.stats = stats;
+      return g;
+    };
+    U.dripPoints = () => lastDrip.map(p => Object.assign({}, p));
+    U.info = { count: N, rollers: NRL, fallSpeed: V, gravity: GRAV, dropRadius: DR, cloud: { w: CW, d: CD, h: 1.4 }, defaults: DEF, state: null, stats: null };
+    U.debug = { drops, beads, rings, cloud, F, RL };
+    U.set({ rate: 0, cloud: 0 });
+    return g;
+  };
+})(typeof window !== 'undefined' ? window : globalThis);
+
 /* "How things work" asset: the sunny street (theme D), the real-world opening of an episode.
 
    const world = L.three.kits.street(T, L3);   ->   { scene, camera, sun, aimSun(x, y, z, half), info }
@@ -2514,6 +2662,277 @@
       floatPivot: [FPX, FPY, ZA], floatArm: FARM, floatRadius: BALL, floatFullY: FULL + FLOATUP, floatMinY: FPY + FARM * Math.sin(TH_MIN), floatAngleFull: TH_FULL, floatAngleMin: TH_MIN, tapOpenAngle: TAPRANGE,
       spout: SPOUT.slice(), inletX: PIPEX, sealY: SEAL, bowlHighY: HIGH, basinBottomY: BOT, weirY: WEIR, trapRadius: TR, trapLowY: trapC[iLow].y, trapTopY: trapC[iTop].y, trapTopZ: trapC[iTop].z,
       trapPath: trapC.map(q => [q.z, q.y]), drain: [0, 0.22, -1.3], cutX: cut => 1 - clamp01(cut), lidOff: [1.25, 0.62, 0.1] };
+    U.set({});
+    return g;
+  };
+})(typeof window !== 'undefined' ? window : globalThis);
+
+/* "How things work" asset: the production umbrella (Episode 30, "How does an umbrella work?").
+
+   const umb = L.three.kits.umbrella(T, L3, opts);
+     opts = { color: '#2E9BF5' canopy colour (default sky blue; NOT pink: Curie is pink),
+              color2: second panel tint (default: color mixed 68 % to white, so the 8 panels alternate),
+              handle: '#E8323C' handle colour }
+   A manual stick umbrella at toy scale, standing upright: the bottom of the J-hook handle is on y = 0 at the group origin,
+   the stick goes up +y, total height 3.21 (ferrule tip), open canopy 3.12 across the rib tips (radius 1.56). Rib i (0..7)
+   is at azimuth phi_i = 22.5 + 45 i degrees, measured from +x towards +z; panel i lies between rib i and rib i + 1. So +z
+   (the default camera side) looks between rib 1 and rib 2: the two spring buttons are on that side of the stick.
+   Parts: handle (candy red J hook) - shaft (steel stick) - top notch (mint hub fixed at the top, the 8 ribs hinge on it) -
+   runner (orange ring that slides on the shaft) - 8 stretchers (gold short arms, hinged on the runner and on the middle of
+   each rib) - 8 ribs (indigo) with ball tips (cream) - canopy (8 cloth panels) - top spring and lower spring (green wedges).
+   Kinematics (exact, planar four-bar per rib in the plane through the shaft): hub hinge H = (0.10, 2.85) fixed, rib arm
+   H-J = 0.62, stretcher J-R = 0.66, runner hinge R = (0.13, runnerY). runnerY goes linearly with `open` from 1.5716 to
+   2.3997 (travel 0.828); the rib angle (from straight down) follows from the two-circle intersection: 4 degrees closed,
+   78 degrees open. Beyond the stretcher joint each rib has three more rigid pieces (0.33, 0.33, 0.32: rib length 1.60 in
+   all) that bow down by up to 10 degrees each as the cloth pulls tight (from open 0.7 to 1): that makes the dome.
+   Everything is procedural and posed ONLY by
+
+     umb.userData.set({ open, spring, lowerSpring, ghost, cut, holes, wet, tilt, tiltDir, spin, stand,
+                        glow: { shaft, runner, stretchers, ribs, spring, canopy, tips,  handle, topNotch, lowerSpring } })
+
+   set() is pure: every call sets every pose, colour and opacity from its argument (missing fields take their defaults).
+     open       0..1 runner position from closed (0) to open (1): drives stretchers, ribs, tips and canopy. Default 0.
+                The cloth is slack (it billows out in 8 soft folds) until the last moment and snaps flat at open = 1.
+     spring     0..1 the TOP spring button: 1 = popped out (it sits just under the runner at open = 1 and holds it up),
+                0 = pressed into the shaft. Default derived from `open`: out while the runner is below it, pushed in by
+                the runner sliding over it (from open 0.47, fully in by 0.62), out again from open 0.97 to 0.99 ("click").
+     lowerSpring 0..1 the lower spring button that holds the runner DOWN when closed. Default derived: out at open 0,
+                pressed in while open is 0.01 .. 0.35 (the runner is over it), out again by 0.47.
+                (To open or close, pass spring / lowerSpring = 0 yourself for the "press the button" beat.)
+     ghost      0..1 the canopy (and its little top cap) turns to clear film (30 % at 1) so ribs, stretchers and runner read.
+     cut        0..1 cutaway: the four panels on the +z side (panels 0..3) fade away one after the other (all gone at 1).
+     holes      0..1 four small round holes grow in every panel (radius 0.085 at 1) for the test beat (cut in the shader; they do not show in the shadow).
+     wet        0..1 glossy wet cloth and beads of water sitting on the canopy.
+     tilt       radians: the umbrella leans about the grip (where the hand holds it). Default 0.
+     tiltDir    radians: the azimuth the top leans towards (0 = +x, PI / 2 = +z). Default 0.
+     spin       radians: turn around the shaft (handle and all). Default 0.
+     stand      0..1 a small toy stand (a round pot of sand, radius 0.84, that hides the hook of the handle) pops in, for the workshop turntable; it
+                lifts the umbrella by info.standLift x stand (0.02). Default 0.
+     glow.*     0..1 lights a part in its code colour, keeping its shading: shaft gold, runner orange, stretchers gold-amber,
+                ribs indigo-violet, spring green (top spring), canopy (its own colour; it also turns solid again in ghost),
+                tips warm yellow; extras: handle, topNotch (mint), lowerSpring.
+
+   umb.userData.hold(curie, { side = 'L', tilt = 0.4, reach, scale = 1 })  (optional helper, call AFTER curie.userData.pose() and
+     umb.userData.set()): turns Curie's arm (side 'L' = HER left, screen right when she faces the camera) forward and up
+     to a natural grip (arm direction `reach`, default [-0.25, 0.45, 0.85] in her frame, x mirrored for 'R'), puts the
+     umbrella's grip in that hand at Curie's scale (x `scale`), and leans the umbrella by `tilt` towards her own axis, so
+     the canopy is centred over her head. Curie and the umbrella
+     must be children of the same un-transformed parent (the scene). Pure: it only uses its arguments and Curie's pose.
+
+   umb.userData.anchor = { shaft, handle, runner, spring, lowerSpring, topNotch, rib[0..7], tip[0..7], stretcher[0..7],
+                           canopyTop, grip,  panel[0..7], joint[0..7] }   Object3Ds that follow the parts (L3.at(world, a)).
+     rib[i] = middle of rib i, stretcher[i] = middle of stretcher i, joint[i] = the hinge of stretcher i on rib i,
+     panel[i] = middle of panel i (on the cloth), grip = the middle of the straight part of the handle.
+   umb.userData.body  = the Object3D whose local frame is the "umbrella frame" used by every info function below (the group
+     frame before stand lift, tilt and spin; rain.js reads body.matrixWorld).
+   umb.userData.state = the values of the last set() call { open, holes, ghost, cut, wet, ... } (read by rain.js).
+   umb.userData.info  = { height, shaftRadius, hubY, hubR, runnerR, ribArm, stretcher, ribLength, ribSegments, runnerY0, runnerY1,
+     runnerTravel, canopyRadius (rib tips at open = 1), canopyDiameter, gripY, standLift, phi0, springY, lowerSpringY, holeRadius,
+     ribAngle(open) radians from straight down; runnerY(open); bend(open) radians per outer rib joint;
+     chain(open) -> { yR, th, be, J: [r, y], nodes: [[r, y] x 5] } the linkage in the rib plane;
+     tipPos(i, open) -> { x, y, z } centre of tip ball i;   ribPoint(i, s, open) -> point at distance s along rib i;
+     canopyPoint(i, u, v, open) -> { x, y, z } on panel i (u 0 = top .. 1 = rim, v 0 = rib i .. 1 = rib i + 1);
+     surface(x, z, open) -> null or { y, i, u, v }: the cloth above/below the point (x, z) (flat-panel model, used by rain);
+     holes: [{ i, u, v }] (32), holePos(k, open) -> { x, y, z } }      all in the umbrella frame (userData.body).
+   umb.userData.debug = scene objects for the numeric check (node out/kit/ep30_work/check_umbrella.js).
+
+   Colour code (keep it in every shot): runner orange #FF8A1F, stretchers gold #FFC233, ribs indigo #4338CA, top notch mint
+   #34E0C2, springs green #34C759, shaft steel, handle candy red, tips cream. About 21 000 triangles drawn (the cloth exists twice, opaque and see-through); Phong toy plastic, no
+   environment maps. No DOM or THREE access at load time. */
+(function (global) {
+  const L = global.LSC; if (!L || !L.three) return;
+  L.three.kits.umbrella = function (T, L3, opts) {
+    opts = opts || {};
+    const PI = Math.PI, clamp01 = v => Math.max(0, Math.min(1, +v || 0)), num = (v, d) => (typeof v === 'number' && isFinite(v)) ? v : d;
+    const ease = k => k * k * (3 - 2 * k), lerp = (a, b, k) => a + (b - a) * k, sstep = (a, b, v) => ease(clamp01((v - a) / (b - a)));
+    const C = { canopy: opts.color || '#2E9BF5', runner: '#FF8A1F', gold: '#FFC233', rib: '#4338CA', mint: '#34E0C2', spring: '#34C759', steel: '#D3D9E4', handle: opts.handle || '#E8323C', tip: '#FFF4DC' };
+    C.canopy2 = opts.color2 || '#' + new T.Color(C.canopy).lerp(new T.Color('#ffffff'), 0.68).getHexString();
+
+    // ------------------------------------------------------------------ dimensions (rib plane: r = distance from the shaft axis, y = height)
+    const HN = 2.85, RH = 0.10, RR = 0.13, A = 0.62, S = 0.66, SEG = [0.33, 0.33, 0.32], RIB = A + SEG[0] + SEG[1] + SEG[2];
+    const TH0 = 4 * PI / 180, TH1 = 78 * PI / 180, BEND = 10 * PI / 180, NR = 8, STEP = 2 * PI / NR, PHI0 = STEP / 2, HALF = STEP / 2;
+    const SHR = 0.055, GRIP = 0.55, TOPY = HN + 0.36, STAND = 0.02;
+    const runY = th => HN - A * Math.cos(th) - Math.sqrt(S * S - Math.pow(RH + A * Math.sin(th) - RR, 2));
+    const YR0 = runY(TH0), YR1 = runY(TH1), RUNB = 0.26, RUNT = 0.03;      // runner hinge height closed/open; sleeve below/above the hinge
+    const OFF = 0.04, APEX = [0, HN + 0.13], SC = 0.075;                    // cloth rides this far outside the rib centre line; scallop depth at the rim
+    const SPH = 0.16, SPD = 0.09, SPW = 0.06, SPT = YR1 - RUNB - 0.004, LSB = YR0 + RUNT + 0.006;   // spring wedges: height, depth, width; top spring's flat top; lower spring's flat bottom
+    const runnerY = o => lerp(YR0, YR1, clamp01(o)), bend = o => BEND * sstep(0.7, 1, clamp01(o));
+    // the four-bar: J is on the circle (H, A) and on the circle (R, S); take the outer intersection
+    function chain(o) {
+      o = clamp01(o); const yR = runnerY(o), dx = RR - RH, dy = yR - HN, d = Math.hypot(dx, dy), a = (A * A - S * S + d * d) / (2 * d), h = Math.sqrt(Math.max(0, A * A - a * a));
+      const mx = RH + a * dx / d, my = HN + a * dy / d, Jx = mx - h * dy / d, Jy = my + h * dx / d;
+      const th = Math.atan2(Jx - RH, HN - Jy), be = bend(o), nodes = [[RH, HN], [Jx, Jy]], ang = [th]; let x = Jx, y = Jy;
+      for (let k = 0; k < 3; k++) { const al = th - (k + 1) * be; x += SEG[k] * Math.sin(al); y -= SEG[k] * Math.cos(al); nodes.push([x, y]); ang.push(al); }
+      return { open: o, yR, th, be, J: [Jx, Jy], nodes, ang };
+    }
+    // cloth profile in the rib plane: apex, then the rib nodes pushed out by OFF along the rib's outer normal. u breakpoints are fixed.
+    const UB = (function () { const l = [0, 0.16, A, SEG[0], SEG[1], SEG[2]], out = [0]; let s = 0; for (let i = 1; i < l.length; i++) { s += l[i]; out.push(s); } return out.map(v => v / s); })(), PLEN = 0.16 + RIB;
+    function profile(o) {
+      const c = chain(o), R = [APEX[0]], Y = [APEX[1]];
+      for (let j = 0; j < 5; j++) { const al = j === 0 ? c.ang[0] : j === 4 ? c.ang[3] : (c.ang[j - 1] + c.ang[j]) / 2; R.push(c.nodes[j][0] + OFF * Math.cos(al)); Y.push(c.nodes[j][1] + OFF * Math.sin(al)); }
+      return { c, R, Y };
+    }
+    const cache = {}; function prof(o) { o = clamp01(o); const k = Math.round(o * 1e6); if (cache.k !== k) { cache.k = k; cache.p = profile(o); } return cache.p; }
+    const P1 = profile(1);
+    function at(p, u) { u = clamp01(u); let j = 0; while (j < 4 && u > UB[j + 1]) j++; const k = (u - UB[j]) / (UB[j + 1] - UB[j]); return [lerp(p.R[j], p.R[j + 1], k), lerp(p.Y[j], p.Y[j + 1], k)]; }
+    const scal = v => SC * Math.pow(Math.sin(PI * clamp01(v)), 1.4);
+    function canopyPoint(i, u, v, o, out) {
+      const p = prof(o), ue = u * (1 - scal(v)), q = at(p, ue), R = q[0], q1 = at(P1, ue), w = 2 * q1[0] * Math.sin(HALF), c = 2 * R * Math.sin(HALF);
+      const a0 = PHI0 + i * STEP, a1 = a0 + STEP, am = a0 + HALF;
+      let x = lerp(R * Math.cos(a0), R * Math.cos(a1), v), z = lerp(R * Math.sin(a0), R * Math.sin(a1), v);
+      // slack cloth: a soft fold bulging outwards between the ribs (zero when the cloth is as wide as the gap: open = 1)
+      const h = Math.min(0.5 * Math.sqrt(Math.max(0, w * w - c * c)), 0.05 + 0.2 * ue), b = h * Math.pow(Math.sin(PI * v), 0.85);
+      x += b * Math.cos(am); z += b * Math.sin(am);
+      out = out || {}; out.x = x; out.y = q[1] - 0.25 * b * (1 - p.c.th / TH1); out.z = z; return out;
+    }
+    function surface(x, z, o) {
+      const p = prof(o), r = Math.hypot(x, z); let f = Math.atan2(z, x) - PHI0; f = ((f % (2 * PI)) + 2 * PI) % (2 * PI);
+      const i = Math.min(NR - 1, Math.floor(f / STEP)), dl = f - (i + 0.5) * STEP, Ru = r * Math.cos(dl) / Math.cos(HALF), hw = Ru * Math.sin(HALF);
+      if (Ru > p.R[5]) return null; const v = hw > 1e-6 ? clamp01(0.5 + r * Math.sin(dl) / (2 * hw)) : 0.5;
+      let j = 0; while (j < 4 && Ru > p.R[j + 1]) j++; const k = (Ru - p.R[j]) / Math.max(1e-9, p.R[j + 1] - p.R[j]), ue = lerp(UB[j], UB[j + 1], k), u = ue / (1 - scal(v));
+      if (u > 1) return null; return { y: lerp(p.Y[j], p.Y[j + 1], k), i, u, v };
+    }
+    const tipPos = (i, o) => { const c = chain(o), al = c.ang[3], r = c.nodes[4][0] + 0.04 * Math.sin(al), a = PHI0 + i * STEP; return { x: r * Math.cos(a), y: c.nodes[4][1] - 0.04 * Math.cos(al), z: r * Math.sin(a) }; };
+    function ribPoint(i, s, o) { const c = chain(o), L4 = [A, SEG[0], SEG[1], SEG[2]]; let j = 0, rest = Math.max(0, Math.min(RIB, s)); while (j < 3 && rest > L4[j]) { rest -= L4[j]; j++; } const k = rest / L4[j], r = lerp(c.nodes[j][0], c.nodes[j + 1][0], k), a = PHI0 + i * STEP; return { x: r * Math.cos(a), y: lerp(c.nodes[j][1], c.nodes[j + 1][1], k), z: r * Math.sin(a) }; }
+    // holes (the same four in every panel, mirrored in the odd panels)
+    const HOLE_R = 0.085, SUV = 1.9, HUV = [[0.50, 0.50], [0.71, 0.27], [0.73, 0.72], [0.90, 0.47]], HOLES = [];
+    for (let i = 0; i < NR; i++) for (const h of HUV) HOLES.push({ i, u: h[0], v: i % 2 ? 1 - h[1] : h[1] });
+    const holePos = (k, o) => canopyPoint(HOLES[k].i, HOLES[k].u, HOLES[k].v, o, {});
+    // cloth uv in real size (so a round hole in the texture is round on the cloth): x across the panel, y down the rib
+    const uvOf = (i, u, v) => { const ue = u * (1 - scal(v)), w = 2 * at(P1, ue)[0] * Math.sin(HALF), vv = i % 2 ? 1 - v : v; return [0.5 + (vv - 0.5) * w / SUV, 1 - ue * PLEN / SUV]; };
+
+    // ------------------------------------------------------------------ materials (toy plastic Phong; every glowing part has its own)
+    const std = (color, o) => { o = Object.assign({ roughness: 0.4, metalness: 0 }, o || {}); const metal = o.metalness > 0.5, k = 1 - o.roughness;
+      const q = { color: metal ? new T.Color(color).multiplyScalar(0.9) : color, specular: new T.Color(metal ? '#ffffff' : '#fff6e8').multiplyScalar(metal ? 0.9 : 0.1 + 0.55 * k * k), shininess: metal ? 70 : 12 + 120 * k * k };
+      for (const n of ['transparent', 'opacity', 'depthWrite', 'side', 'emissive', 'emissiveIntensity', 'alphaMap', 'alphaTest']) if (o[n] !== undefined) q[n] = o[n]; const m = new T.MeshPhongMaterial(q); m.userData.e0 = new T.Color(color).multiplyScalar(0.06); m.emissive.copy(m.userData.e0); return m; };
+    const GL = {}; const gmat = (name, m, code) => { (GL[name] = GL[name] || []).push({ m, code: new T.Color(code).lerp(new T.Color('#ffffff'), 0.15) }); return m; };
+    const shaftM = gmat('shaft', std(C.steel, { metalness: 1 }), '#FFC233'), handleM = gmat('handle', std(C.handle, { roughness: 0.22 }), '#FF5A4D'), collarM = gmat('shaft', std('#FFF4DC', { roughness: 0.3 }), '#FFC233');
+    const runnerM = gmat('runner', std(C.runner, { roughness: 0.25 }), '#FF8A1F'), strM = gmat('stretchers', std(C.gold, { roughness: 0.28 }), '#FFB300');
+    const ribM = gmat('ribs', std(C.rib, { roughness: 0.3 }), '#7C6BFF'), hubM = gmat('topNotch', std(C.mint, { roughness: 0.25 }), '#34E0C2'), pinM = std('#FFF4DC', { roughness: 0.3 });
+    const springM = gmat('spring', std(C.spring, { roughness: 0.25 }), '#34C759'), lspringM = gmat('lowerSpring', std(C.spring, { roughness: 0.25 }), '#34C759'), slotM = new T.MeshLambertMaterial({ color: '#4A5263' });
+    const tipM = gmat('tips', std(C.tip, { roughness: 0.25 }), '#FFD43B'), ferM = std(C.handle, { roughness: 0.22 }), standM = std('#8E7CE6', { roughness: 0.3 }), standM2 = std('#FFF4DC', { roughness: 0.35 }), standM3 = new T.MeshLambertMaterial({ color: '#F3D9A4' });
+    // holes: cut in the shader (no texture, no material switching): a fragment closer than uHole to one of the four hole centres (in cloth uv) is dropped
+    const UH = { value: 0 }, HC = HUV.map(q => uvOf(0, q[0], q[1]));
+    const holePatch = m => { m.onBeforeCompile = sh => { sh.uniforms.uHole = UH;
+      sh.vertexShader = sh.vertexShader.replace('#include <common>', 'varying vec2 vHuv;\n#include <common>').replace('#include <begin_vertex>', '#include <begin_vertex>\nvHuv = uv;');
+      sh.fragmentShader = sh.fragmentShader.replace('#include <common>', 'varying vec2 vHuv; uniform float uHole;\n#include <common>').replace('#include <clipping_planes_fragment>', '#include <clipping_planes_fragment>\n' + HC.map(c => 'if (distance(vHuv, vec2(' + c[0].toFixed(5) + ', ' + c[1].toFixed(5) + ')) < uHole) discard;').join('\n')); }; return m; };
+    // every cloth material exists twice, opaque and see-through (set() shows one of the two meshes: switching a material's `transparent` flag costs a recompile)
+    const panelM = [], panelT = []; for (let i = 0; i < NR; i++) { const col = i % 2 ? C.canopy2 : C.canopy, m = holePatch(std(col, { roughness: 0.62 })); m.userData.base = new T.Color(col); panelM.push(m); panelT.push(holePatch(std(col, { roughness: 0.62, transparent: true, depthWrite: false }))); }
+    const lin = (m, tr) => { const b = m.userData.base.clone().lerp(new T.Color('#ffffff'), 0.12); return holePatch(new T.MeshLambertMaterial({ color: b, side: T.BackSide, emissive: b.clone().multiplyScalar(0.3), transparent: tr, depthWrite: !tr })); }, liningM = panelM.map(m => lin(m, false)), liningT = panelM.map(m => lin(m, true));
+    const capM = std(C.canopy, { roughness: 0.5 }), capT = std(C.canopy, { roughness: 0.5, transparent: true, depthWrite: false }); capM.userData.base = new T.Color(C.canopy);
+    const beadM = new T.MeshPhongMaterial({ color: '#E9F6FF', specular: '#ffffff', shininess: 140, emissive: '#3E8FD6', emissiveIntensity: 0.35, transparent: true, opacity: 0.88 });
+
+    // ------------------------------------------------------------------ build
+    const g = new T.Group(), U = g.userData, rig = new T.Group(), body = new T.Group(); g.add(rig); rig.add(body); U.body = body;
+    const mesh = (geo, m, x, y, z, p) => { const o = new T.Mesh(geo, m); o.position.set(x || 0, y || 0, z || 0); o.castShadow = true; o.receiveShadow = true; (p || body).add(o); return o; };
+    const node = (p, x, y, z) => { const o = new T.Object3D(); o.position.set(x || 0, y || 0, z || 0); p.add(o); return o; };
+    const cyl = (r, y0, y1, seg) => { const ge = new T.CylinderGeometry(r, r, y1 - y0, seg || 16); ge.translate(0, (y0 + y1) / 2, 0); return ge; };
+    const A_ = U.anchor = { rib: [], tip: [], stretcher: [], panel: [], joint: [] }, D = U.debug = { ribPivot: [], joint: [], strPivot: [], strEnd: [], tip: [], seg: [], panels: [] };
+
+    // handle: J hook (in the x-y plane, hooking towards +x), collar, shaft, top notch, ferrule
+    (function () { const HR = 0.19, CYH = 0.265, pts = []; for (let k = 0; k <= 6; k++) pts.push(new T.Vector3(0, lerp(0.84, CYH, k / 6), 0)); for (let k = 1; k <= 14; k++) { const a = PI + PI * k / 14; pts.push(new T.Vector3(HR + HR * Math.cos(a), CYH + HR * Math.sin(a), 0)); } pts.push(new T.Vector3(2 * HR, CYH + 0.1, 0));
+      mesh(new T.TubeGeometry(new T.CatmullRomCurve3(pts), 56, 0.075, 16), handleM); mesh(new T.SphereGeometry(0.075, 16, 12), handleM, 2 * HR, CYH + 0.1, 0); mesh(new T.SphereGeometry(0.075, 16, 12), handleM, 0, 0.84, 0);
+      mesh(cyl(0.085, 0.86, 0.96, 20), collarM); mesh(cyl(SHR, 0.9, HN + 0.06, 16), shaftM);
+      A_.handle = node(body, 0.1, 0.3, 0); A_.grip = node(body, 0, GRIP, 0); A_.shaft = node(body, 0, 1.25, SHR); })();
+    mesh(cyl(0.15, HN - 0.05, HN + 0.035, 24), hubM); mesh(cyl(0.09, HN - 0.13, HN - 0.05, 20), hubM); A_.topNotch = node(body, 0, HN - 0.03, 0.15);
+    const capGeo = new T.SphereGeometry(0.2, 24, 10, 0, 2 * PI, 0, PI / 2), cap = mesh(capGeo, capM, 0, HN + 0.085, 0), capG = mesh(capGeo, capT, 0, HN + 0.085, 0); cap.scale.y = capG.scale.y = 0.55; capG.castShadow = false; capG.renderOrder = 2;
+    mesh(cyl(0.045, HN + 0.12, HN + 0.29, 12), ferM); mesh(new T.SphereGeometry(0.075, 16, 12), ferM, 0, HN + 0.29, 0); A_.canopyTop = node(body, 0, TOPY, 0);
+    // runner: a spool sliding on the shaft (hinge flange on top, finger lip at the bottom)
+    const runner = new T.Group(); body.add(runner);
+    mesh(cyl(0.095, -RUNB, RUNT, 20), runnerM, 0, 0, 0, runner); mesh(cyl(0.165, -0.04, 0.035, 24), runnerM, 0, 0, 0, runner); mesh(cyl(0.135, -RUNB, -RUNB + 0.06, 24), runnerM, 0, 0, 0, runner);
+    A_.runner = node(runner, 0, -0.12, 0.1);
+    // springs: green wedges through slots in the shaft, on the +z side
+    function wedge(up, w) { const s = new T.Shape(), d = up ? -1 : 1; s.moveTo(0, 0); s.lineTo(SPD, 0); s.lineTo(SPD, d * 0.03); s.lineTo(0.012, d * SPH); s.lineTo(0, d * SPH); const ge = new T.ExtrudeGeometry(s, { depth: w, bevelEnabled: false }); ge.translate(0, 0, -w / 2); ge.rotateY(-PI / 2); return ge; }   // shape x -> +z
+    const spring = mesh(wedge(true, SPW), springM, 0, SPT, 0), lspring = mesh(wedge(false, SPW * 0.7), lspringM, 0, LSB, 0); D.spring = spring; D.lowerSpring = lspring; D.runner = runner;
+    mesh(new T.BoxGeometry(SPW + 0.016, SPH + 0.03, 0.02), slotM, 0, SPT - SPH / 2, SHR - 0.006); mesh(new T.BoxGeometry(SPW + 0.016, SPH + 0.03, 0.02), slotM, 0, LSB + SPH / 2, SHR - 0.006);
+    A_.spring = node(body, 0, SPT - SPH * 0.4, SHR + SPD * 0.6); A_.lowerSpring = node(body, 0, LSB + SPH * 0.4, SHR + SPD * 0.6);
+    // ribs and stretchers
+    const RIBR = 0.032, STRR = 0.03, bar = (r, len, dir) => { const ge = new T.CylinderGeometry(r, r, len, 10); ge.translate(0, dir * len / 2, 0); return ge; };
+    const gInner = bar(RIBR, A, -1), gSeg = SEG.map(l => bar(RIBR, l, -1)), gStr = bar(STRR, S, 1), gPin = new T.SphereGeometry(0.047, 12, 8), gKnee = new T.SphereGeometry(RIBR, 10, 8), gTip = new T.SphereGeometry(0.07, 16, 12);
+    const ribs = []; for (let i = 0; i < NR; i++) {
+      const az = new T.Group(); az.rotation.y = -(PHI0 + i * STEP); body.add(az);
+      const rp = new T.Group(); rp.position.set(RH, HN, 0); az.add(rp); mesh(gInner, ribM, 0, 0, 0, rp); mesh(gPin, pinM, 0, 0, 0, rp);
+      const segs = []; let par = rp, len = A; for (let k = 0; k < 3; k++) { const sg = new T.Group(); sg.position.set(0, -len, 0); par.add(sg); mesh(gSeg[k], ribM, 0, 0, 0, sg); mesh(k === 0 ? gPin : gKnee, k === 0 ? pinM : ribM, 0, 0, 0, sg); segs.push(sg); par = sg; len = SEG[k]; }
+      const tip = mesh(gTip, tipM, 0, -SEG[2] - 0.04, 0, segs[2]);
+      const sp = new T.Group(); sp.position.set(RR, 0, 0); az.add(sp); mesh(gStr, strM, 0, 0, 0, sp); mesh(gPin, pinM, 0, 0, 0, sp);
+      A_.rib.push(node(segs[0], 0, -SEG[0] * 0.55, 0)); A_.tip.push(tip); A_.stretcher.push(node(sp, 0, S / 2, 0)); A_.joint.push(segs[0]);
+      D.ribPivot.push(rp); D.joint.push(segs[0]); D.strPivot.push(sp); D.strEnd.push(node(sp, 0, S, 0)); D.tip.push(tip); D.seg.push(segs);
+      ribs.push({ rp, segs, sp });
+    }
+    // canopy: 8 panels, each a small grid re-posed by set()
+    const NU = 16, NV = 8, panels = [], panelsT = [], linings = [], liningsT = [], TMP = {};
+    for (let i = 0; i < NR; i++) {
+      const n = (NU + 1) * (NV + 1), pos = new Float32Array(n * 3), uv = new Float32Array(n * 2), idx = [];
+      for (let a = 0; a <= NU; a++) for (let b = 0; b <= NV; b++) { const q = uvOf(i, a / NU, b / NV), k = a * (NV + 1) + b; uv[k * 2] = q[0]; uv[k * 2 + 1] = q[1]; }
+      for (let a = 0; a < NU; a++) for (let b = 0; b < NV; b++) { const k = a * (NV + 1) + b; idx.push(k, k + 1, k + NV + 1, k + 1, k + NV + 2, k + NV + 1); }   // counter-clockwise seen from outside (rib i -> i + 1 turns x towards z)
+      const ge = new T.BufferGeometry(); ge.setAttribute('position', new T.BufferAttribute(pos, 3)); ge.setAttribute('uv', new T.BufferAttribute(uv, 2)); ge.setIndex(idx);
+      const m = mesh(ge, panelM[i]); panels.push(m); const mt = mesh(ge, panelT[i]); mt.renderOrder = 2; panelsT.push(mt); const ln = mesh(ge, liningM[i]); ln.castShadow = false; linings.push(ln); const lt = mesh(ge, liningT[i]); lt.castShadow = false; lt.renderOrder = 1; liningsT.push(lt);
+      for (const q of [m, mt, ln, lt]) q.frustumCulled = false; D.panels.push(m); A_.panel.push(node(body));
+    }
+    function poseCanopy(o) { for (let i = 0; i < NR; i++) { const ge = panels[i].geometry, P = ge.attributes.position; let k = 0;
+        for (let a = 0; a <= NU; a++) for (let b = 0; b <= NV; b++) { canopyPoint(i, a / NU, b / NV, o, TMP); P.array[k++] = TMP.x; P.array[k++] = TMP.y; P.array[k++] = TMP.z; }
+        P.needsUpdate = true; ge.computeVertexNormals(); canopyPoint(i, 0.62, 0.5, o, TMP); A_.panel[i].position.set(TMP.x, TMP.y, TMP.z); } }
+    // beads of water on the wet cloth
+    const NB = 88, beadSeed = (function () { let a = 30307; const r = () => { a = (a + 0x6D2B79F5) | 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; const out = []; for (let k = 0; k < NB; k++) out.push({ i: k % NR, u: 0.2 + 0.74 * Math.sqrt(r()), v: 0.1 + 0.8 * r(), s: 0.6 + 0.8 * r() }); return out; })();
+    const beads = new T.InstancedMesh(new T.SphereGeometry(0.034, 10, 7), beadM, NB); beads.frustumCulled = false; beads.renderOrder = 3; body.add(beads); const M4 = new T.Matrix4(), Q0 = new T.Quaternion(), V1 = new T.Vector3(), V2 = new T.Vector3();
+    // stand: a round weighted pot (does not tilt or spin)
+    const stand = new T.Group(); g.add(stand);
+    (function () { const pts = [[0, 0], [0.8, 0], [0.84, 0.05], [0.8, 0.12], [0.66, 0.17], [0.6, 0.42], [0.63, 0.47], [0.58, 0.51], [0.52, 0.47], [0.52, 0.2], [0, 0.2]].map(p => new T.Vector2(p[0], p[1])); mesh(new T.LatheGeometry(pts, 36), standM, 0, 0, 0, stand);
+      const fill = mesh(new T.CylinderGeometry(0.53, 0.53, 0.04, 36), standM3, 0, 0.455, 0, stand); fill.castShadow = false; const ring = mesh(new T.TorusGeometry(0.615, 0.035, 10, 40), standM2, 0, 0.44, 0, stand); ring.rotation.x = PI / 2; const r2 = mesh(new T.TorusGeometry(0.815, 0.03, 10, 44), standM2, 0, 0.06, 0, stand); r2.rotation.x = PI / 2; })();
+
+    // ------------------------------------------------------------------ the one setter
+    const XA = new T.Vector3(), CUTSEQ = [1, 2, 0, 3];
+    U.set = function (o) {
+      o = o || {}; const open = clamp01(o.open), c = chain(open), gh = clamp01(o.ghost), cut = clamp01(o.cut), holes = clamp01(o.holes), wet = clamp01(o.wet), st = clamp01(o.stand), G = o.glow || {};
+      // rig: stand lift, tilt about the grip, spin about the shaft
+      const lift = STAND * st, tilt = num(o.tilt, 0), td = num(o.tiltDir, 0);
+      rig.position.set(0, GRIP + lift, 0); XA.set(Math.sin(td), 0, -Math.cos(td)); rig.quaternion.setFromAxisAngle(XA, tilt); body.position.set(0, -GRIP, 0); body.rotation.set(0, num(o.spin, 0), 0);
+      stand.visible = st > 0.001; stand.scale.setScalar(Math.max(0.001, st * (1 + 0.15 * Math.sin(PI * st))));
+      // linkage
+      runner.position.y = c.yR; const psi = Math.atan2(c.J[0] - RR, c.J[1] - c.yR);
+      for (const r of ribs) { r.rp.rotation.z = c.th; for (const sg of r.segs) sg.rotation.z = -c.be; r.sp.position.y = c.yR; r.sp.rotation.z = -psi; }
+      // springs (wedge local z = 0 is its inner face)
+      const top = c.yR + RUNT, bot = c.yR - RUNB;
+      const sDef = bot >= SPT - 0.022 ? sstep(SPT - 0.022, SPT - 0.004, bot) : 1 - clamp01((top - (SPT - SPH)) / (SPH * 0.8));
+      const lDef = open <= 0.01 ? 1 - sstep(0.002, 0.01, open) : clamp01((bot - LSB) / (SPH * 0.8));
+      const sp = o.spring == null ? sDef : clamp01(o.spring), ls = o.lowerSpring == null ? lDef : clamp01(o.lowerSpring);
+      spring.position.z = SHR - 0.012 - (SPD - 0.006) * (1 - sp); lspring.position.z = SHR - 0.012 - (SPD - 0.006) * (1 - ls);
+      // canopy
+      poseCanopy(open);
+      const cg = clamp01(G.canopy), baseOp = lerp(1, 0.3, gh * (1 - 0.75 * cg));
+      UH.value = holes * HOLE_R / SUV;
+      for (let i = 0; i < NR; i++) { const m = panelM[i], seq = CUTSEQ.indexOf(i), ck = seq < 0 ? 0 : sstep(seq * 0.2, seq * 0.2 + 0.4, cut), op = baseOp * (1 - ck), vis = op > 0.01, tr = op < 0.995;
+        panels[i].visible = linings[i].visible = vis && !tr; panelsT[i].visible = liningsT[i].visible = vis && tr; panelsT[i].castShadow = op > 0.5; panelT[i].opacity = op; liningT[i].opacity = op * 0.6; panelT[i].depthWrite = liningT[i].depthWrite = op > 0.6; m.userData.op = op;
+
+        for (const q of [m, panelT[i]]) { q.color.copy(m.userData.base).multiplyScalar(1 - 0.16 * wet); q.shininess = lerp(22, 150, wet); q.specular.setScalar(lerp(0.1, 0.85, wet)); q.emissive.copy(m.userData.base).multiplyScalar(0.07 + 0.5 * cg); } }
+
+      const ctr = baseOp < 0.995; cap.visible = !ctr; capG.visible = ctr; capT.opacity = baseOp; for (const q of [capM, capT]) { q.color.copy(capM.userData.base).multiplyScalar(0.82 - 0.12 * wet); q.emissive.copy(capM.userData.base).multiplyScalar(0.06 + 0.5 * cg); }
+      // beads
+      beads.visible = wet > 0.01;
+      if (beads.visible) for (let k = 0; k < NB; k++) { const b = beadSeed[k], s = panelM[b.i].userData.op > 0.5 ? b.s * sstep(0, 0.6, wet - 0.4 * (k % 5) / 5) : 0; canopyPoint(b.i, b.u, b.v, open, TMP); V1.set(TMP.x, TMP.y + 0.012, TMP.z); V2.set(s, s * 0.62, s); M4.compose(V1, Q0, V2); beads.setMatrixAt(k, M4); }
+      if (beads.visible) beads.instanceMatrix.needsUpdate = true;
+      // glows
+      for (const name in GL) { const k = clamp01(G[name]); for (const e of GL[name]) e.m.emissive.copy(e.m.userData.e0).lerp(e.code, 0.6 * k); }
+      U.state = { open, spring: sp, lowerSpring: ls, ghost: gh, cut, holes, wet, tilt, tiltDir: td, spin: num(o.spin, 0), stand: st };
+      return g;
+    };
+
+    // ------------------------------------------------------------------ helper: put the umbrella in Curie's hand
+    const HV = new T.Vector3(), HD = new T.Vector3(), DOWN = new T.Vector3(0, -1, 0);
+    U.hold = function (curie, o) {
+      o = o || {}; const left = o.side !== 'R', hand = curie.userData.anchor[left ? 'handL' : 'handR'], arm = hand.parent, rc = o.reach || [-0.25, 0.45, 0.85];
+      HD.set((left ? 1 : -1) * rc[0], rc[1], rc[2]).normalize(); arm.quaternion.setFromUnitVectors(DOWN, HD);
+      curie.updateMatrixWorld(true); hand.getWorldPosition(HV); const s = curie.scale.x * num(o.scale, 1), tilt = num(o.tilt, 0.4), st = U.state || {};
+      // lean towards Curie's own axis (over her head)
+      const dx = curie.position.x - HV.x, dz = curie.position.z - HV.z, td = Math.atan2(dz, dx);
+      XA.set(Math.sin(td), 0, -Math.cos(td)); rig.quaternion.setFromAxisAngle(XA, tilt); rig.position.set(0, GRIP, 0); stand.visible = false;
+      g.scale.setScalar(s); g.rotation.set(0, 0, 0); g.position.set(HV.x, HV.y - GRIP * s, HV.z); st.tilt = tilt; st.tiltDir = td; st.stand = 0; return g;
+    };
+
+    U.info = { height: TOPY, shaftRadius: SHR, hubY: HN, hubR: RH, runnerR: RR, ribArm: A, stretcher: S, ribLength: RIB, ribSegments: [A].concat(SEG), runnerY0: YR0, runnerY1: YR1, runnerTravel: YR1 - YR0,
+      canopyRadius: Math.hypot(tipPos(0, 1).x, tipPos(0, 1).z), canopyDiameter: 2 * Math.hypot(tipPos(0, 1).x, tipPos(0, 1).z), rimY: tipPos(0, 1).y, tipClosedY: tipPos(0, 0).y, gripY: GRIP, standLift: STAND, phi0: PHI0, springY: SPT, lowerSpringY: LSB,
+      holeRadius: HOLE_R, ribs: NR, clothOffset: OFF, ribAngle: o => chain(o).th, runnerY, bend, chain, tipPos, ribPoint, canopyPoint: (i, u, v, o, out) => canopyPoint(i, u, v, o, out || {}), surface, holes: HOLES, holePos,
+      hold: { side: 'L', reach: [-0.25, 0.45, 0.85], tilt: 0.4 } };
     U.set({});
     return g;
   };

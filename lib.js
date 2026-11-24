@@ -16506,4 +16506,862 @@ function ep27Interactives(L) {
   };
 })(typeof window !== 'undefined' ? window : globalThis);
 
+/* Episode 30 — How does an umbrella work?
+   Staged in 3D ("How things work"): the scenes call the animation director's block below (EP30 3D STAGING), which poses two
+   cached worlds (the street in the rain; the workshop with the umbrella on its stand, the rain cloud and the try-at-home table).
+   Read docs/HTW3D.md and docs/PIPELINE.md first.
+
+   Coordinates: a 1920 x 1080 canvas. Keep anything important above y = 800: the caption box covers the bottom.
+   Everything is a pure function of time t: draw(ctx, t, Lt) must not keep state between frames (frames are rendered out of order).
+   Lt (lib/scenes.js L.tl) anchors animation to the narration:
+     Lt.p('line')                      0..1 across the spoken part of a line
+     Lt.win('line', offset, dur)       0..1 over [line start + offset, + dur]
+     Lt.cwin('line', 'words', dur, ease, offset)   0..1 starting when the chunk containing 'words' is spoken (+offset)
+     Lt.cafter('line', 'words', offset) true once that chunk has started
+     Lt.chunk('line', 'words')         start time of that chunk; Lt.after('line') / Lt.done('line'); Lt.span('a', 'b')
+   A chunk is a sentence, or a piece of one split at "...". Needles must match the spoken (say) text: ./lsc.sh check verifies them. */
+(function (global) {
+  const L = global.LSC; const LSC = L; const { W, H, P, E, seg, clamp, lerp, circle, ellipse, text, roundRect } = L;
+  L.episodes = L.episodes || {};
+
+  // ==== EP30 3D STAGING: BEGIN ==== (animation director's block; the scenes below call into it)
+  // Everything here is a pure function of the episode time (Lt.t). Worlds, built once and cached by key:
+  //   'ep30:street' (the street in the rain: Curie holds the umbrella) and 'ep30:shop' (workshop: the umbrella on its stand on the
+  //   turntable at 1.5 x, the friendly rain cloud, the test with the holes, and the try-at-home table).
+  // Structure: st*(Lt) -> a plain state object (umbrella, rain, camera, Curie); pose*(w, Lt, st) poses a world from it (no drawing);
+  // scene*(ctx, t, Lt) renders it and draws the 2D labels. out/kit/ep30_work/check_ep30_kinematics.js runs the st/pose pairs.
+  const TAU = Math.PI * 2, PI = Math.PI, L3 = L.three;
+  const C = { orange: '#FF8A1F', gold: '#FFC233', indigo: '#4338CA', green: '#34C759', blue: '#2E9BF5', mint: '#34E0C2', pink: '#FF4D8D', water: '#49AEFF' };
+  const io = (t, a, b) => seg(t, a, b, E.inOut);
+  const pulse = (t, a, d) => seg(t, a, a + 0.35, E.out) * (1 - seg(t, a + d - 0.35, a + d, E.inOut));   // 0 -> 1 -> 0 over [a, a + d]
+  // a move with a smooth start and stop: 0..1 over [a, b]; the speed ramps up over r1 seconds, stays constant, ramps down over r2
+  function glide(t, a, b, r1, r2) { const T = b - a; r1 = r1 == null ? Math.min(0.6, T * 0.3) : r1; r2 = r2 == null ? r1 : r2; const v = 1 / (T - (r1 + r2) / 2), u = clamp(t - a, 0, T); return u < r1 ? v * u * u / (2 * r1) : u < T - r2 ? v * (u - r1 / 2) : 1 - v * (T - u) * (T - u) / (2 * r2); }
+  const fold = (t, moves) => { let v = 0; for (const m of moves) { const k = glide(t, m[1], m[2], m[3], m[4]); if (k > 0) v = k >= 1 ? m[0] : v + (m[0] - v) * k; } return v; };
+  const lerp3 = (a, b, k) => a.map((v, i) => v + (b[i] - v) * k);
+  // word times inside a chunk, measured on the narration (seconds after the chunk starts)
+  const WD = { stick: 1.45, up: 0.5, down: 1.2, ribsOut: 1.45, flower: 2.38, catchW: 0.76, snaps: 2.35, roof: 2.32, dripOff: 1.36, tips: 2.25, drip2: 0.42, push: 0.92, click: 1.68, stretch: 2.22, press: 0.92, catchC: 1.9, holes: 1.0, ribsOpen: 0.75, rolls: 1.1, plastic: 1.4, each: 1.45 };
+
+  // ---------- kinematics (closed form) ----------
+  const US = 1.5;                                             // the umbrella on the workshop stand is 1.5 x (the artist's note: it reads better)
+  const CS = { x: -0.6, y: 0.16, z: -2.8 };                   // Curie's spot on the pavement (never in the bike lane or on the road)
+  const HOLD = { carry: [0.12, 0.05, 0.95], high: [0.25, 0.98, 0.35], over: [0.12, 0.98, 0.3], scale: 1.22 };   // how she holds it: carried closed / up high, away from her face
+  function kinStreet(Lt) {
+    const t = Lt.t, tq = Lt.chunk('q', 'how does an umbrella'), pit = Lt.chunk('s1', 'pitter-patter'), rainy = Lt.chunk('s1', "it's raining"), iopen = Lt.chunk('s1', 'i open my umbrella'), high = Lt.chunk('s1', 'up high'),
+      up = Lt.chunk('s2', 'up it goes'), dry = Lt.chunk('s2', 'and i stay dry'), how = Lt.chunk('s2', 'but how does it work'), find = Lt.chunk('s2', "let's find out"), shop = Lt.chunk('s2', 'in my workshop');
+    const open = glide(t, up + 0.05, up + 1.2, 0.3, 0.25), raise = io(t, iopen + 0.25, iopen + 1.55);
+    return { tq, pit, rainy, iopen, high, up, dry, how, find, shop, open, raise, dim: io(t, pit - 1.0, pit + 0.4), rate: 0.34 * io(t, pit - 0.15, pit + 0.8) + 0.5 * io(t, up + 0.9, dry + 0.5), wet: io(t, up + 1.0, dry + 1.0) };
+  }
+  function shopTimes(Lt) {
+    return { gog: Lt.chunk('look', 'peek-inside'), lookU: Lt.chunk('look', "let's look at"), sbs: Lt.chunk('look', 'step by step'),
+      c1: Lt.chunk('e1', 'step one'), stick: Lt.chunk('e1', 'in the middle'), ring: Lt.chunk('e1', 'on it is a ring'), slide: Lt.chunk('e1', 'that can slide'),
+      c2: Lt.chunk('e2', 'step two'), push: Lt.chunk('e2', 'i push the ring'), arms: Lt.chunk('e2', 'it pushes little arms'), ribs: Lt.chunk('e2', 'and the arms push'),
+      c3: Lt.chunk('e3', 'step three'), click: Lt.chunk('e3', 'click!'), tiny: Lt.chunk('e3', 'a tiny spring'), holds: Lt.chunk('e3', 'and holds the ring'),
+      c4: Lt.chunk('e4', 'step four'), tight: Lt.chunk('e4', 'the ribs stretch'), coat: Lt.chunk('e4', 'the cloth has'), soak: Lt.chunk('e4', 'so water cannot'),
+      round: Lt.chunk('rain', 'raindrops stay'), roll: Lt.chunk('rain', 'roll down'), drip: Lt.chunk('rain', 'drip, drip'),
+      rc: Lt.start('recap'), ropen: Lt.chunk('recap', 'the ribs open'), rolls: Lt.chunk('recap', 'and the rain rolls'),
+      cl: Lt.start('close'), down: Lt.chunk('close', 'the ring slides'), fold: Lt.chunk('close', 'and the ribs fold'), gently: Lt.chunk('close', 'gently'),
+      ts: Lt.start('test'), what: Lt.chunk('test', 'what if'), r0: Lt.start('result'), thru: Lt.chunk('result', 'the rain comes'), wetT: Lt.chunk('result', 'and i get wet'), good: Lt.chunk('result', 'good umbrella'),
+      say: Lt.start('sayit'), s1: Lt.chunkN('sayit', 1), s2: Lt.chunkN('sayit', 2), bye: Lt.start('bye'), rem: Lt.chunk('bye', 'remember'), know: Lt.chunk('bye', 'now you know'), see: Lt.chunk('bye', 'see you next'), byeb: Lt.chunk('bye', 'bye-bye') };
+  }
+  // The workshop umbrella from 'look' to 'close': ONE list of runner moves [to, from time, to time, ramp up, ramp down]. Ribs, stretchers
+  // and cloth follow the runner (the kit's four-bar); the spring catch follows the runner too (the kit's default), except while Curie
+  // presses it in (close): then it is passed as 0 until the runner has slid over it.
+  function mechMoves(S) {
+    return [[0.12, S.ring + 0.25, S.ring + 0.9], [0.4, S.slide + 0.3, S.slide + 0.95], [0, S.slide + 1.05, S.slide + 1.8],   // e1: the ring shows itself, slides up a little, and down
+      [0.4, S.push + 0.1, S.push + 1.2], [0.62, S.arms + 0.15, S.arms + 1.5], [0.93, S.ribs + 0.1, S.ribs + 2.05],   // e2: ring up, arms push, ribs out
+      [1, S.click + 0.02, S.click + 0.3, 0.1, 0.1],                                                              // e3: the last bit: click!
+      [0, S.rc - 0.85, S.rc - 0.1], [0.45, S.rc + 0.02, S.rc + 0.52], [0.93, S.rc + WD.push, S.rc + WD.push + 0.6], [1, S.rc + WD.click, S.rc + WD.click + 0.15, 0.05, 0.05],   // recap: closed, then slide, push, click in step with the words
+      [0, S.down + 0.1, S.fold + 1.4, 0.7, 0.7]];                                                                // close: the ring slides down, the ribs fold in
+  }
+  function kinMech(Lt) {
+    const t = Lt.t, S = shopTimes(Lt), open = fold(t, mechMoves(S)), pressT = S.cl + WD.catchC, press = io(t, pressT - 0.15, pressT + 0.1);
+    const g1 = io(t, S.lookU + 0.25, S.lookU + 1.25), a = io(t, S.tight - 0.3, S.tight + 0.5), b = io(t, S.coat - 0.2, S.coat + 0.7);
+    const rW3 = S.rc + WD.stretch, ghost = Math.max(g1 * (1 - 0.5 * a) * (1 - b), io(t, S.rc - 0.75, S.rc - 0.25) * (1 - 0.8 * io(t, rW3, rW3 + 0.5)) * (1 - io(t, S.rolls - 0.7, S.rolls - 0.1)), io(t, S.cl - 0.7, S.cl + 0.1) * (1 - io(t, S.gently + 0.3, S.gently + 1.0)));
+    const cut = Math.max(io(t, S.c3 - 0.75, S.c3 + 0.5) * (1 - io(t, S.holds - 0.2, S.holds + 0.9)), io(t, S.cl - 0.5, S.cl + 0.4) * (1 - io(t, S.down - 0.1, S.down + 0.8)));
+    const rate = Math.max(io(t, S.round + 0.95, S.round + 1.35) * (1 - io(t, S.drip + 1.0, S.drip + 1.45)), io(t, S.rolls - 0.15, S.rolls + 0.25) * (1 - io(t, S.rolls + 1.55, S.rolls + 1.95)));   // no drop falls before its cloud is there
+    const cloud = Math.max(io(t, S.round + 0.45, S.round + 0.9) * (1 - io(t, S.rc - 1.0, S.rc - 0.6)), io(t, S.rolls - 0.7, S.rolls - 0.2) * (1 - io(t, S.cl - 0.85, S.cl - 0.45)));
+    const wet = Math.max(io(t, S.soak, S.soak + 1) * (1 - io(t, S.rc - 0.9, S.rc - 0.4)), io(t, S.rolls, S.rolls + 0.5) * (1 - io(t, S.cl - 0.6, S.cl)));
+    const onStool = io(t, S.cl - 0.75, S.cl + 0.1) * (1 - io(t, pressT + 0.6, pressT + 1.6));                    // Curie on her step stool beside the stick (she is back on the floor before the ribs fold)
+    return { S, open, press, pressT, spring: (t >= S.cl && t < S.fold + 2 && open > 0.9) ? 1 - press : (t >= S.rc - 1.1 && t < S.rc - 0.05 && open > 0.9) ? 1 - io(t, S.rc - 1.1, S.rc - 0.9) : undefined, ghost, cut, rate, cloud, wet, onStool, reach: io(t, pressT - 0.95, pressT - 0.2) * (1 - io(t, pressT + 0.25, pressT + 0.6)),
+      spin: -0.9 * (1 - io(t, S.gog, S.lookU + 1.4)) };
+  }
+  // test + result: Curie stands on the turntable with the open umbrella; the holes come, the rain comes through, the holes go
+  function kinTest(Lt) {
+    const t = Lt.t, S = shopTimes(Lt), holes = io(t, S.what + WD.holes - 0.35, S.what + WD.holes + 0.5) * (1 - io(t, S.good + 0.05, S.good + 0.9)), end = Lt.end('result');
+    return { S, open: 1, holes, rate: io(t, S.r0 - 0.5, S.r0 + 0.05) * (1 - io(t, end + 0.35, end + 0.8)), cloud: io(t, S.what - 0.2, S.what + 0.35), wet: io(t, S.r0 - 0.2, S.r0 + 0.6) };
+  }
+  function kinSay(Lt) {
+    const t = Lt.t, S = shopTimes(Lt), end = Lt.end('sayit');
+    const open = fold(t, [[1, S.s1 - 0.05, S.s1 + 0.85], [0, S.s1 + 2.5, S.s2 - 0.3], [1, S.s2 - 0.05, S.s2 + 0.95]]);
+    return { S, open, rate: Math.max(io(t, S.s1 + WD.rolls - 0.1, S.s1 + WD.rolls + 0.2) * (1 - io(t, S.s1 + 2.15, S.s1 + 2.45)), io(t, S.s2 + WD.rolls - 0.1, S.s2 + WD.rolls + 0.2) * (1 - io(t, end + 0.6, end + 1.0))), cloud: io(t, S.s1 + 0.5, S.s1 + 1.0), wet: io(t, S.s1 + WD.rolls, S.s1 + WD.rolls + 0.5) };
+  }
+  function kinBye(Lt) {
+    const t = Lt.t, S = shopTimes(Lt), a = S.rem + WD.ribsOpen;
+    return { S, open: fold(t, [[1, a - 0.05, a + 0.9]]), rate: io(t, a + 1.0, a + 1.3) * (1 - io(t, S.know - 0.25, S.know + 0.15)), cloud: io(t, a + 0.55, a + 0.85) * (1 - io(t, S.know + 0.2, S.know + 0.5)), wet: io(t, a + 1.1, a + 1.6) };
+  }
+  // Try at home: a tray on the table, a flat piece of plastic bag and a paper towel on it, a spoonful of water on each, lift them.
+  const BD = { x: 0.4, z: 0.25, top: 2.0, w: 3.7, d: 1.6, stool: 0.9, tray: [0.4, 0.3], trayW: 2.5, trayD: 1.2, px: -0.2, qx: 1.0, pz: 0.3, sq: 0.9, cup: [1.55, -0.3], lift: 0.7, gu: [2.15, -1.4] };
+  function kinBench(Lt) {
+    const t = Lt.t, ask = Lt.chunk('try1', 'ask a grown-up'), towel = Lt.chunk('try1', 'a paper towel'), tray = Lt.chunk('try1', 'and a tray'), put = Lt.chunk('try2', 'put a spoonful'), lift = Lt.chunk('try2', 'then lift'), which = Lt.chunk('try2', 'which one');
+    const pour1 = put + 0.72, pour2 = put + WD.each;                                 // the spoon tips over the plastic, then over the towel ("each")
+    const lay = io(t, put - 0.8, put - 0.15), up = glide(t, lift + 0.15, lift + 1.0, 0.25, 0.3);
+    // spoon: 0 = resting in the cup, 1 = over the plastic, 2 = over the towel, 3 = back in the cup
+    const sp = glide(t, put - 0.05, pour1 - 0.12, 0.15, 0.15) + glide(t, pour1 + 0.28, pour2 - 0.12, 0.12, 0.12) + glide(t, pour2 + 0.3, pour2 + 1.0, 0.2, 0.2);
+    return { ask, towel, tray, put, lift, which, pour1, pour2, lay, up, sp, tip: Math.max(pulse(t, pour1 - 0.1, 0.5), pulse(t, pour2 - 0.1, 0.5)), water: t < pour1 + 0.05 ? 1 : t < pour2 + 0.05 ? 0.5 : 0,
+      plastic: seg(t, ask + WD.plastic - 0.1, ask + WD.plastic + 0.3), towelP: seg(t, towel + 0.25, towel + 0.65), trayP: seg(t, tray + 0.25, tray + 0.65), cupP: seg(t, put - 0.75, put - 0.4),
+      fall1: seg(t, pour1 + 0.05, pour1 + 0.25), fall2: seg(t, pour2 + 0.05, pour2 + 0.25), soak: io(t, pour2 + 0.3, pour2 + 1.5), roll: 0.05 * Math.sin((t - lift) * 2.4) * up, dripT: t - (lift + 1.1) };
+  }
+
+  // ---------- 3D helpers ----------
+  const wpos = (T, o) => { const v = new T.Vector3(); o.getWorldPosition(v); return v; };
+  // Curie: pose() plus optional arm targets (world Vector3): the arm turns to the target and stretches a little to reach it
+  function poseCurie(T, c, o, t) {
+    c.visible = true; c.userData.pose(o, t + (o.dt || 0)); const A = c.userData.anchor; let upd = false;   // dt shifts her automatic blink away from key moments
+    A.handL.parent.rotation.x = o.backL || 0; A.handR.parent.rotation.x = o.backR || 0;
+    for (const [key, tgt, k0] of [['handL', o.aimL, o.aimLk], ['handR', o.aimR, o.aimRk]]) {
+      const hand = A[key], arm = hand.parent; arm.scale.set(1, 1, 1); hand.scale.set(1, 1, 1);
+      const k = tgt ? (k0 == null ? 1 : clamp(k0, 0, 1)) : 0; if (k <= 0) continue;
+      if (!upd) { c.updateMatrixWorld(true); upd = true; }
+      const v = tgt.clone(); arm.parent.worldToLocal(v); v.sub(arm.position); const d = v.length(), q = new T.Quaternion().setFromUnitVectors(new T.Vector3(0, -1, 0), v.normalize());
+      arm.quaternion.slerp(q, k); const st = lerp(1, clamp(d / 0.63, 0.7, o.stretch || 1.6), k); arm.scale.y = st; hand.scale.y = 1 / st;
+    }
+  }
+  function camFold(keys, t) { let s = keys[0].s; for (let i = 1; i < keys.length; i++) { const k = keys[i], p = k.d > 0 ? io(t, k.t, k.t + k.d) : (t >= k.t ? 1 : 0); if (p > 0) s = L3.mix(s, k.s, p); } return s; }
+  const between = (Lt, ids) => ids.some(id => Lt.t > Lt.start(id) && Lt.t < Lt.end(id));
+  // a step token beside its part in EVERY shot: placed in screen space at a fixed direction from the part's anchor, just outside
+  // the part, kept inside the frame (and above the captions), pulled towards the camera and scaled to one size on screen
+  function placeTok(w, tk, A, deg, rp, show, k) {
+    const cam = w.camera, th = Math.tan(cam.fov * PI / 360), rpx = (k || 1) * 0.2 * 1080 / (8.5 * 2 * th), a = deg * PI / 180, q = A.clone().applyMatrix4(cam.matrixWorldInverse), d = -q.z, ppu = 1080 / (2 * d * th), R = (rp * ppu + rpx + 14) / ppu;
+    const n = A.clone().project(cam), inFrame = clamp(Math.min(1 - Math.abs(n.x), 1 - n.y, n.y + 0.45) / 0.1, 0, 1);
+    q.x += R * Math.cos(a); q.y += R * Math.sin(a); const Pp = q.applyMatrix4(cam.matrixWorld).project(cam);
+    const mx = (rpx + 30) / 960, my = (rpx + 30) / 540; Pp.x = clamp(Pp.x, -1 + mx, 1 - mx); Pp.y = clamp(Pp.y, 1 - 2 * 790 / 1080 + my, 1 - my);
+    Pp.unproject(cam); Pp.sub(cam.position).multiplyScalar(0.55).add(cam.position); tk.position.copy(Pp);
+    tk.scale.setScalar((k || 1) * clamp(Pp.distanceTo(cam.position) / 8.5, 0.1, 1.6)); tk.userData.face(cam); tk.userData.show((show || 0) * inFrame);
+  }
+
+  // "My grown-up": a wooden peg-doll figure (a toy, like everything in Curie's world; no likeness of anybody), taller than Curie.
+  // pose({ x, y, z, ry, s, hop, rock, armL, armR, aimL, aimR, aimLk, aimRk }): aim* = world point the arm reaches to (it stretches a little).
+  function buildGrownUp(T) {
+    const g = new T.Group(), root = new T.Group(), U = g.userData; g.add(root);
+    const ph = (c, sh) => new T.MeshPhongMaterial({ color: c, specular: new T.Color('#fff6e8').multiplyScalar(0.3), shininess: sh || 40, emissive: new T.Color(c).multiplyScalar(0.1) });
+    const coat = ph('#2BA8A0'), wood = ph('#F3D3AC'), scarf = ph('#FFC233'), ink = ph('#2B2D42', 80), cheek = ph('#F7A6A0', 10), white = ph('#FFF7E8');
+    const m = (geo, mat, x, y, z) => { const o = new T.Mesh(geo, mat); o.position.set(x || 0, y || 0, z || 0); o.castShadow = true; o.receiveShadow = true; root.add(o); return o; };
+    m(new T.LatheGeometry([[0, 0], [0.74, 0], [0.8, 0.1], [0.79, 0.5], [0.68, 1.3], [0.57, 1.95], [0.44, 2.2], [0.3, 2.32], [0, 2.32]].map(p => new T.Vector2(p[0], p[1])), 36), coat);
+    m(new T.CylinderGeometry(0.805, 0.805, 0.16, 36), white, 0, 0.3, 0);
+    m(new T.SphereGeometry(0.62, 32, 24), wood, 0, 2.86, 0); const sc = m(new T.TorusGeometry(0.4, 0.13, 12, 32), scarf, 0, 2.3, 0); sc.rotation.x = PI / 2;
+    for (const sx of [-1, 1]) { m(new T.SphereGeometry(0.062, 16, 12), ink, sx * 0.2, 2.95, 0.562); const ck = m(new T.SphereGeometry(0.1, 16, 12), cheek, sx * 0.37, 2.77, 0.47); ck.scale.set(1, 0.7, 0.4); }
+    const sm = m(new T.TorusGeometry(0.15, 0.027, 8, 20, PI), ink, 0, 2.78, 0.585); sm.rotation.z = PI; sm.rotation.x = 0.12;
+    for (const y of [1.25, 1.65]) m(new T.SphereGeometry(0.065, 12, 10), white, 0, y, 0.73 - (y - 0.5) * 0.14);
+    const arms = {}; for (const sx of [-1, 1]) { const arm = new T.Group(); arm.position.set(sx * 0.6, 1.92, 0); root.add(arm);
+      const up = new T.Mesh(new T.CapsuleGeometry(0.115, 0.62, 6, 12), coat); up.position.y = -0.42; up.castShadow = true; arm.add(up);
+      const hand = new T.Mesh(new T.SphereGeometry(0.17, 18, 14), wood); hand.position.y = -0.9; hand.castShadow = true; arm.add(hand); arms[sx] = arm; arm.userData.hand = hand; }
+    U.anchor = { handL: arms[1].userData.hand, handR: arms[-1].userData.hand, top: (() => { const o = new T.Object3D(); o.position.y = 3.5; root.add(o); return o; })() };
+    U.pose = function (o) {
+      g.visible = true; g.position.set(o.x || 0, (o.y || 0) + (o.hop || 0), o.z || 0); g.rotation.set(0, o.ry || 0, 0); g.scale.setScalar(o.s || 1); root.rotation.z = o.rock || 0;
+      arms[-1].quaternion.setFromEuler(new T.Euler(0, 0, -0.42 - (o.armR || 0))); arms[1].quaternion.setFromEuler(new T.Euler(0, 0, 0.42 + (o.armL || 0)));
+      for (const [sx, tgt, k0] of [[1, o.aimL, o.aimLk], [-1, o.aimR, o.aimRk]]) { const arm = arms[sx], hand = arm.userData.hand; arm.scale.set(1, 1, 1); hand.scale.set(1, 1, 1); const k = tgt ? (k0 == null ? 1 : clamp(k0, 0, 1)) : 0; if (k <= 0) continue;
+        g.updateMatrixWorld(true); const v = tgt.clone(); root.worldToLocal(v); v.sub(arm.position); const d = v.length(); arm.quaternion.slerp(new T.Quaternion().setFromUnitVectors(new T.Vector3(0, -1, 0), v.normalize()), k);
+        const st = lerp(1, clamp(d / 0.9, 0.6, 2.4), k); arm.scale.y = st; hand.scale.y = 1 / st; }
+    };
+    U.pose({}); return g;
+  }
+
+  function buildStreet(T) {
+    const w = L3.kits.street(T, L3), K = L3.kits;
+    w.umb = K.umbrella(T, L3); w.scene.add(w.umb);
+    w.rain = K.rain(T, L3, { count: 220, rollers: 72, seed: 30 }); w.scene.add(w.rain);                       // on the pavement (with the umbrella)
+    w.rain2 = K.rain(T, L3, { count: 90, rollers: 0, seed: 31 }); w.scene.add(w.rain2); w.rain3 = K.rain(T, L3, { count: 90, rollers: 0, seed: 32 }); w.scene.add(w.rain3);   // on the bike lane and the road in front, left and right of her (no drop crosses her face)
+    w.curie = K.curie(T, L3, { skin: 'pink' }); w.scene.add(w.curie);
+    // for the rain: the sunny set is turned down inside the episode (sun, sky light, sky dome, clouds, haze); the set itself is not changed
+    w.scene.traverse(o => { if (o.isHemisphereLight) w.hemi = o; if (o.isMesh && o.material && o.material.isMeshBasicMaterial && o.material.fog === false) { if (o.geometry.type === 'SphereGeometry' && o.material.map) w.sky = o; else if (o.material.vertexColors) w.clouds = o; } });
+    w.base = { sun: w.sun.intensity, hemi: w.hemi ? w.hemi.intensity : 1, fog: w.scene.fog ? w.scene.fog.color.clone() : null };
+    return w;
+  }
+  function buildShop(T) {
+    const w = L3.kits.workshop(T, L3), K = L3.kits;
+    w.umb = K.umbrella(T, L3); w.scene.add(w.umb);
+    w.rain = K.rain(T, L3, { cloud: true, count: 240, rollers: 72, seed: 30 }); w.scene.add(w.rain);
+    w.curie = K.curie(T, L3, { skin: 'pink' }); w.scene.add(w.curie);
+    w.fx = { tok: [K.token(T, L3, 1, C.orange, 0.2), K.token(T, L3, 2, C.gold, 0.2), K.token(T, L3, 3, C.green, 0.2), K.token(T, L3, 4, C.blue, 0.2)] }; for (const k of w.fx.tok) w.scene.add(k);
+    const ph = (c, sh, o) => new T.MeshPhongMaterial(Object.assign({ color: c, specular: new T.Color('#fff6e8').multiplyScalar(0.25), shininess: sh || 30, emissive: new T.Color(c).multiplyScalar(0.09) }, o || {}));
+    const mk = (p, geo, mat, x, y, z) => { const o = new T.Mesh(geo, mat); o.position.set(x || 0, y || 0, z || 0); o.castShadow = true; o.receiveShadow = true; p.add(o); return o; };
+    const stoolG = (h, wd, dp) => { const g = new T.Group(); mk(g, new T.BoxGeometry(wd, 0.16, dp), ph('#E8323C', 60), 0, h - 0.08, 0); for (const sx of [-1, 1]) for (const sz of [-1, 1]) mk(g, new T.BoxGeometry(0.16, h - 0.16, 0.16), ph('#B8242C', 40), sx * (wd / 2 - 0.15), (h - 0.16) / 2, sz * (dp / 2 - 0.15)); return g; };
+    w.stool = stoolG(STOOL.h, 1.2, 1.1); { const st2 = stoolG(STOOL.h / 2, 1.2, 0.7); st2.position.z = -0.9; w.stool.add(st2); } w.scene.add(w.stool);                                                // Curie's step stool for the "press the catch" beat
+    // ---- the try-at-home table (on the turntable; the umbrella is hidden then)
+    const g = w.bench = new T.Group(), B = BD, top = B.top; g.position.y = w.floorY; w.scene.add(g);
+    const woodT = ph('#E9B872', 20), woodL = ph('#C98F4E', 20);
+    mk(g, new T.BoxGeometry(B.w, 0.18, B.d), woodT, B.x, top - 0.09, B.z); mk(g, new T.BoxGeometry(B.w - 0.2, 0.3, B.d - 0.2), woodL, B.x, top - 0.33, B.z);
+    for (const sx of [-1, 1]) for (const sz of [-1, 1]) mk(g, new T.BoxGeometry(0.2, top - 0.18, 0.2), woodL, B.x + sx * (B.w / 2 - 0.25), (top - 0.18) / 2, B.z + sz * (B.d / 2 - 0.25));
+    const bs = stoolG(B.stool, 1.7, 1.5); bs.position.set(-2.45, 0, 0.35); g.add(bs);
+    // tray: a pale tray with a raised rim (so a wet patch reads on it)
+    const tray = new T.Group(); tray.position.set(B.tray[0], top, B.tray[1]); g.add(tray);
+    mk(tray, new T.BoxGeometry(B.trayW, 0.05, B.trayD), ph('#FFF4DC', 20), 0, 0.025, 0);
+    for (const [x, z, wd, dp] of [[0, B.trayD / 2, B.trayW + 0.08, 0.08], [0, -B.trayD / 2, B.trayW + 0.08, 0.08], [B.trayW / 2, 0, 0.08, B.trayD], [-B.trayW / 2, 0, 0.08, B.trayD]]) mk(tray, new T.BoxGeometry(wd, 0.13, dp), ph('#FF8A3D', 50), x, 0.065, z);
+    const patch = mk(tray, new T.CircleGeometry(0.3, 28), new T.MeshPhongMaterial({ color: '#6FB8F2', shininess: 120, specular: '#ffffff', transparent: true, opacity: 0.85 }), B.qx - B.tray[0], 0.056, B.pz - B.tray[1]); patch.rotation.x = -PI / 2; patch.castShadow = false;
+    // the two flat pieces (each a group whose origin is the middle of the piece)
+    const tex = (fn) => { const cv = document.createElement('canvas'); cv.width = cv.height = 256; fn(cv.getContext('2d')); const tx = new T.CanvasTexture(cv); tx.colorSpace = T.SRGBColorSpace; return tx; };
+    const towTx = tex(c => { c.fillStyle = '#FFFFFF'; c.fillRect(0, 0, 256, 256); c.fillStyle = '#DDE3EC'; for (let i = 0; i < 12; i++) for (let j = 0; j < 12; j++) { c.beginPath(); c.arc(11 + i * 21.3 + (j % 2) * 10, 11 + j * 21.3, 4.2, 0, TAU); c.fill(); } c.strokeStyle = '#C9D1DC'; c.lineWidth = 6; c.strokeRect(3, 3, 250, 250); });
+    const plastic = new T.Group(), towel = new T.Group(); g.add(plastic); g.add(towel);
+    const pm = mk(plastic, new T.BoxGeometry(B.sq, 0.014, B.sq), new T.MeshPhongMaterial({ color: '#BFEFFF', specular: '#ffffff', shininess: 140, transparent: true, opacity: 0.62, emissive: '#2B6C86', emissiveIntensity: 0.25 })); pm.castShadow = false;
+    for (const [x, z, wd, dp] of [[0, B.sq / 2, B.sq, 0.03], [0, -B.sq / 2, B.sq, 0.03], [B.sq / 2, 0, 0.03, B.sq], [-B.sq / 2, 0, 0.03, B.sq]]) mk(plastic, new T.BoxGeometry(wd, 0.02, dp), ph('#3FB4E0', 90), x, 0, z).castShadow = false;
+    const shineM = new T.MeshBasicMaterial({ color: '#FFFFFF', transparent: true, opacity: 0.55 }); for (const [x, z, l] of [[-0.18, -0.12, 0.34], [-0.06, -0.2, 0.2]]) { const s = mk(plastic, new T.PlaneGeometry(l, 0.035), shineM, x, 0.009, z); s.rotation.x = -PI / 2; s.rotation.z = 0.7; s.castShadow = false; }
+    mk(towel, new T.BoxGeometry(B.sq, 0.05, B.sq), [ph('#F4F6FA', 5), ph('#F4F6FA', 5), new T.MeshLambertMaterial({ map: towTx }), ph('#F4F6FA', 5), ph('#F4F6FA', 5), ph('#F4F6FA', 5)]);
+    const waterM = new T.MeshPhongMaterial({ color: '#3FA9FF', specular: '#ffffff', shininess: 160, emissive: '#1D6FD1', emissiveIntensity: 0.4, transparent: true, opacity: 0.92 });
+    const bead = mk(plastic, new T.SphereGeometry(0.15, 24, 16), waterM); bead.castShadow = false; const blob = mk(towel, new T.SphereGeometry(0.15, 24, 16), waterM); blob.castShadow = false;
+    const stain = mk(towel, new T.CircleGeometry(0.3, 28), new T.MeshLambertMaterial({ color: '#8DB9E6', transparent: true, opacity: 0.95 }), 0, 0.027, 0); stain.rotation.x = -PI / 2; stain.castShadow = false;
+    const dripM = mk(g, new T.SphereGeometry(0.05, 12, 8), waterM); dripM.castShadow = false;
+    // a glass of water and a spoon
+    const cup = new T.Group(); cup.position.set(B.x + B.cup[0], top, B.z + B.cup[1]); g.add(cup);
+    mk(cup, new T.CylinderGeometry(0.2, 0.17, 0.42, 24, 1, true), new T.MeshPhongMaterial({ color: '#DFF3FF', specular: '#ffffff', shininess: 140, transparent: true, opacity: 0.45, side: T.DoubleSide }), 0, 0.21, 0).castShadow = false;
+    mk(cup, new T.CylinderGeometry(0.185, 0.165, 0.3, 24), waterM, 0, 0.16, 0).castShadow = false;
+    const spoon = new T.Group(); g.add(spoon); const steel = new T.MeshPhongMaterial({ color: '#C9D1DC', specular: '#ffffff', shininess: 90, emissive: '#3a4250', emissiveIntensity: 0.25 });
+    const bowl = mk(spoon, new T.SphereGeometry(0.13, 20, 12, 0, TAU, PI / 2, PI / 2), steel, 0, 0.05, 0); bowl.scale.set(1.25, 0.55, 1); bowl.material.side = T.DoubleSide; const hd = mk(spoon, new T.CapsuleGeometry(0.03, 0.62, 4, 10), steel, 0.5, 0.06, 0); hd.rotation.z = PI / 2 - 0.08;
+    const swater = mk(spoon, new T.SphereGeometry(0.1, 16, 10), waterM, 0, 0.045, 0); swater.scale.set(1.15, 0.45, 0.9); swater.castShadow = false;
+    const sgrip = new T.Object3D(); sgrip.position.set(0.82, 0.08, 0); spoon.add(sgrip); const fall = mk(g, new T.SphereGeometry(0.09, 14, 10), waterM); fall.castShadow = false;
+    w.gu = buildGrownUp(T); w.scene.add(w.gu);
+    const pop = (o, p) => { o.visible = p > 0.001; o.scale.setScalar(Math.max(0.001, p <= 0 ? 0 : E.outBack(clamp(p, 0, 1)))); };
+    const node = (p, x, y, z) => { const o = new T.Object3D(); o.position.set(x, y, z); p.add(o); return o; };
+    w.anchorB = { tray, plastic, towel, cup, spoon, sgrip, patch, bead, pEdge: node(plastic, -B.sq / 2 + 0.06, 0, 0.1), tEdge: node(towel, B.sq / 2 - 0.06, 0, 0.1), dryC: node(tray, B.px - B.tray[0], 0.05, B.pz - B.tray[1]), trayR: node(tray, B.trayW / 2, 0.1, B.trayD / 2) };
+    // set(k): k = kinBench(...) (pure)
+    w.setBench = function (k) {
+      const ty = top + 0.05;
+      pop(tray, k.trayP); pop(plastic, k.plastic); pop(towel, k.towelP); pop(cup, k.cupP);
+      // each piece: shown standing up towards the camera first, then laid flat on the tray, then lifted (a little tilted towards us)
+      const piece = (o, x, th, sag) => { const show = 1 - k.lay; o.position.set(x, ty + th / 2 + 0.75 * show + (B.lift - 0.17 * sag) * k.up, B.pz + 0.25 * show); o.rotation.set(1.05 * show + 0.1 * sag * k.up, 0, 0.42 * sag * k.up); };   // the plastic is lifted flat; the wet towel hangs from the held edge
+      piece(plastic, B.px, 0.014, 0); piece(towel, B.qx, 0.05, 1);
+      // water: a round bead on the plastic (it rolls when the sheet is lifted); on the towel a blob that soaks in and spreads
+      bead.visible = k.fall1 >= 1; bead.scale.set(1.2, 0.72, 1.2); bead.position.set(k.roll, 0.007 + 0.15 * 0.72 * 0.92, 0.03);
+      const bs = 1 - k.soak; blob.visible = k.fall2 >= 1 && bs > 0.02; blob.scale.set(1.2 + 0.5 * k.soak, 0.72 * bs, 1.2 + 0.5 * k.soak); blob.position.set(0, 0.025 + 0.1 * bs, 0);
+      stain.visible = k.fall2 >= 1; stain.scale.setScalar(0.45 + 0.85 * k.soak); stain.material.opacity = 0.35 + 0.6 * k.soak; patch.visible = k.soak > 0.3; patch.scale.setScalar(0.3 + 0.75 * io(k.soak, 0.3, 1));
+      // spoon: cup -> plastic -> towel -> cup
+      const Pc = [B.x + B.cup[0], top + 0.34, B.z + B.cup[1]], Pp = [B.px + 0.05, top + 0.75, B.pz], Pt = [B.qx + 0.05, top + 0.75, B.pz], s = k.sp;
+      const q = s <= 1 ? lerp3(Pc, Pp, s) : s <= 2 ? lerp3(Pp, Pt, s - 1) : lerp3(Pt, Pc, s - 2); q[1] += 0.3 * Math.sin(PI * (s % 1)) * (s < 1 ? 1 : s > 2 ? 0.12 : 0.3);
+      spoon.visible = k.cupP > 0.5; spoon.position.set(q[0], q[1], q[2]); spoon.rotation.set(0.9 * k.tip, lerp(0.6, 0.1, clamp(s - 1, 0, 1)) + 0.5 * clamp(s - 2, 0, 1), -0.25 * (1 - clamp(s, 0, 1) + clamp(s - 2, 0, 1))); swater.visible = k.water > 0; swater.scale.set(1.15, 0.45 * (0.5 + 0.5 * k.water), 0.9);
+      const f = k.fall1 > 0 && k.fall1 < 1 ? [B.px, k.fall1] : k.fall2 > 0 && k.fall2 < 1 ? [B.qx, k.fall2] : null; fall.visible = !!f; if (f) fall.position.set(f[0], lerp(top + 0.72, ty + 0.12, f[1] * f[1]), B.pz);
+      // the soggy towel drips onto the tray when it is lifted
+      const dp = k.dripT > 0 ? (k.dripT % 0.9) / 0.45 : -1; dripM.visible = dp >= 0 && dp < 1; if (dripM.visible) dripM.position.set(B.qx - 0.36, lerp(ty + B.lift - 0.4, ty + 0.05, dp * dp), B.pz + 0.1);
+    };
+    return w;
+  }
+  const STOOL = { h: 1.5, x: -2.0, z: 0.55, s: 0.75, ry: 1.25 };
+
+  // ---------- posing (pure): one function per world, driven by a state object from st*(Lt) ----------
+  function poseStreet(w, Lt, st) {
+    const T = global.THREE, t = Lt.t, k = st.k, U = w.umb.userData, d = k.dim;
+    w.sun.intensity = w.base.sun * lerp(1, 0.5, d); if (w.hemi) w.hemi.intensity = w.base.hemi * lerp(1, 0.86, d);
+    if (w.sky) w.sky.material.color.setRGB(lerp(1, 0.78, d), lerp(1, 0.74, d), lerp(1, 0.7, d)); if (w.clouds) w.clouds.material.color.setRGB(lerp(1, 0.72, d), lerp(1, 0.74, d), lerp(1, 0.8, d));
+    if (w.base.fog) w.scene.fog.color.copy(w.base.fog).lerp(new T.Color('#b4c2d0'), d);
+    w.aimSun(CS.x, 1.6, CS.z, 6);
+    poseCurie(T, w.curie, st.curie, t);
+    w.umb.position.set(0, 0, 0); w.umb.rotation.set(0, 0, 0); w.umb.scale.setScalar(1); U.set(st.umb); U.hold(w.curie, st.hold); w.umb.updateMatrixWorld(true);
+    // what stops the drops besides the open cloth: Curie, and the folded umbrella (the rain kit's cloth test is made for an open canopy:
+    // on the closed, leaning one a drop could slip through the folds, so the folded cloth is a row of small spheres for the rain)
+    const bl = [{ x: st.curie.x, y: st.curie.y + 1.15, z: st.curie.z, r: 1.25 }, { x: st.curie.x, y: st.curie.y + 2.75, z: st.curie.z, r: 0.45 }];
+    if (st.umb.open < 0.3) for (const y of [1.3, 1.65, 2.0, 2.35, 2.7, 3.0]) { const v = U.body.localToWorld(new T.Vector3(0, y, 0)); bl.push({ x: v.x, y: v.y, z: v.z, r: 0.4 * (1 - st.umb.open) }); }
+    w.rain.userData.set({ t, rate: st.rain.rate, area: { x: CS.x, z: -3.65, w: 17, d: 2.7 }, top: 8.2, floor: CS.y, umbrella: w.umb, blockers: bl });   // not on the front of the canopy: no drip off the front tips across her face
+    w.rain2.userData.set({ t: t + 0.37, rate: st.rain.rate, area: { x: CS.x - 6.2, z: 0.55, w: 7.6, d: 5.7 }, top: 8.2, floor: 0 }); w.rain3.userData.set({ t: t + 0.71, rate: st.rain.rate, area: { x: CS.x + 6.6, z: 0.55, w: 7.6, d: 5.7 }, top: 8.2, floor: 0 });
+    L3.shoot(w, st.shot); w.camera.updateMatrixWorld(true);
+    const an = U.anchor, ca = w.curie.userData.anchor;
+    st.A = { top: L3.at(w, ca.top), mouth: L3.at(w, ca.mouth), bulb: L3.at(w, ca.bulb), runner: L3.at(w, an.runner), canopy: L3.at(w, an.canopyTop), grip: L3.at(w, an.grip), tipR: L3.at(w, an.tip[7]), tipL: L3.at(w, an.tip[3]), panel: L3.at(w, an.panel[1]) };
+  }
+  const RAIN = { area: { x: 0, z: 0, w: 5.6, d: 3.0 }, top: 5.5 };                                             // the cloud over the 1.5 x umbrella on the turntable
+  function poseShop(w, Lt, st) {
+    const T = global.THREE, t = Lt.t, U = w.umb.userData;
+    w.upper.visible = st.upper !== false; w.turntable.rotation.y = 0; for (const tk of w.fx.tok) tk.userData.show(0);
+    w.bench.visible = !!st.bench; w.gu.visible = !!st.bench; if (st.bench) w.setBench(st.bench);
+    w.stool.visible = !!st.stool && st.stool > 0.001; if (w.stool.visible) { w.stool.position.set(STOOL.x, w.floorY, STOOL.z); w.stool.scale.setScalar(E.outBack(clamp(st.stool, 0, 1))); }
+    w.umb.visible = !st.bench;
+    if (!st.bench) { w.umb.position.set(0, w.floorY, 0); w.umb.rotation.set(0, 0, 0); w.umb.scale.setScalar(US); U.set(Object.assign({ stand: st.hold ? 0 : 1 }, st.umb)); w.umb.updateMatrixWorld(true); }
+    const cp = typeof st.curie === 'function' ? st.curie(T, w) : st.curie; st.cp = cp;
+    if (cp) poseCurie(T, w.curie, cp, t); else w.curie.visible = false;
+    if (st.gu) w.gu.userData.pose(typeof st.gu === 'function' ? st.gu(T, w) : st.gu);
+    if (st.hold && !st.bench) { U.hold(w.curie, st.hold); w.umb.updateMatrixWorld(true); }
+    w.rain.userData.set(st.rain && !st.bench ? Object.assign({ t, area: RAIN.area, top: RAIN.top, floor: w.floorY, umbrella: w.umb }, st.rain) : { rate: 0, cloud: 0 });
+    L3.shoot(w, st.shot); w.camera.updateMatrixWorld(true);
+    const an = U.anchor, ca = w.curie.userData.anchor, at = o => L3.at(w, o);
+    if (st.tok) { const TK = st.tokMid ? [[an.shaft, 180, 0.04], [an.joint[3], 150, 0.08], [an.spring, 0, 0.12], [an.panel[1], 15, 0]] : [[an.runner, 180, 0.2], [an.joint[3], 150, 0.08], [an.spring, 0, 0.12], [an.panel[0], 75, 0.1]];
+      TK.forEach((q, i) => placeTok(w, w.fx.tok[i], wpos(T, q[0]), (st.tokDir && st.tokDir[i] != null) ? st.tokDir[i] : q[1], (st.tokR && st.tokR[i] != null) ? st.tokR[i] : q[2] * US, st.tok[i] || 0, st.tokK || 1)); }
+    st.A = { top: at(ca.top), mouth: at(ca.mouth), shaft: at(an.shaft), runner: at(an.runner), spring: at(an.spring), lower: at(an.lowerSpring), notch: at(an.topNotch), canopy: at(an.canopyTop), grip: at(an.grip), handle: at(an.handle),
+      holes: [5, 6, 9].map(k => { const h = U.info.holePos(k, U.state.open), a = L3.at(w, U.body, h.x, h.y, h.z), b = L3.at(w, U.body, h.x + U.info.holeRadius, h.y, h.z), c = L3.at(w, U.body, h.x, h.y, h.z + U.info.holeRadius); return { x: a.x, y: a.y, r: Math.max(Math.hypot(b.x - a.x, b.y - a.y), Math.hypot(c.x - a.x, c.y - a.y)) }; }),
+      str: an.stretcher.map(at), rib: an.rib.map(at), tip: an.tip.map(at), panel: an.panel.map(at), joint: an.joint.map(at) };
+    if (st.bench) { const b = w.anchorB; st.A.b = { tray: at(b.tray), trayR: at(b.trayR), plastic: at(b.plastic), towel: at(b.towel), cup: at(b.cup), dry: at(b.dryC), patch: at(b.patch), gu: at(w.gu.userData.anchor.top), spoon: at(b.spoon) }; }
+  }
+
+  // ---------- 2D overlay helpers ----------
+  // a friendly label with a leader line to (tx, ty)
+  function label(ctx, str, x, y, tx, ty, p, o) {
+    if (p <= 0) return; o = o || {}; const size = o.size || 54, s = E.outBack(clamp(p, 0, 1));
+    ctx.save(); ctx.font = `700 ${size}px Fredoka`; const w = ctx.measureText(str).width + size * 1.1, h = size * 1.55;
+    if (o.keepIn) { x = clamp(x, w * 0.56 + 40, W - w * 0.56 - 40); y = clamp(y, h * 0.56 + 40, 800 - h * 0.56); }
+    for (const q of tx != null ? [[tx, ty]].concat(o.t2 ? [o.t2] : []) : []) { const a = Math.atan2(q[1] - y, q[0] - x), ex = q[0] - Math.cos(a) * (o.gap || 16), ey = q[1] - Math.sin(a) * (o.gap || 16); ctx.globalAlpha = clamp(p * 1.5, 0, 1); ctx.lineCap = 'round';
+      ctx.strokeStyle = P.ink; ctx.lineWidth = 13; ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(ex, ey); ctx.stroke(); ctx.strokeStyle = o.bg || P.white; ctx.lineWidth = 6; ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(ex, ey); ctx.stroke();
+      circle(ctx, ex, ey, 11, o.bg || P.white, P.ink, 5); ctx.globalAlpha = 1; }
+    ctx.translate(x, y); ctx.scale(s, s); ctx.rotate(o.rot || 0); ctx.fillStyle = o.bg || P.white; roundRect(ctx, -w / 2, -h / 2, w, h, h / 2); ctx.fill(); ctx.strokeStyle = P.ink; ctx.lineWidth = 7; ctx.stroke();
+    text(ctx, str, 0, 3, { size, weight: 700, color: o.color || P.ink }); ctx.restore();
+  }
+  // a screen-space arrow with a dark outline
+  function arrow2(ctx, x1, y1, x2, y2, color, lw, p) {
+    if (p <= 0) return; const k = clamp(p, 0, 1), ex = lerp(x1, x2, k), ey = lerp(y1, y2, k), a = Math.atan2(y2 - y1, x2 - x1), hd = lw * 2.4;
+    const path = () => { ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(ex - Math.cos(a) * hd * 0.6, ey - Math.sin(a) * hd * 0.6); ctx.stroke(); ctx.beginPath(); ctx.moveTo(ex, ey); ctx.lineTo(ex - Math.cos(a - 0.5) * hd, ey - Math.sin(a - 0.5) * hd); ctx.lineTo(ex - Math.cos(a + 0.5) * hd, ey - Math.sin(a + 0.5) * hd); ctx.closePath(); ctx.fill(); ctx.stroke(); };
+    ctx.save(); ctx.globalAlpha = clamp(p * 3, 0, 1); ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.strokeStyle = P.ink; ctx.fillStyle = P.ink; ctx.lineWidth = lw + 10; path(); ctx.strokeStyle = color; ctx.fillStyle = color; ctx.lineWidth = lw; path(); ctx.restore();
+  }
+  // "like a flower opening": a card with a flower whose 8 petals open (k 0..1), like the 8 ribs
+  function flowerCard(ctx, x, y, p, k) {
+    if (p <= 0) return; const s = E.outBack(clamp(p, 0, 1)); ctx.save(); ctx.translate(x, y); ctx.scale(s, s); ctx.rotate(0.03);
+    ctx.fillStyle = P.white; roundRect(ctx, -170, -170, 340, 340, 44); ctx.fill(); ctx.strokeStyle = P.ink; ctx.lineWidth = 7; ctx.stroke(); ctx.lineJoin = 'round';
+    ctx.strokeStyle = P.ink; ctx.lineWidth = 16; ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(0, 30); ctx.lineTo(0, 140); ctx.stroke(); ctx.strokeStyle = '#2FBF71'; ctx.lineWidth = 8; ctx.beginPath(); ctx.moveTo(0, 30); ctx.lineTo(0, 140); ctx.stroke();
+    const sp = lerp(0.12, 1, clamp(k, 0, 1)); ctx.translate(0, lerp(10, -20, k));
+    for (let i = 0; i < 8; i++) { const a = -PI / 2 + (i - 3.5) * (TAU / 8) * sp; ctx.save(); ctx.rotate(a + PI / 2); ctx.fillStyle = i % 2 ? '#FF8DC0' : '#FF6AAE'; ctx.strokeStyle = P.ink; ctx.lineWidth = 6; ctx.beginPath(); ctx.ellipse(0, -62, 26, 62, 0, 0, TAU); ctx.fill(); ctx.stroke(); ctx.restore(); }
+    circle(ctx, 0, 0, 30 * (0.5 + 0.5 * k), P.sun, P.ink, 6); ctx.restore();
+  }
+  // "like a roof": a card with a little house; raindrops run off its roof
+  function roofCard(ctx, x, y, p, t) {
+    if (p <= 0) return; const s = E.outBack(clamp(p, 0, 1)); ctx.save(); ctx.translate(x, y); ctx.scale(s, s); ctx.rotate(-0.03);
+    ctx.fillStyle = '#DDF1FF'; roundRect(ctx, -170, -150, 340, 300, 44); ctx.fill(); ctx.strokeStyle = P.ink; ctx.lineWidth = 7; ctx.stroke(); ctx.lineJoin = 'round';
+    ctx.fillStyle = '#FFE9BE'; ctx.fillRect(-80, 0, 160, 110); ctx.strokeRect(-80, 0, 160, 110); ctx.fillStyle = '#FF8A3D'; ctx.fillRect(-22, 50, 44, 60); ctx.strokeRect(-22, 50, 44, 60);
+    ctx.fillStyle = C.blue; ctx.beginPath(); ctx.moveTo(-125, 8); ctx.lineTo(0, -92); ctx.lineTo(125, 8); ctx.closePath(); ctx.fill(); ctx.stroke();
+    for (let i = 0; i < 4; i++) { const u = (t * 0.9 + i * 0.25) % 1, sd = i % 2 ? 1 : -1, bx = sd * lerp(18, 140, u), by = lerp(-98, 2, u) + (u > 0.9 ? (u - 0.9) * 600 : 0); circle(ctx, bx, by, 10, C.water, P.ink, 4); }
+    ctx.restore();
+  }
+  // a big raindrop shape
+  function dropIcon(ctx, x, y, r, p) { if (p <= 0) return; ctx.save(); ctx.translate(x, y); ctx.scale(p, p); ctx.fillStyle = C.water; ctx.strokeStyle = P.ink; ctx.lineWidth = 6; ctx.lineJoin = 'round'; ctx.beginPath(); ctx.moveTo(0, -r * 1.7); ctx.bezierCurveTo(r * 0.5, -r * 0.7, r, -r * 0.2, r, r * 0.25); ctx.arc(0, r * 0.25, r, 0, PI); ctx.bezierCurveTo(-r, -r * 0.2, -r * 0.5, -r * 0.7, 0, -r * 1.7); ctx.closePath(); ctx.fill(); ctx.stroke(); ctx.restore(); }
+  const logoAt = (ctx, x, y, s, p, t) => { if (p <= 0) return; ctx.save(); ctx.translate(x, y); ctx.scale(p, p); L.logo(ctx, 0, 0, s, t); ctx.restore(); };
+  const pill = (ctx, phrase, x, y, pp, size) => { if (pp <= 0) return; ctx.save(); ctx.translate(x, y); ctx.scale(pp, pp); ctx.fillStyle = P.white; ctx.font = `700 ${size}px Fredoka`; const ww = ctx.measureText(phrase).width + 100; roundRect(ctx, -ww / 2, -size, ww, size * 2, 40); ctx.fill(); ctx.strokeStyle = P.ink; ctx.lineWidth = 8; ctx.stroke(); text(ctx, phrase, 0, 4, { size, weight: 700, color: P.ink }); ctx.restore(); };
+
+  // =====================================================================================================================
+  // STREET: hello + q + s1 + s2. Shots are given relative to Curie's spot.
+  const rs = (p, l, fov) => ({ p: [CS.x + p[0], p[1], CS.z + p[2]], l: [CS.x + l[0], l[1], CS.z + l[2]], fov });
+  const SS = {
+    hello: rs([1.5, 2.2, 10.6], [0.8, 2.0, 0], 32),
+    hello2: rs([1.3, 2.15, 9.6], [0.7, 1.95, 0], 32),
+    rain: rs([-0.3, 2.3, 12.6], [-0.7, 2.05, 0], 32),
+    high: rs([-0.4, 2.4, 11.8], [-0.7, 2.05, 0], 32),
+    dry: rs([0.4, 2.6, 10.3], [-0.65, 2.2, 0], 30),
+    how: rs([0.1, 2.5, 11.2], [-0.7, 2.15, 0], 32)
+  };
+  function stStreet(Lt) {
+    const t = Lt.t, k = kinStreet(Lt), cheer = Lt.cwin('hello', 'welcome', 0.5, E.inOut, 0.9), s1 = Lt.start('s1');
+    const wv = pulse(t, Lt.start('hello'), 2.0), hi = pulse(t, Lt.chunk('hello', "i'm curie"), 1.1), lookUp = io(t, k.pit - 0.2, k.pit + 0.3) * (1 - io(t, k.dry + 1.0, k.how)), wowF = pulse(t, k.pit, 1.0) + pulse(t, k.up + 0.9, 1.3) > 0.5, away = io(t, k.shop, k.shop + 0.4);
+    return { k, world: 'street', away, umb: { open: k.open, wet: k.wet }, hold: { side: 'L', reach: lerp3(lerp3(HOLD.carry, HOLD.high, k.raise), HOLD.over, k.open), tilt: lerp(0.1, 0.42, k.raise) - 0.27 * k.open, scale: HOLD.scale }, rain: { rate: k.rate },
+      shot: camFold([{ s: SS.hello }, { t: Lt.start('hello') - 0.5, d: Lt.end('q') - Lt.start('hello') + 0.6, s: SS.hello2 }, { t: s1 - 0.85, d: 1.7, s: SS.rain }, { t: k.iopen - 0.2, d: 2.2, s: SS.high }, { t: k.dry - 0.5, d: 2.2, s: SS.dry }, { t: k.how - 0.3, d: 2.0, s: SS.how }], t),
+      curie: { x: CS.x, y: CS.y + 0.16 * pulse(t, k.up + 1.0, 0.6), z: CS.z, ry: 0.12, s: 1, mood: wowF ? 'wow' : between(Lt, ['hello', 'q', 's1', 's2']) ? 'talk' : 'happy', dt: 0.9,
+        armR: lerp(0.25, 2.25 + 0.3 * Math.sin(t * 9), wv) + 0.9 * cheer + 1.5 * pulse(t, k.dry + 0.2, 1.4) + 2.0 * away, armL: 0.3,
+        lookX: t < k.tq ? 0 : 0.45 * io(t, k.tq + 0.2, k.tq + 0.7) * (1 - io(t, s1 - 0.5, s1)) + 0.35 * lookUp, lookY: 0.05 + 0.7 * lookUp, bulb: 0.5 + 0.45 * hi + 0.3 * cheer + 0.5 * away, squash: -0.08 * pulse(t, Lt.chunk('hello', "i'm curie"), 0.7) } };
+  }
+  function sceneStreet(ctx, t, Lt) {
+    const st = stStreet(Lt), k = st.k, s1 = Lt.start('s1'), away = st.away;
+    const w = L3.frame(ctx, 'ep30:street', buildStreet, w => poseStreet(w, Lt, st));
+    if (!w) return; const A = st.A;
+    if (k.dim > 0) { ctx.save(); ctx.globalAlpha = 0.16 * k.dim; ctx.fillStyle = '#5E7186'; ctx.fillRect(0, 0, W, H); ctx.restore(); }   // a grey veil: the rainy light
+    logoAt(ctx, 360, 260, 0.8, Lt.cwin('hello', 'welcome', 0.7, E.outBack, 0.6) * (1 - Lt.win('q', -0.4, 0.3)), t);
+    L.sticker(ctx, "Today's big question", 620, 130, Lt.win('q', 0.1, 0.5) * (1 - seg(t, s1 - 0.6, s1 - 0.3)), { bg: P.white, size: 64, rot: -0.02 });
+    L.sticker(ctx, 'How?', 440, 340, seg(t, k.tq + 0.5, k.tq + 1.0) * (1 - seg(t, s1 - 0.6, s1 - 0.3)), { bg: P.sun, size: 110, rot: -0.06 });
+    L.sticker(ctx, 'Pitter-patter!', 470, 190, pulse(t, k.pit + 0.05, k.iopen - k.pit - 0.3), { bg: P.sun, size: 96, rot: -0.05 });
+    label(ctx, 'outside', 430, 330, null, null, pulse(t, k.iopen + 1.1, k.high - k.iopen - 0.9), { bg: '#C9F7EC', size: 70 });
+    { const hp = pulse(t, k.high + 0.1, k.up - k.high - 0.3); arrow2(ctx, A.canopy.x - 210, A.canopy.y + 250, A.canopy.x - 210, A.canopy.y + 40, C.green, 24, hp); label(ctx, 'up high', 420, 250, null, null, hp, { bg: '#C9F7EC', size: 70 });
+      label(ctx, 'away from faces', 440, 380, null, null, hp * seg(t, k.high + 0.9, k.high + 1.3), { bg: P.white, size: 58 }); }
+    L.sticker(ctx, 'Up it goes!', 450, 200, pulse(t, k.up + 0.05, k.dry - k.up - 0.1), { bg: P.sun, size: 96, rot: -0.04 });
+    label(ctx, 'dry!', 400, 300, null, null, pulse(t, k.dry + 0.5, k.how - k.dry - 0.6), { bg: '#C9F7EC', size: 96 });
+    { const q = pulse(t, k.how + 0.1, k.find - k.how - 0.1); L.sticker(ctx, 'How does it work?', 470, 200, q, { bg: P.white, size: 72, rot: -0.02 }); L.questionMark(ctx, 300, 430, 0.9 * q, t, P.red); }
+    L.sticker(ctx, 'To the workshop!', 470, 200, away, { bg: P.green, color: P.white, size: 76, rot: -0.03 });
+  }
+
+  // =====================================================================================================================
+  // WORKSHOP shots. The umbrella stands on the turntable at 1.5 x: uz() turns a shot given in the umbrella's own units into the world.
+  const uz = (p, l, fov) => ({ p: [US * p[0], 0.15 + US * p[1], US * p[2]], l: [US * l[0], 0.15 + US * l[1], US * l[2]], fov });
+  const SH = {
+    wide: { p: [-1.3, 3.3, 17.5], l: [-1.1, 2.45, 0], fov: 30 },          // Curie and the whole umbrella
+    mid: uz([0.1, 2.0, 8.8], [-0.4, 1.33, 0], 28),                        // the umbrella from handle to tip, Curie on the left
+    ring: uz([0.5, 2.2, 6.0], [0, 2.12, 0], 26),                          // the ring on the stick (closed)
+    mech: uz([0.6, 2.75, 7.7], [0, 2.3, 0], 26),                           // the ring's whole way, arms and ribs
+    spring: uz([2.5, 2.3, 2.5], [0, 2.2, 0], 20),                          // the spring catch under the ring (the artist's close-up; cut 1)
+    cloth: uz([0.4, 4.55, 5.6], [0, 2.72, 0.55], 26),                      // looking down on the cloth
+    rain: { p: [0.3, 4.3, 15.4], l: [0, 4.0, 0], fov: 28 },                // the cloud, the umbrella and the floor
+    rainL: { p: [-1.0, 3.9, 18.4], l: [-1.1, 3.35, 0], fov: 29 },           // the same with Curie
+    press: { p: [4.4, 3.05, 1.5], l: [-0.7, 2.72, 0.45], fov: 24 },         // Curie on her stool, her hand at the catch
+    say: { p: [-5.2, 3.5, 19.5], l: [-5.2, 2.95, 0], fov: 30 },                 // the umbrella and its cloud in the right third, clear of the say-it sticker
+    test: { p: [0.4, 3.25, 16.6], l: [0, 3.2, 0], fov: 28 },
+    testIn: { p: [0.45, 3.1, 15.4], l: [0.05, 2.65, 0], fov: 28 },
+    thumb: { p: [-2.0, 4.3, 11.6], l: [-2.0, 4.2, 0], fov: 30 }
+  };
+  const CUR = { x: -3.7, y: 0, z: 0.5, s: 0.92, ry: 0.45 };   // Curie's spot beside the turntable
+
+  // WORKSHOP: look + e1..e4 + rain + recap + close
+  function stMech(Lt) {
+    const t = Lt.t, K = kinMech(Lt), S = K.S, rW = [S.rc + 0.02, S.rc + WD.push, S.rc + WD.click, S.rc + WD.stretch];
+    const glow = {
+      shaft: pulse(t, S.stick + 0.5, S.ring - S.stick - 0.4),
+      runner: 0.5 * Math.max(pulse(t, S.ring + 0.3, S.c2 - S.ring - 0.5), pulse(t, S.push, S.arms - S.push), 0.8 * pulse(t, S.holds + 0.3, 1.6), pulse(t, rW[0], 0.95), pulse(t, S.down, S.fold - S.down)),
+      stretchers: Math.max(pulse(t, S.arms + 0.3, S.ribs - S.arms + 0.5), pulse(t, rW[1], 0.85)),
+      ribs: 0.75 * Math.max(pulse(t, S.ribs + 0.9, S.c3 - S.ribs - 1.6), pulse(t, S.tight, 1.6), pulse(t, S.ropen, S.rolls - S.ropen - 0.2), pulse(t, S.fold, S.gently - S.fold)),
+      spring: Math.max(pulse(t, S.click, S.holds - S.click + 1.2), pulse(t, rW[2], 0.7), pulse(t, S.cl + WD.press, S.down - S.cl - WD.press)),
+      canopy: Math.max(pulse(t, S.tight + 0.9, S.coat - S.tight - 0.6), pulse(t, rW[3], S.ropen - rW[3] - 0.1)),
+      tips: pulse(t, S.roll + WD.tips - 0.3, S.drip - S.roll - WD.tips + 1.5)
+    };
+    const tok = [seg(t, S.c1, S.c1 + 0.5), seg(t, S.c2, S.c2 + 0.5), seg(t, S.c3, S.c3 + 0.5), seg(t, S.c4, S.c4 + 0.5)].map(v => v * (1 - io(t, S.coat - 0.4, S.coat)));
+    { const cu = 1 - io(t, S.c3 - 0.8, S.c3 - 0.4) * (1 - io(t, S.holds + 0.9, S.holds + 1.3)); tok[0] *= cu; tok[1] *= cu; }   // tokens 1 and 2 step aside in the spring close-up
+    const out = Math.max(io(t, S.ring - 0.6, S.ring + 0.4) * (1 - io(t, S.holds + 1.0, S.holds + 1.9)), io(t, S.coat - 0.25, S.coat + 0.75) * (1 - io(t, S.rolls - 0.9, S.rolls + 0.1)));   // Curie steps out of the close shots
+    const keys = [{ s: SH.wide }, { t: S.lookU - 0.1, d: 2.2, s: SH.mid }, { t: S.ring - 0.55, d: 1.7, s: SH.ring }, { t: S.c2 - 0.75, d: 1.7, s: SH.mech }, { t: S.c3 - 0.75, d: 1.75, s: SH.spring }, { t: S.holds - 0.2, d: 2.0, s: SH.mid },
+      { t: S.coat - 0.15, d: 1.9, s: SH.cloth }, { t: S.round - 0.9, d: 1.9, s: SH.rain }, { t: S.rc - 0.7, d: 1.7, s: SH.mech }, { t: S.rolls - 0.9, d: 1.8, s: SH.rainL }, { t: S.cl - 0.75, d: 1.7, s: SH.press }, { t: K.pressT + 0.2, d: 1.35, s: SH.mid }];
+    const speaking = between(Lt, ['look', 'e1', 'e2', 'e3', 'e4', 'rain', 'recap', 'close']);
+    return { K, world: 'shop', glow, tok, shot: camFold(keys, t), upper: true, stool: io(t, S.cl - 1.0, S.cl - 0.7) * (1 - io(t, K.pressT + 1.45, K.pressT + 1.8)), tokMid: t > S.holds,
+      umb: { open: K.open, spring: K.spring, ghost: K.ghost, cut: K.cut, wet: K.wet, spin: K.spin, glow }, rain: { rate: K.rate, cloud: K.cloud },
+      tokDir: [t < S.c2 - 0.6 || t > S.holds ? 180 : 215, 150, 0, t > S.holds ? 15 : 75],
+      curie: (T, w) => {
+        const an = w.umb.userData.anchor, gog = seg(t, S.gog + 1.45, S.gog + 2.35), wow = pulse(t, S.gog + 1.9, 1.2) + pulse(t, S.click + 0.05, 0.9) + pulse(t, S.drip, 1.2) + pulse(t, S.gently, 0.9) > 0.5;
+        const pt = io(t, S.stick, S.stick + 0.4) * (1 - io(t, S.ring - 0.7, S.ring - 0.3)) + io(t, S.holds + 1.4, S.holds + 1.8) * (1 - io(t, S.c4 - 0.4, S.c4)) + io(t, S.tight, S.tight + 0.4) * (1 - io(t, S.coat - 0.8, S.coat - 0.4)) + io(t, S.down + 0.9, S.down + 1.3) * (1 - io(t, S.gently - 0.2, S.gently + 0.2));
+        const sp = wpos(T, an.spring); sp.z += 0.14; sp.x -= 0.05; const wa = clamp(K.onStool / 0.5, 0, 1), up = E.inOut(clamp((K.onStool - 0.5) / 0.5, 0, 1)), hop = Math.sin(PI * up);   // she walks to the stool, then hops straight up
+        return { x: lerp(CUR.x - 5.6 * out, STOOL.x, wa), y: (w.floorY + STOOL.h) * up + 0.45 * hop + 0.22 * Math.abs(Math.sin(out * PI * 3)) * (out > 0 && out < 1 ? 1 : 0) + 0.16 * Math.abs(Math.sin(wa * PI * 3)) * (wa > 0 && wa < 1 ? 1 : 0), z: lerp(CUR.z, STOOL.z, wa), ry: lerp(CUR.ry, STOOL.ry, up), s: lerp(CUR.s, STOOL.s, wa), mood: wow ? 'wow' : speaking ? 'talk' : 'happy', goggles: gog, dt: 1.5,
+          lookX: lerp(0.7, -0.35, up), lookY: 0.4 * (1 - up) + 0.25 * pt + 0.3 * K.reach, armL: 0.3 + 1.0 * io(t, S.lookU, S.lookU + 0.5) * (1 - io(t, S.c1 - 0.6, S.c1 - 0.2)) + 1.3 * pt + 1.6 * K.reach, aimL: K.reach > 0 ? sp : wpos(T, an.runner), aimLk: K.reach > 0 ? K.reach : 0.6 * pt, stretch: K.reach > 0 ? 3.3 : 1.0,
+          armR: 0.3 + 2.2 * pulse(t, S.gog + 1.8, 1.3) + 2.0 * pulse(t, S.drip, 1.3) + 1.8 * pulse(t, S.gently, 1.0), bulb: 0.45 + 0.5 * (wow ? 1 : 0), squash: -0.1 * pulse(t, S.gog + 1.9, 0.6) - 0.08 * hop };
+      } };
+  }
+  function sceneMech(ctx, t, Lt) {
+    const st = stMech(Lt), K = st.K, S = K.S;
+    const w = L3.frame(ctx, 'ep30:shop', buildShop, w => poseShop(w, Lt, st));
+    if (!w) return; const A = st.A, rW = [S.rc + 0.02, S.rc + WD.push, S.rc + WD.click, S.rc + WD.stretch];
+    L.sticker(ctx, 'Peek-Inside Goggles: ON!', 1250, 150, seg(t, S.gog + 2.2, S.gog + 2.6) * (1 - seg(t, S.lookU + 0.5, S.lookU + 0.8)), { bg: P.sun, size: 70, rot: -0.02 });
+    label(ctx, 'the umbrella', A.canopy.x + 380, A.canopy.y + 40, A.canopy.x + 40, A.canopy.y + 90, pulse(t, S.lookU + 1.0, S.c1 - S.lookU - 1.4), { bg: P.white, size: 56, keepIn: true });
+    // e1: the long stick, and the ring that slides up and down
+    label(ctx, 'stick', A.shaft.x + 330, A.shaft.y + 60, A.shaft.x + 14, A.shaft.y, pulse(t, S.stick + WD.stick - 0.4, S.ring - S.stick - WD.stick + 0.1), { bg: '#FFE9A8', size: 64, keepIn: true });
+    label(ctx, 'ring', A.runner.x + 360, A.runner.y - 110, A.runner.x + 34, A.runner.y - 8, pulse(t, S.ring + 0.75, S.c2 - S.ring - 1.4), { bg: '#FFD9A0', size: 64, keepIn: true });
+    { const up = pulse(t, S.slide + 0.3, 0.75), dn = pulse(t, S.slide + 1.05, 0.85), x = A.runner.x - 300; arrow2(ctx, x, A.runner.y + 60, x, A.runner.y - 110, C.orange, 22, up); arrow2(ctx, x, A.runner.y - 110, x, A.runner.y + 60, C.orange, 22, dn);
+      label(ctx, 'up', x - 130, A.runner.y - 30, null, null, up, { bg: '#FFD9A0', size: 60, keepIn: true }); label(ctx, 'down', x - 150, A.runner.y - 30, null, null, dn, { bg: '#FFD9A0', size: 60, keepIn: true }); }
+    // e2: ring up -> little arms -> ribs out, like a flower opening
+    { const pu = pulse(t, S.push + 0.1, S.arms - S.push - 0.2), x = A.runner.x + 160; arrow2(ctx, x, A.runner.y + 110, x, A.runner.y - 60, C.orange, 24, pu); label(ctx, 'push up', x + 200, A.runner.y + 30, null, null, pu, { bg: '#FFD9A0', size: 58, keepIn: true }); }
+    label(ctx, 'little arms', A.str[1].x + 430, A.str[1].y + 150, A.str[1].x + 10, A.str[1].y + 8, pulse(t, S.arms + 0.5, S.ribs - S.arms + 0.4), { bg: '#FFE9A8', size: 60, keepIn: true });
+    label(ctx, 'ribs', A.rib[0].x + 230, A.rib[0].y - 170, A.rib[0].x + 6, A.rib[0].y - 10, pulse(t, S.ribs + WD.ribsOut - 0.35, S.c3 - S.ribs - WD.ribsOut - 0.5), { bg: '#DAD6FF', size: 64, keepIn: true });
+    { const fp = pulse(t, S.ribs + WD.flower - 0.1, S.c3 - S.ribs - WD.flower - 0.6); flowerCard(ctx, 1650, 590, fp, seg(t, S.ribs + WD.flower + 0.1, S.ribs + WD.flower + 1.3, E.inOut)); label(ctx, 'like a flower!', 1650, 375, null, null, fp * seg(t, S.ribs + WD.flower + 0.3, S.ribs + WD.flower + 0.7), { bg: P.sun, size: 54 }); }
+    // e3: click! the spring catch snaps out under the ring
+    L.sticker(ctx, 'Click!', 480, 230, pulse(t, S.click, S.tiny - S.click + 0.6), { bg: P.sun, size: 120, rot: -0.06 });
+    label(ctx, 'spring catch', A.spring.x - 420, A.spring.y + 150, A.spring.x - 14, A.spring.y + 10, pulse(t, S.tiny + WD.catchW - 0.2, S.holds - S.tiny - WD.catchW + 0.6), { bg: '#C9F7D5', size: 62, keepIn: true });
+    label(ctx, 'ring', A.runner.x - 400, A.runner.y - 90, A.runner.x - 60, A.runner.y - 10, pulse(t, S.holds + 0.2, 1.4), { bg: '#FFD9A0', size: 62, keepIn: true });
+    L.sticker(ctx, 'It stays open!', 430, 170, pulse(t, S.holds + 1.5, S.c4 - S.holds - 1.7), { bg: P.green, color: P.white, size: 76, rot: 0.03 });
+    // e4: the ribs stretch the cloth tight, like a roof; the special coat
+    label(ctx, 'cloth', A.panel[0].x + 440, A.panel[0].y - 10, A.panel[0].x + 14, A.panel[0].y, pulse(t, S.tight + 1.0, S.coat - S.tight - 0.9), { bg: '#CFE9FF', size: 64, keepIn: true });
+    label(ctx, 'ribs', A.rib[0].x + 300, A.rib[0].y + 200, A.rib[0].x + 8, A.rib[0].y + 8, pulse(t, S.tight + 0.1, 1.9), { bg: '#DAD6FF', size: 60, keepIn: true });
+    { const rp = pulse(t, S.tight + WD.roof - 0.1, S.coat - S.tight - WD.roof + 0.25); roofCard(ctx, 1650, 570, rp, t); }
+    L.sticker(ctx, 'a special coat', 480, 150, pulse(t, S.coat + 0.9, S.round - S.coat - 1.1), { bg: P.white, size: 72, rot: -0.03 });
+    label(ctx, 'water cannot soak in', 1400, 150, null, null, pulse(t, S.soak + 0.2, S.round - S.soak - 0.4), { bg: '#CFE9FF', size: 56, keepIn: true });
+    // rain: round drops roll down the sides and drip off the tips
+    label(ctx, 'round drops', 470, 150, null, null, pulse(t, S.round + 0.3, S.roll - S.round - 0.5), { bg: '#CFE9FF', size: 64 });
+    { const rp = pulse(t, S.roll + 0.5, WD.dripOff + 0.2), q = A.panel[0]; arrow2(ctx, q.x - 30, q.y - 60, q.x + 150, q.y + 40, C.water, 20, rp); arrow2(ctx, A.panel[3].x + 30, A.panel[3].y - 60, A.panel[3].x - 150, A.panel[3].y + 40, C.water, 20, rp); }
+    label(ctx, 'tips', A.tip[0].x + 290, A.tip[0].y - 120, A.tip[0].x + 14, A.tip[0].y - 6, pulse(t, S.roll + WD.tips - 0.2, S.rc - S.roll - WD.tips - 0.5), { bg: '#FFF0A8', size: 64, keepIn: true });
+    L.sticker(ctx, 'Drip, drip!', 450, 330, pulse(t, S.drip, 1.6), { bg: P.sun, size: 100, rot: -0.05 });
+    // recap: slide, push, click, stretch
+    if (t > S.rc - 0.3 && t < S.cl) { const o1 = 1 - seg(t, S.ropen - 0.5, S.ropen - 0.2);
+      label(ctx, 'slide', A.runner.x - 420, A.runner.y - 30, A.runner.x - 60, A.runner.y - 4, seg(t, rW[0], rW[0] + 0.3) * o1, { bg: '#FFD9A0', size: 68, keepIn: true });
+      label(ctx, 'push', A.str[1].x + 440, A.str[1].y + 120, A.str[1].x + 10, A.str[1].y + 6, seg(t, rW[1], rW[1] + 0.3) * o1, { bg: '#FFE9A8', size: 68, keepIn: true });
+      label(ctx, 'click', A.spring.x - 360, A.spring.y + 150, A.spring.x - 12, A.spring.y + 6, seg(t, rW[2], rW[2] + 0.3) * o1, { bg: '#C9F7D5', size: 68, keepIn: true });
+      label(ctx, 'stretch', A.panel[2].x - 380, A.panel[2].y - 150, A.panel[2].x - 10, A.panel[2].y - 6, seg(t, rW[3], rW[3] + 0.3) * o1, { bg: '#CFE9FF', size: 68, keepIn: true });
+      L.sticker(ctx, 'The ribs open...', 470, 170, pulse(t, S.ropen + 0.1, S.rolls - S.ropen + 0.1), { bg: P.white, size: 72, rot: -0.03 });
+      L.sticker(ctx, '...the rain rolls off!', 440, 300, pulse(t, S.rolls + 0.3, S.cl - S.rolls - 1.2), { bg: P.sun, size: 68, rot: 0.03 }); }
+    // close: press the little catch, the ring slides down, the ribs fold in. Gently!
+    if (t > S.cl - 0.2) {
+      label(ctx, 'press', A.spring.x + 360, A.spring.y + 150, A.spring.x + 14, A.spring.y + 6, pulse(t, S.cl + WD.press + 0.1, S.down - S.cl - WD.press - 0.1), { bg: '#C9F7D5', size: 64, keepIn: true });
+      { const dn = pulse(t, S.down + 0.2, S.fold - S.down - 0.1), x = A.runner.x + 190; arrow2(ctx, x, A.runner.y - 110, x, A.runner.y + 70, C.orange, 22, dn); label(ctx, 'down', x + 150, A.runner.y - 20, null, null, dn, { bg: '#FFD9A0', size: 60, keepIn: true }); }
+      label(ctx, 'ribs fold in', A.tip[0].x + 330, A.tip[0].y - 190, A.tip[0].x + 12, A.tip[0].y - 12, pulse(t, S.fold + 0.2, S.gently - S.fold - 0.2), { bg: '#DAD6FF', size: 60, keepIn: true });
+      L.sticker(ctx, 'Gently!', 1380, 240, seg(t, S.gently, S.gently + 0.4) * (1 - seg(t, S.ts - 0.5, S.ts - 0.2)), { bg: P.green, color: P.white, size: 100, rot: 0.04 });
+    }
+  }
+
+  // WORKSHOP: test + result. Curie stands on the turntable under the cloud with the open umbrella (held up high, away from her face)
+  const TC = { x: 0, z: 0.3, s: 1 };
+  function stTest(Lt) {
+    const t = Lt.t, K = kinTest(Lt), S = K.S, wowF = pulse(t, S.what + WD.holes, 1.2) + pulse(t, S.r0, 1.1) + pulse(t, S.wetT, 1.0) > 0.5, shake = pulse(t, S.wetT + 0.1, 1.2), glad = pulse(t, S.good + 1.0, 1.6);
+    return { K, world: 'shop', upper: true, umb: { open: 1, holes: K.holes, wet: K.wet }, hold: { side: 'L', reach: HOLD.over, tilt: 0.14, scale: HOLD.scale },
+      rain: { rate: K.rate, cloud: K.cloud, area: { x: TC.x, z: TC.z - 0.6, w: 4.8, d: 2.1 }, top: 5.35,   // the rain falls on the middle and the back of the canopy: no drip runs off the front tips across her face
+        blockers: [{ x: TC.x, y: 0.15 + 1.15, z: TC.z, r: 1.04 }].concat(K.holes < 0.03 ? [{ x: TC.x, y: 2.3, z: TC.z, r: 0.9 }, { x: TC.x, y: 3.0, z: TC.z, r: 0.9 }] : []) },   // without holes nothing reaches her
+      shot: camFold([{ s: SH.test }, { t: S.r0 - 0.4, d: 2.0, s: SH.testIn }, { t: S.good - 0.3, d: 2.0, s: SH.test }], t),
+      curie: { x: TC.x + 0.05 * shake * Math.sin(t * 22), y: 0.15, z: TC.z, ry: 0.12, s: TC.s, mood: wowF ? 'wow' : between(Lt, ['test', 'result']) ? 'talk' : 'happy', goggles: 0, dt: 0.6, armL: 0.3, armR: 0.3 + 0.9 * pulse(t, S.ts + 0.1, 1.2) + 1.2 * shake + 1.9 * glad,
+        lookX: 0.2, lookY: 0.1 + 0.75 * io(t, S.what, S.what + 0.5) * (1 - io(t, S.good + 1.0, S.good + 1.5)), bulb: 0.5 + 0.5 * glad, squash: 0.06 * shake * Math.sin(t * 18) } };
+  }
+  function sceneTest(ctx, t, Lt) {
+    const st = stTest(Lt), K = st.K, S = K.S;
+    const w = L3.frame(ctx, 'ep30:shop', buildShop, w => poseShop(w, Lt, st));
+    if (!w) return; const A = st.A;
+    L.sticker(ctx, 'Scientists test it!', 470, 130, pulse(t, S.ts + 0.1, S.what - S.ts + 0.3), { bg: P.purple, color: P.white, size: 68, rot: 0.03 });
+    { const q = pulse(t, S.what + 0.5, S.r0 - S.what - 0.6); L.sticker(ctx, 'Holes in the cloth?', 1440, 330, q, { bg: P.white, size: 70, rot: 0.03 }); L.questionMark(ctx, 1640, 540, 0.8 * q, t, P.red); }
+    if (K.holes > 0.5) { ctx.save(); ctx.globalAlpha = clamp((K.holes - 0.5) * 2, 0, 1); for (const h of A.holes) for (const [c, lw] of [[P.ink, 9], [P.white, 3.5]]) { ctx.strokeStyle = c; ctx.lineWidth = lw; ctx.beginPath(); ctx.arc(h.x, h.y, h.r + 9, 0, TAU); ctx.stroke(); } ctx.restore(); }   // rings round three of the holes
+    label(ctx, 'holes', A.holes[0].x - 420, A.holes[0].y - 60, A.holes[0].x - A.holes[0].r - 8, A.holes[0].y - 2, pulse(t, S.what + WD.holes + 0.2, S.wetT - S.what - WD.holes - 0.4), { bg: '#FFD2BD', size: 64, keepIn: true });
+    L.sticker(ctx, 'Drip!', 1500, 250, pulse(t, S.r0, S.thru - S.r0 + 0.5), { bg: P.sun, size: 120, rot: 0.06 });
+    L.sticker(ctx, 'I get wet!', 1480, 420, pulse(t, S.wetT + 0.1, S.good - S.wetT - 0.2), { bg: P.red, color: P.white, size: 84, rot: 0.04 });
+    L.sticker(ctx, 'The water stays out!', 470, 250, seg(t, S.good + 1.0, S.good + 1.4), { bg: P.green, color: P.white, size: 70, rot: -0.03 });
+  }
+
+  // WORKSHOP: say it (the umbrella opens on "ribs open", the cloud rains on "rain rolls off")
+  function stStand(Lt, K, shot, curie) { return { K, world: 'shop', upper: true, umb: { open: K.open, wet: K.wet }, rain: { rate: K.rate, cloud: K.cloud }, shot, curie }; }
+  function stSay(Lt) {
+    const t = Lt.t, K = kinSay(Lt), S = K.S, said = io(t, S.s1 - 0.1, S.s1 + 0.3), sw = 0.25 * Math.sin(t * 8) * said;
+    return stStand(Lt, K, SH.say, { x: -9.3, y: 0, z: 5.0, ry: 0.3, s: 1.0, mood: t > Lt.end('sayit') ? 'happy' : 'talk', goggles: 0, dt: 1.5, armL: lerp(0.9, 2.1, said) + sw, armR: lerp(0.9, 2.1, said) - sw, lookX: 0.1, lookY: 0.1, bulb: 0.5 + 0.5 * said });
+  }
+  function sceneSay(ctx, t, Lt) {
+    const st = stSay(Lt), S = st.K.S;
+    const w = L3.frame(ctx, 'ep30:shop', buildShop, w => poseShop(w, Lt, st));
+    if (!w) return;
+    ctx.save(); ctx.translate(580, 215); ctx.scale(0.9, 0.9); ctx.translate(-W / 2, -300); L.sayItSticker(ctx, 'Ribs open, rain rolls off!', seg(t, S.s1, S.s1 + 0.8), t); ctx.restore();   // the series sticker, moved to the left so the umbrella opens beside it
+  }
+
+  // WORKSHOP TABLE: try at home (try1 + try2)
+  const BS = { a: { p: [0.3, 5.9, 9.6], l: [0.35, 2.55, 0], fov: 28 }, b: { p: [-0.15, 5.7, 8.0], l: [-0.15, 2.35, 0.1], fov: 28 } };
+  function stTry(Lt) {
+    const t = Lt.t, k = kinBench(Lt), nod = pulse(t, k.ask + 0.2, 1.6), carry = pulse(t, k.put - 0.2, k.pour2 - k.put + 1.1), wowF = pulse(t, k.lift + 0.9, 1.3) > 0.5;
+    return { k, world: 'shop', bench: k, upper: true, umb: {}, shot: camFold([{ s: BS.a }, { t: k.put - 1.0, d: 1.6, s: BS.b }], t),
+      curie: (T, w) => ({ x: -2.45, y: w.floorY + BD.stool, z: 0.35, ry: 0.6, s: 0.8, mood: wowF ? 'wow' : between(Lt, ['try1', 'try2']) ? 'talk' : 'happy', goggles: 0, dt: 1.2, lookX: 0.75, lookY: 0.15 + 0.25 * k.up,
+        armL: 0.3 + 1.2 * k.up, aimL: wpos(T, w.anchorB.pEdge), aimLk: k.up > 0 ? Math.min(1, k.up * 3) : 0, stretch: 2.4, armR: 0.3 + 1.8 * pulse(t, k.which + 0.5, 1.5), bulb: 0.5 + 0.5 * (wowF ? 1 : 0) }),
+      gu: (T, w) => { const lf = Math.min(1, k.up * 3); return { x: BD.gu[0], y: 0, z: BD.gu[1], ry: -0.4, s: 1.12, hop: 0.1 * Math.abs(Math.sin(nod * PI * 3)), rock: 0.04 * Math.sin(nod * PI * 6), aimR: wpos(T, lf > 0 ? w.anchorB.tEdge : w.anchorB.sgrip), aimRk: Math.max(carry, lf) }; } };
+  }
+  function sceneTry(ctx, t, Lt) {
+    const st = stTry(Lt), k = st.k;
+    const w = L3.frame(ctx, 'ep30:shop', buildShop, w => poseShop(w, Lt, st));
+    if (!w) return; const A = st.A.b;
+    L.tryBanner(ctx, Lt.win('try1', 0, 0.6) * (1 - seg(t, k.ask + 0.2, k.ask + 0.5)));
+    label(ctx, 'with a grown-up', A.gu.x + 420, A.gu.y + 30, A.gu.x + 60, A.gu.y + 60, pulse(t, k.ask + 0.2, k.towel - k.ask - 0.2), { bg: '#D3F3EF', size: 54, keepIn: true });
+    label(ctx, 'a piece of plastic bag', A.plastic.x - 330, A.plastic.y - 250, A.plastic.x - 20, A.plastic.y - 40, pulse(t, k.ask + WD.plastic + 0.1, k.put - k.ask - WD.plastic - 0.9), { bg: '#CFF1FF', size: 54, keepIn: true });
+    label(ctx, 'a paper towel', A.towel.x + 400, A.towel.y - 190, A.towel.x + 30, A.towel.y - 40, pulse(t, k.towel + 0.45, k.put - k.towel - 1.25), { bg: P.white, size: 54, keepIn: true });
+    label(ctx, 'a tray', A.trayR.x + 190, A.trayR.y + 110, A.trayR.x + 6, A.trayR.y + 6, pulse(t, k.tray + 0.45, k.put - k.tray - 1.25), { bg: '#FFD9A0', size: 54, keepIn: true });
+    L.sticker(ctx, 'a spoonful of water on each', 640, 110, pulse(t, k.put + 0.1, k.lift - k.put - 0.2), { bg: P.white, size: 64, rot: -0.015 });
+    { const lp = seg(t, Lt.end('try2') + 0.3, Lt.end('try2') + 0.6);   // the answer comes after a thinking pause
+      label(ctx, 'dry', A.dry.x - 90, A.dry.y + 150, A.dry.x - 6, A.dry.y + 10, lp, { bg: '#C9F7D5', size: 64, keepIn: true }); label(ctx, 'wet', A.patch.x + 120, A.patch.y + 150, A.patch.x + 8, A.patch.y + 10, lp, { bg: '#CFE3FF', size: 64, keepIn: true }); }
+    { const q = seg(t, k.which + 0.2, k.which + 0.6); L.sticker(ctx, 'Which one kept the water out?', 660, 110, q, { bg: P.sun, size: 68, rot: -0.015 }); L.questionMark(ctx, 1290, 130, 0.85 * q, t, P.red); }
+  }
+
+  // WORKSHOP: bye
+  function stBye(Lt) {
+    const t = Lt.t, K = kinBye(Lt), S = K.S, hap = pulse(t, S.see, 1.6), big = io(t, S.byeb - 0.1, S.byeb + 0.25), wv = pulse(t, S.bye, 1.9), pt = pulse(t, S.rem + 0.6, 2.6);
+    return stStand(Lt, K, L3.mix({ p: [-1.6, 3.1, 20.0], l: [-1.6, 2.1, 0], fov: 30 }, { p: [-1.9, 3.0, 18.8], l: [-1.9, 2.1, 0], fov: 30 }, io(t, S.bye, Lt.end('bye'))),
+      { x: -5.0, y: 0, z: 3.8, ry: 0.3, s: 1.0, mood: t > Lt.end('bye') || hap > 0.5 ? 'happy' : 'talk', goggles: 0,
+        armR: lerp(lerp(0.3, 2.2 + 0.3 * Math.sin(t * 9), wv) + 2.0 * hap + 1.6 * pulse(t, S.know + 0.1, 1.2), 2.3 + 0.35 * Math.sin(t * 9), big), armL: 0.3 + 1.1 * pt + 2.0 * hap + 0.5 * big + 1.6 * pulse(t, S.know + 0.1, 1.2), lookX: pt * 0.6, lookY: 0.05 + 0.4 * pt, bulb: 0.5 + 0.5 * hap + 0.5 * big, squash: -0.1 * hap });
+  }
+  function sceneBye(ctx, t, Lt) {
+    const st = stBye(Lt), S = st.K.S;
+    const w = L3.frame(ctx, 'ep30:shop', buildShop, w => poseShop(w, Lt, st));
+    if (!w) return;
+    if (t > S.see) { ctx.save(); ctx.globalAlpha = seg(t, S.see, S.see + 0.4); L.confetti(ctx, t, 21, 60); ctx.restore(); }
+    logoAt(ctx, 1720, 230, 0.75, Lt.win('bye', 0, 0.6, E.outBack), t);
+    pill(ctx, 'Ribs open, rain rolls off!', 420, 105, Lt.cwin('bye', 'remember', 0.6, E.outBack, 0.3), 48);
+    L.sticker(ctx, 'Bye-bye!', 1560, 560, Lt.cwin('bye', 'bye-bye', 0.6, E.outBack), { bg: P.sun, rot: 0.05, size: 84 });
+  }
+
+  // the state of any moment of the film (for tests and tools): which world, and its state object
+  function stateAt(Lt) {
+    const t = Lt.t; return t < Lt.start('look') ? stStreet(Lt) : t < Lt.start('test') ? stMech(Lt) : t < Lt.start('sayit') ? stTest(Lt) : t < Lt.start('try1') ? stSay(Lt) : t < Lt.start('bye') ? stTry(Lt) : stBye(Lt);
+  }
+
+  // THUMBNAIL background: pink Curie with her goggles beside the open umbrella under the rain cloud (2D fallback while three.js is not loaded)
+  function thumbBg(ctx, t) {
+    if (!L3 || !L3.ok || !L3.ok()) {
+      const g = ctx.createLinearGradient(0, 0, 0, H); g.addColorStop(0, '#F6E3BD'); g.addColorStop(1, '#E9C98F'); ctx.fillStyle = g; ctx.fillRect(0, 0, W, H); ctx.fillStyle = '#C99655'; ctx.fillRect(0, 860, W, H - 860);
+      ctx.strokeStyle = P.ink; ctx.lineWidth = 12; ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(1300, 420); ctx.lineTo(1300, 900); ctx.stroke(); ctx.fillStyle = C.blue; ctx.beginPath(); ctx.arc(1300, 470, 420, PI, 0); ctx.closePath(); ctx.fill(); ctx.stroke();
+      return;
+    }
+    const st = { world: 'shop', upper: true, umb: { open: 1, wet: 1, glow: { canopy: 0.3, tips: 0.5 } }, rain: { t: 1.15, rate: 1, cloud: 1 }, shot: SH.thumb, tok: [0, 0, 0, 0], tokDir: [200, 135, 0, 60], tokR: [0.75, 0.3, 0.6, 0], tokK: 1.05,
+      curie: { x: -5.1, y: 1.6, z: 2.6, ry: 0.5, s: 1.0, mood: 'wow', armL: 1.9, armR: 0.5, lookX: 0.7, lookY: 0.5, bulb: 0.3, goggles: 1, bob: 0 } };
+    L3.frame(ctx, 'ep30:shop', buildShop, w => poseShop(w, { t: 1.15 }, st));
+  }
+  // ==== EP30 3D STAGING: END ====
+
+  // ---------- Try it (interaction designer): two live 3D activities, merged below as interactives: ep30Interactives(L) ----------
+  // Try it 1 "Open it!": drag the orange ring (runner) up the stick; the little arms (stretchers) push the ribs out; right at the
+  //   top the spring catch clicks out and holds the ring up (only when fully open: let go before the click and the ring slides back
+  //   down); tap the green catch to press it in and the ring slides down gently, the ribs fold in. Tags 1 ring, 2 little arms, 3 ribs,
+  //   4 catch light up as the push travels.
+  // Try it 2 "Rain test": Curie holds the open umbrella under the friendly cloud; tap the cloud (or Rain) to make it rain; choose good
+  //   umbrella cloth or cloth with holes. Good cloth: the drops roll down to the rib tips and drip off, and Curie's dry/wet meter
+  //   stays at dry. Holes: some drops fall straight through onto Curie and the meter climbs. The towel dries her again.
+  // Both use their own cached worlds ('ep30:try1', 'ep30:try2'), never the film's 'ep30:shop'. The state is plain JSON (tests read it).
+  function ep30Interactives(L) {
+    const { P, clamp, circle, text, roundRect } = L;
+    const TAU = Math.PI * 2;
+    const K = { orange: '#FF8A1F', gold: '#FFC233', indigo: '#6D63FF', green: '#34C759', blue: '#2E9BF5', water: '#49AEFF', red: '#E5484D', panel: '#FFFDF6' };
+    const clamp01 = v => clamp(v, 0, 1);
+    const snd = f => { try { if (L.sound && L.sound.ctx) f(L.sound); } catch (e) { /* no sound is fine */ } };
+    const inRect = (r, x, y, m) => x >= r.x - (m || 0) && x <= r.x + r.w + (m || 0) && y >= r.y - (m || 0) && y <= r.y + r.h + (m || 0);
+    const r1 = v => Math.round(v * 10) / 10;
+    const THREEg = () => global.THREE;
+
+    // cues: each asked once (flags in s.saw) and spaced by Curie's spoken length; a cue that is no longer true when its turn comes is
+    // dropped (and may be asked again later)
+    const DUR = { push: 7.2, click: 7.2, roof: 3.0, press: 2.5, close: 4.9, pitter: 2.1, dry: 6.2, coat: 4.0, holes: 3.9, out: 2.1 };   // seconds, measured on audio/cues
+    function cues(s, dt, cue, valid) {
+      s.quiet += dt;
+      while (s.queue.length && s.quiet > s.wait) {
+        const id = s.queue.shift(); if (valid && !valid(s, id)) { s.saw[id] = false; continue; }
+        s.lastCue = id; s.quiet = 0; s.wait = (DUR[id] || 3) + 0.6; cue(id);
+      }
+    }
+    const ask = (s, id) => { if (!s.saw[id]) { s.saw[id] = true; s.queue.push(id); } };
+
+    // ---------- 2D pieces
+    function panel(ctx, x, y, w, h, r) {
+      ctx.save(); ctx.fillStyle = 'rgba(43,45,66,0.22)'; roundRect(ctx, x + 4, y + 10, w, h, r); ctx.fill();
+      ctx.fillStyle = K.panel; roundRect(ctx, x, y, w, h, r); ctx.fill(); ctx.strokeStyle = P.ink; ctx.lineWidth = 6; ctx.stroke(); ctx.restore();
+    }
+    function tag(ctx, str, x, y, size, bg, color) {
+      ctx.save(); ctx.font = '700 ' + size + 'px Fredoka'; const w = ctx.measureText(str).width + size * 0.9, h = size * 1.5;
+      ctx.fillStyle = bg; roundRect(ctx, x - w / 2, y - h / 2, w, h, h / 2); ctx.fill(); ctx.strokeStyle = P.ink; ctx.lineWidth = 5; ctx.stroke();
+      text(ctx, str, x, y + 3, { size, weight: 700, color: color || P.ink }); ctx.restore();
+    }
+    // a numbered part tag with a leader line to the part (lit = in the part's code colour)
+    function partTag(ctx, n, str, tx, ty, px, py, color, lit) {
+      ctx.save(); ctx.lineCap = 'round'; ctx.strokeStyle = P.ink; ctx.lineWidth = 10; ctx.beginPath(); ctx.moveTo(tx, ty); ctx.lineTo(px, py); ctx.stroke();
+      ctx.strokeStyle = lit ? color : K.panel; ctx.lineWidth = 5; ctx.stroke(); circle(ctx, px, py, 9, lit ? color : K.panel); ctx.lineWidth = 4; ctx.strokeStyle = P.ink; ctx.beginPath(); ctx.arc(px, py, 9, 0, TAU); ctx.stroke(); ctx.restore();
+      ctx.save(); ctx.font = '700 44px Fredoka'; const w = ctx.measureText(str).width + 44 * 0.9 + 62, h = 66, x0 = tx - w / 2;
+      ctx.fillStyle = lit ? color : K.panel; roundRect(ctx, x0, ty - h / 2, w, h, h / 2); ctx.fill(); ctx.strokeStyle = P.ink; ctx.lineWidth = 5; ctx.stroke();
+      circle(ctx, x0 + 36, ty, 25, lit ? P.white : '#E3E6EE'); ctx.lineWidth = 4; ctx.beginPath(); ctx.arc(x0 + 36, ty, 25, 0, TAU); ctx.stroke(); ctx.restore();
+      text(ctx, String(n), x0 + 36, ty + 3, { size: 38, weight: 700, color: P.ink }); text(ctx, str, x0 + 62 + (w - 62) / 2, ty + 3, { size: 44, weight: 700, color: P.ink });
+    }
+    function button(ctx, r, label, fill, lip, down, glow, size) {
+      const d = down ? 10 : 0; ctx.save();
+      if (glow > 0) { ctx.fillStyle = 'rgba(255,255,255,' + (0.6 * glow).toFixed(3) + ')'; roundRect(ctx, r.x - 14, r.y - 14, r.w + 28, r.h + 28, 58); ctx.fill(); }
+      ctx.fillStyle = lip; roundRect(ctx, r.x, r.y + 14, r.w, r.h - 14, 46); ctx.fill(); ctx.strokeStyle = P.ink; ctx.lineWidth = 7; ctx.stroke();
+      ctx.fillStyle = fill; roundRect(ctx, r.x, r.y + d, r.w, r.h - 14, 46); ctx.fill(); ctx.stroke();
+      text(ctx, label, r.x + r.w / 2, r.y + d + (r.h - 14) / 2 + 4, { size: size || 76, weight: 700, color: P.white, stroke: P.ink, strokeWidth: 12 });
+      ctx.restore();
+    }
+    function invite(ctx, x, y, r, t) { const k = 0.5 + 0.5 * Math.sin(t * 4); ctx.save(); ctx.strokeStyle = 'rgba(255,255,255,' + (0.55 + 0.4 * k).toFixed(3) + ')'; ctx.lineWidth = 8; ctx.setLineDash([18, 16]); ctx.beginPath(); ctx.arc(x, y, r + 8 * k, 0, TAU); ctx.stroke(); ctx.restore(); }
+    function arrowUp(ctx, x, y1, y2, color, lw) {
+      const hd = lw * 2.4, path = () => { ctx.beginPath(); ctx.moveTo(x, y1); ctx.lineTo(x, y2 + hd * 0.6); ctx.stroke(); ctx.beginPath(); ctx.moveTo(x, y2); ctx.lineTo(x - hd * 0.5, y2 + hd); ctx.lineTo(x + hd * 0.5, y2 + hd); ctx.closePath(); ctx.fill(); ctx.stroke(); };
+      ctx.save(); ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.strokeStyle = P.ink; ctx.fillStyle = P.ink; ctx.lineWidth = lw + 10; path(); ctx.strokeStyle = color; ctx.fillStyle = color; ctx.lineWidth = lw; path(); ctx.restore();
+    }
+
+    // =====================================================================================================
+    // Try it 1: Open it!
+    // =====================================================================================================
+    const SHOT1 = { p: [0.45, 2.9, 10.4], l: [-0.6, 2.62, 0], fov: 30 };
+    const LATCH = 0.985, SLIP = 0.8, GENTLE = 0.42;           // open at which the catch clicks; slide back a second; gentle close a second
+    function buildTry1(T, L3) {
+      const w = L3.kits.workshop(T, L3);
+      w.umb = L3.kits.umbrella(T, L3); w.scene.add(w.umb);
+      w.curie = L3.kits.curie(T, L3, { skin: 'pink' }); w.scene.add(w.curie);
+      return w;
+    }
+    const task1 = {
+      title: 'Open it!',
+      hint: 'Drag the orange ring up the stick until it clicks. Then tap the green catch to close it, gently!',
+      init: s => {
+        s.open = 0; s.drag = false; s.grab = 0; s.latched = false; s.closing = false; s.press = 0; s.touched = false; s.ready = false;
+        s.move = 0; s.prevOpen = 0; s.clickT = 0; s.slipT = 0; s.nudgeT = 0; s.opens = 0; s.closes = 0; s.slips = 0; s.wow = 0;
+        s.track = null; s.catchXY = null; s.ringXY = null;
+        s.saw = { push: false, click: false, roof: false, press: false, close: false }; s.queue = []; s.quiet = 99; s.wait = 0; s.lastCue = '';
+      },
+      update: (s, dt, cue) => {
+        dt = clamp(dt, 0, 0.05);
+        if (s.closing) {                                       // the catch is pressed in: the ring slides down, the ribs fold in, gently
+          s.open = Math.max(0, s.open - GENTLE * dt); s.press = s.open > 0.9 ? 1 : Math.max(0, s.press - 3 * dt);
+          if (s.open === 0) { s.closing = false; s.closes++; s.saw.click = false; s.saw.roof = false; }   // a new opening may click again
+        } else if (!s.drag && !s.latched && s.open > 0) {      // let go before the click: nothing holds the ring, it slides back down
+          s.open = Math.max(0, s.open - SLIP * dt);
+        }
+        if (!s.latched && !s.closing && s.open >= LATCH) {     // click! the spring catch snaps out under the ring
+          s.latched = true; s.open = 1; s.opens++; s.clickT = 1.4; s.wow = 1.6; ask(s, 'click'); ask(s, 'roof');
+          snd(S => { S.tone(1900, 0.05, { type: 'square', vol: 0.06 }); S.tone(1250, 0.07, { type: 'triangle', vol: 0.06 }); });
+        }
+        if (s.drag && s.open > 0.5 && !s.latched) ask(s, 'push');
+        s.move = Math.abs(s.open - s.prevOpen) > 1e-4 ? 0.5 : Math.max(0, s.move - dt); s.prevOpen = s.open;
+        s.clickT = Math.max(0, s.clickT - dt); s.slipT = Math.max(0, s.slipT - dt); s.nudgeT = Math.max(0, s.nudgeT - dt); s.wow = Math.max(0, s.wow - dt);
+        cues(s, dt, cue, (s, id) => id === 'click' || id === 'roof' || id === 'press' ? s.latched : (id === 'close' ? s.closing || s.open === 0 : true));
+      },
+      draw: (ctx, s, t) => {
+        const w = L.three.frame(ctx, 'ep30:try1', buildTry1, w => {
+          const T = THREEg(), U = w.umb.userData; L.three.shoot(w, SHOT1); w.turntable.rotation.y = 0; w.upper.visible = true;
+          const mv = s.move > 0, o = s.open, lit = { ring: mv || s.drag, arms: mv && o > 0.08, ribs: mv && o > 0.25 };
+          w.umb.position.set(0, w.floorY, 0); w.umb.rotation.set(0, 0, 0); w.umb.scale.setScalar(US);
+          U.set({ open: o, stand: 1, ghost: 0.55, spring: s.closing && s.press > 0 ? 1 - s.press : undefined, wet: 0,
+            glow: { runner: lit.ring ? 0.9 : (s.touched ? 0 : 0.5 + 0.5 * Math.sin(t * 4)), stretchers: lit.arms ? 0.8 : 0, ribs: lit.ribs ? 0.7 : 0, spring: s.latched ? (s.clickT > 0 ? 1 : 0.45 + 0.35 * Math.sin(t * 4)) : (s.closing ? 0.8 : 0), canopy: s.clickT > 0 ? 0.35 : 0 } });
+          w.umb.updateMatrixWorld(true);
+          const wow = s.wow > 0;
+          poseCurie(T, w.curie, { x: -3.75, y: 0, z: -0.3, ry: 0.55, s: 0.95, mood: wow ? 'wow' : 'happy', goggles: 1, lookX: 0.7, lookY: 0.25 + 0.35 * o, armL: wow ? 2.5 : 0.3 + 0.9 * (s.drag ? 1 : 0), armR: wow ? 2.5 : 0.3, bulb: 0.4 + 0.5 * (wow ? 1 : 0) }, t);
+        });
+        if (!w) { s.ready = false; return; }
+        s.ready = true;
+        const U = w.umb.userData, A = U.anchor, info = U.info, at = (o, x, y, z) => L.three.at(w, o, x, y, z);
+        const rg = at(A.runner), sp = at(A.spring), y0 = at(U.body, 0, info.runnerY0, 0), y1 = at(U.body, 0, info.runnerY1, 0);
+        s.track = { x: r1(y0.x), y0: r1(y0.y), y1: r1(y1.y) }; s.ringXY = [r1(rg.x), r1(rg.y)]; s.catchXY = [r1(sp.x), r1(sp.y)];
+        // the ring's path on the stick, while it can be pushed
+        if (!s.latched && !s.closing) { ctx.save(); ctx.strokeStyle = 'rgba(255,255,255,0.85)'; ctx.lineWidth = 8; ctx.setLineDash([14, 14]); ctx.beginPath(); ctx.moveTo(y0.x - 70, y0.y); ctx.lineTo(y1.x - 70, y1.y); ctx.stroke(); ctx.restore(); }
+        const mv = s.move > 0, o = s.open, st = A.stretcher[0], rb = A.rib[3];
+        const pa = at(st), pr = at(rb);
+        partTag(ctx, 1, 'ring', 470, clamp(rg.y, 260, 720), rg.x - 40, rg.y, K.orange, mv || s.drag);
+        partTag(ctx, 2, 'little arms', 1560, 330, pa.x + 12, pa.y, K.gold, mv && o > 0.08);
+        partTag(ctx, 3, 'ribs', 470, 140, pr.x - 6, pr.y - 4, K.indigo, mv && o > 0.25);
+        partTag(ctx, 4, 'catch', 1560, 600, sp.x + 22, sp.y + 4, K.green, s.latched || s.closing);
+        if (!s.touched) { invite(ctx, rg.x, rg.y, 92, t); arrowUp(ctx, rg.x + 170, rg.y + 40, y1.y - 10, K.orange, 18); L.sticker(ctx, 'Push the ring up!', rg.x + 170, rg.y + 150, 1, { bg: P.sun, size: 56, rot: -0.04 }); }
+        if (s.clickT > 0) L.sticker(ctx, 'Click!', 1500, 790, clamp01((1.4 - s.clickT) / 0.2) * clamp01(s.clickT / 0.2), { bg: P.sun, size: 110, rot: -0.06 });
+        if (s.latched && !s.clickT) { invite(ctx, sp.x, sp.y, 70, t); L.sticker(ctx, s.nudgeT > 0 ? 'Press the catch first!' : 'It stays open! Tap the catch.', 960, 760, 1, { bg: s.nudgeT > 0 ? P.white : P.green, color: s.nudgeT > 0 ? P.ink : P.white, size: 54, rot: 0.02 }); }
+        if (s.slipT > 0) L.sticker(ctx, 'No click, so it slid down!', 960, 760, clamp01(s.slipT / 0.3), { bg: P.white, size: 54, rot: -0.02 });
+        if (s.closing) L.sticker(ctx, 'Gently!', 1500, 790, 1, { bg: P.green, color: P.white, size: 90, rot: 0.04 });
+      },
+      pointer: (s, type, x, y) => {
+        if (!s.ready || !s.track) return;
+        const Tk = s.track, span = Tk.y0 - Tk.y1, ringY = Tk.y0 - span * s.open;
+        if (type === 'down') {
+          const dC = s.catchXY ? Math.hypot(x - s.catchXY[0], y - s.catchXY[1]) : 1e9, hy = s.ringXY ? s.ringXY[1] : ringY, dR = Math.hypot(x - Tk.x, y - hy);
+          if ((s.latched || s.closing) && dC < 95 && dC <= dR) {   // press the catch (when the finger is nearer the catch than the ring)
+            s.touched = true; if (s.closing) return; s.latched = false; s.closing = true; s.press = 1; ask(s, 'close');
+            snd(S => S.tone(700, 0.06, { type: 'triangle', vol: 0.07 })); return;
+          }
+          if (s.closing) return;
+          if (Math.abs(x - Tk.x) < 130 && Math.abs(y - hy) < 120) { s.drag = true; s.touched = true; s.grab = y - ringY; s.dragY = y; }
+          return;
+        }
+        if (type === 'move' && s.drag) {
+          const yy = clamp(y - s.grab, Tk.y1 - 40, Tk.y0 + 40);
+          if (s.latched) { if (y - s.dragY > 60 && s.nudgeT <= 0) { s.nudgeT = 2.2; ask(s, 'press'); snd(S => S.tone(520, 0.08, { type: 'triangle', vol: 0.06 })); } return; }   // the catch holds it
+          s.open = clamp01((Tk.y0 - yy) / span); if (s.open >= LATCH) s.dragY = y;
+          return;
+        }
+        if (type === 'up' && s.drag) { s.drag = false; if (!s.latched && s.open > 0.05) { s.slipT = 1.8; s.slips++; } }
+      },
+      cues: {
+        push: 'I push the ring up. It pushes little arms... and the arms push the long ribs out, like a flower opening!',
+        click: 'Click! A tiny spring catch on the stick snaps out... and holds the ring up, so the umbrella stays open.',
+        roof: 'The ribs stretch the cloth tight, like a roof.',
+        press: 'To close it, I press the little catch.',
+        close: 'The ring slides down... and the ribs fold in. Gently!'
+      }
+    };
+
+    // =====================================================================================================
+    // Try it 2: Rain test
+    // =====================================================================================================
+    const SHOT2 = { p: [0.4, 3.1, 20.5], l: [0.1, 2.3, 0], fov: 28 };
+    const CU = { x: 0, z: 0.3 }, AREA = { x: 0.3, z: -0.2, w: 4.6, d: 2.4 }, TOP = 5.35;
+    const R2 = { good: { x: 40, y: 860, w: 420, h: 180 }, holes: { x: 490, y: 860, w: 500, h: 180 }, towel: { x: 1020, y: 860, w: 330, h: 180 }, rain: { x: 1500, y: 860, w: 380, h: 180 }, meter: { x: 1380, y: 40, w: 500, h: 240 } };
+    const WETUP = 0.14;                                         // how fast Curie gets wet under the holes (meter per second of full rain)
+    function buildTry2(T, L3) {
+      const w = L3.kits.workshop(T, L3);
+      w.umb = L3.kits.umbrella(T, L3); w.scene.add(w.umb);
+      w.rain = L3.kits.rain(T, L3, { cloud: true, count: 240, rollers: 72, seed: 33 }); w.scene.add(w.rain);
+      w.curie = L3.kits.curie(T, L3, { skin: 'pink' }); w.scene.add(w.curie);
+      return w;
+    }
+    const task2 = {
+      title: 'Rain test',
+      hint: 'Tap the cloud to make it rain. Choose good umbrella cloth or cloth with holes. Does Curie stay dry?',
+      init: s => {
+        s.time = 0; s.raining = false; s.rate = 0; s.cloth = 'good'; s.holesK = 0; s.clothWet = 0; s.wet = 0; s.towelT = 0; s.ready = false; s.touched = false;
+        s.goodT = 0; s.holeT = 0; s.shake = 0; s.press = ''; s.pressT = 0; s.cloudXY = null; s.labels = null;
+        s.saw = { pitter: false, dry: false, coat: false, holes: false, out: false }; s.queue = []; s.quiet = 99; s.wait = 0; s.lastCue = '';
+      },
+      update: (s, dt, cue) => {
+        dt = clamp(dt, 0, 0.05); s.time += dt;
+        s.rate = s.raining ? Math.min(1, s.rate + 1.5 * dt) : Math.max(0, s.rate - 1.5 * dt);
+        s.holesK = s.cloth === 'holes' ? Math.min(1, s.holesK + 2 * dt) : Math.max(0, s.holesK - 2 * dt);
+        s.clothWet = s.rate > 0.2 ? Math.min(1, s.clothWet + 0.6 * dt) : Math.max(0, s.clothWet - 0.08 * dt);
+        if (s.towelT > 0) { s.towelT = Math.max(0, s.towelT - dt); s.wet = Math.max(0, s.wet - 0.9 * dt); }
+        else s.wet = Math.min(1, s.wet + WETUP * s.rate * s.holesK * dt);   // only rain through the holes reaches her: good cloth keeps her dry
+        const full = s.rate > 0.8;
+        s.goodT = full && s.holesK < 0.05 ? s.goodT + dt : 0; s.holeT = full && s.holesK > 0.8 ? s.holeT + dt : 0;
+        if (s.goodT > 2.0) { if (s.saw.holes) ask(s, 'out'); else { ask(s, 'dry'); ask(s, 'coat'); } }
+        if (s.holeT > 1.2) ask(s, 'holes');
+        s.shake = s.holeT > 0.6 ? Math.min(1, s.shake + 2 * dt) : Math.max(0, s.shake - 2 * dt);
+        s.pressT = Math.max(0, s.pressT - dt);
+        cues(s, dt, cue, (s, id) => id === 'pitter' ? s.raining : (id === 'holes' ? s.raining && s.cloth === 'holes' : s.raining && s.cloth === 'good'));
+      },
+      draw: (ctx, s, t) => {
+        const w = L.three.frame(ctx, 'ep30:try2', buildTry2, w => {
+          const T = THREEg(), U = w.umb.userData; L.three.shoot(w, SHOT2); w.turntable.rotation.y = 0; w.upper.visible = true;
+          w.umb.position.set(0, w.floorY, 0); w.umb.rotation.set(0, 0, 0); w.umb.scale.setScalar(US);
+          U.set({ open: 1, holes: s.holesK, wet: s.clothWet, stand: 0, glow: { tips: s.cloth === 'good' && s.rate > 0.8 ? 0.4 : 0 } });
+          const sad = s.wet > 0.35 && s.cloth === 'holes', glad = s.rate > 0.8 && s.cloth === 'good' && s.wet < 0.05;
+          poseCurie(T, w.curie, { x: CU.x + 0.05 * s.shake * Math.sin(t * 22), y: w.floorY, z: CU.z, ry: 0.12, s: 1, mood: sad ? 'sad' : (s.shake > 0.5 ? 'wow' : 'happy'), goggles: 0, dt: 0.6,
+            armL: 0.3, armR: 0.3 + 1.2 * s.shake + (glad ? 1.6 + 0.25 * Math.sin(t * 5) : 0), lookX: 0.2, lookY: 0.1 + 0.7 * s.rate, bulb: 0.45 + 0.5 * (glad ? 1 : 0), squash: 0.06 * s.shake * Math.sin(t * 18) }, t);
+          U.hold(w.curie, { side: 'L', reach: HOLD.high, tilt: 0.42, scale: HOLD.scale }); w.umb.updateMatrixWorld(true);
+          w.rain.userData.set({ t: s.time, rate: s.rate, cloud: 1, area: AREA, top: TOP, floor: w.floorY, umbrella: w.umb, blockers: [{ x: CU.x, y: w.floorY + 1.15, z: CU.z, r: 1.04 }] });
+        });
+        if (!w) { s.ready = false; return; }
+        s.ready = true;
+        const U = w.umb.userData, A = U.anchor, cl = L.three.project(w, AREA.x, TOP + 0.55, AREA.z), tip = L.three.at(w, A.tip[0]), hd = L.three.at(w, w.curie.userData.anchor.top);
+        s.cloudXY = [r1(cl.x), r1(cl.y)]; s.labels = { tip: [r1(tip.x), r1(tip.y)], head: [r1(hd.x), r1(hd.y)] };
+        if (!s.touched) { invite(ctx, cl.x, cl.y, 150, t); L.sticker(ctx, 'Tap the cloud!', cl.x - 470, cl.y + 20, 1, { bg: P.sun, size: 56, rot: -0.04 }); L.arrow(ctx, cl.x - 300, cl.y + 20, cl.x - 170, cl.y + 10, P.sun, 14); }
+        // what the cloth does with the rain
+        if (s.rate > 0.8 && s.cloth === 'good') L.sticker(ctx, 'Drip off the tips!', 420, 230, 1, { bg: '#CFE9FF', size: 52, rot: 0.03 });
+        if (s.holesK > 0.5) L.sticker(ctx, s.rate > 0.8 ? 'Drip! Through the holes!' : 'Holes in the cloth', 420, 230, 1, { bg: s.rate > 0.8 ? P.sun : P.white, size: 52, rot: -0.03 });
+        // Curie's dry / wet meter
+        const M = R2.meter; panel(ctx, M.x, M.y, M.w, M.h, 40);
+        text(ctx, 'Curie is…', M.x + M.w / 2, M.y + 44, { size: 44, weight: 700 });
+        const bx = M.x + 40, bw = M.w - 80, by = M.y + 84; ctx.save();
+        const grad = ctx.createLinearGradient(bx, 0, bx + bw, 0); grad.addColorStop(0, '#8EE6A8'); grad.addColorStop(0.5, '#9FD3FF'); grad.addColorStop(1, '#2E7BF5');
+        ctx.fillStyle = '#E3E6EE'; roundRect(ctx, bx, by, bw, 46, 23); ctx.fill(); ctx.fillStyle = grad; roundRect(ctx, bx, by, Math.max(46, bw * Math.max(0.04, s.wet)), 46, 23); ctx.fill();
+        ctx.strokeStyle = P.ink; ctx.lineWidth = 5; roundRect(ctx, bx, by, bw, 46, 23); ctx.stroke(); ctx.restore();
+        text(ctx, 'dry', bx + 4, by + 76, { size: 30, weight: 700, color: '#1E8A50', align: 'left' }); text(ctx, 'wet', bx + bw - 4, by + 76, { size: 30, weight: 700, color: '#1F5FC4', align: 'right' });
+        const word = s.wet < 0.03 ? 'Dry!' : (s.holesK < 0.05 ? 'No more drips!' : (s.wet < 0.5 ? 'Getting wet!' : 'Wet!'));
+        text(ctx, word, M.x + M.w / 2, M.y + 196, { size: word.length > 12 ? 44 : 54, weight: 700, color: s.wet < 0.03 ? K.green : '#1F5FC4' });
+        // drops on Curie when the rain comes through
+        if (s.wet > 0.03) for (let i = 0; i < Math.ceil(6 * s.wet); i++) { const a = i * 2.4, dx = hd.x - 70 + (i * 53) % 150, dy = hd.y + 70 + ((i * 37) % 120); circle(ctx, dx, dy + 3 * Math.sin(t * 3 + a), 9, K.water, P.ink, 3); }
+        if (s.towelT > 0) L.sticker(ctx, 'Rub-a-dub!', hd.x + 220, hd.y + 40, clamp01(s.towelT / 0.3), { bg: P.white, size: 56, rot: 0.05 });
+        // controls
+        const pr = id => s.press === id && s.pressT > 0;
+        button(ctx, R2.good, 'Good cloth', s.cloth === 'good' ? K.blue : '#9AA4B8', s.cloth === 'good' ? '#1F5FC4' : '#6B7590', pr('good'), 0, 60);
+        button(ctx, R2.holes, 'With holes', s.cloth === 'holes' ? '#F59E0B' : '#9AA4B8', s.cloth === 'holes' ? '#B45309' : '#6B7590', pr('holes'), 0, 60);
+        button(ctx, R2.towel, 'Towel', '#A78BFA', '#7C5CE0', pr('towel'), s.wet > 0.03 && s.holesK < 0.05 && s.towelT <= 0 ? 0.5 + 0.5 * Math.sin(t * 4) : 0, 60);
+        button(ctx, R2.rain, s.raining ? 'Stop rain' : 'Rain!', s.raining ? '#9AA4B8' : K.green, s.raining ? '#6B7590' : '#1E8A50', pr('rain'), !s.touched ? 0.5 + 0.5 * Math.sin(t * 4) : 0, 66);
+        tag(ctx, 'umbrella cloth', (R2.good.x + R2.holes.x + R2.holes.w) / 2, R2.good.y - 40, 40, K.panel);
+      },
+      pointer: (s, type, x, y) => {
+        if (!s.ready || type !== 'down') return;
+        const hit = id => { s.touched = true; s.press = id; s.pressT = 0.25; snd(S => S.tone(880, 0.06, { type: 'triangle', vol: 0.07 })); };
+        const rainTap = () => { s.raining = !s.raining; if (s.raining) ask(s, 'pitter'); snd(S => S.noise(0.25, 0.05, { lp: 3000 })); };
+        if (inRect(R2.rain, x, y, 10)) { hit('rain'); rainTap(); }
+        else if (s.cloudXY && Math.hypot(x - s.cloudXY[0], y - s.cloudXY[1]) < 190) { hit('cloud'); rainTap(); }
+        else if (inRect(R2.good, x, y, 10)) { hit('good'); s.cloth = 'good'; }
+        else if (inRect(R2.holes, x, y, 10)) { hit('holes'); s.cloth = 'holes'; }
+        else if (inRect(R2.towel, x, y, 10)) { hit('towel'); if (s.wet > 0) s.towelT = 1.2; }
+      },
+      cues: {
+        pitter: "Pitter-patter! It's raining.",
+        dry: 'Raindrops stay round... roll down the sides, and drip off the tips. Drip, drip!',
+        coat: 'The cloth has a special coat... so water cannot soak in.',
+        holes: 'Drip! The rain comes through the holes... and I get wet.',
+        out: 'Good umbrella cloth keeps the water out.'
+      }
+    };
+    return [task1, task2];
+  }
+
+  L.episodes.ep30 = {
+    id: 'ep30', num: 30, three: true, curie: 'pink', title: 'How does an umbrella work?', short: 'Umbrella', phrase: 'Ribs open, rain rolls off!',
+    // YouTube thumbnail (render/art.js): big word, small text above/below, and the background drawn behind Curie (Curie stands at x 560, y 760 unless pip is set)
+    thumb: { big: 'UMBRELLA', small1: 'How does an', small2: 'work?', pip: false, bg: (ctx, t) => thumbBg(ctx, t) },
+    // text = the caption on screen (and the site); say = what Curie speaks, with direction tags (docs/PIPELINE.md, "Narration markup")
+    lines: [
+      { id: "hello", text: "Hello, little scientists! I'm Curie. Welcome to the Little Scientists Club!", say: "Hello, little scientists! I'm *Curie*! Welcome... to the Little Scientists Club!", hold: 0.3 },
+      { id: "q", text: "Today's big question: how does an umbrella work?", say: "Today's big question... How does an *umbrella* work?", hold: 0.6 },
+      { id: "s1", text: "Pitter-patter! It's raining. I open my umbrella outside, up high and away from faces.", say: "Pitter-patter! It's *raining*. I open my umbrella outside... up high, and away from faces.", hold: 0.6 },
+      { id: "s2", text: "Up it goes, and I stay dry. But how does it work? Let's find out in my workshop!", say: "Up it goes... and I stay *dry*. But how does it work? Let's find out... in my workshop!", hold: 0.8 },
+      { id: "look", text: "Peek-Inside Goggles on! Let's look at the umbrella, step by step.", say: "{sfx:pop}Peek-Inside Goggles... *on*! Let's look at the umbrella... step by step.", hold: 0.6 },
+      { id: "e1", text: "Step one. In the middle is a long stick. On it is a ring that can slide up and down.", say: "Step *one*. In the middle is a long *stick*. On it is a ring... that can slide up and down.", hold: 0.6 },
+      { id: "e2", text: "Step two. I push the ring up. It pushes little arms, and the arms push the long ribs out, like a flower opening!", say: "Step *two*. I push the ring *up*. It pushes little arms... and the arms push the long *ribs* out, like a flower opening!", hold: 0.8 },
+      { id: "e3", text: "Step three. Click! A tiny spring catch on the stick snaps out and holds the ring up, so the umbrella stays open.", say: "Step *three*. {sfx:ding}Click! A tiny spring *catch* on the stick snaps out... and holds the ring up, so the umbrella stays *open*.", hold: 0.6 },
+      { id: "e4", text: "Step four. The ribs stretch the cloth tight, like a roof. The cloth has a special coat, so water cannot soak in.", say: "Step *four*. The ribs stretch the cloth *tight*, like a roof. The cloth has a special coat... so water cannot *soak* in.", hold: 0.8 },
+      { id: "rain", text: "Raindrops stay round, roll down the sides and drip off the tips. Drip, drip!", say: "Raindrops stay *round*... roll down the sides, and drip off the *tips*. Drip, drip!", hold: 0.8 },
+      { id: "recap", text: "Slide, push, click, stretch! The ribs open, and the rain rolls off.", say: "Slide... push... click... stretch! The ribs open... and the rain rolls *off*.", hold: 0.8 },
+      { id: "close", text: "To close it, I press the little catch. The ring slides down, and the ribs fold in. Gently!", say: "To close it, I press the little *catch*. The ring slides down... and the ribs fold in. *Gently*!", hold: 0.6 },
+      { id: "test", text: "Scientists test it! What if the cloth had holes?", say: "{sfx:ding}Scientists *test* it! What if the cloth had *holes*?", hold: 0.4 },
+      { id: "result", text: "Drip! The rain comes through the holes, and I get wet. Good umbrella cloth keeps the water out.", say: "Drip! The rain comes through the holes... and I get *wet*. Good umbrella cloth keeps the water *out*.", hold: 1.0 },
+      { id: "sayit", text: "Say it with me: ribs open, rain rolls off!", say: "Say it with me... {sfx:ding}Ribs open, rain rolls off! {pause 0.9} {slow}Ribs open, rain rolls off!{/slow}", hold: 1.4 },
+      { id: "try1", text: "Let's try it at home! Ask a grown-up for a piece of plastic bag, a paper towel and a tray.", say: "{sfx:tada}Let's try it at home! Ask a grown-up for a piece of plastic bag... a paper towel... and a tray.", hold: 0.4 },
+      { id: "try2", text: "Put a spoonful of water on each. Then lift them up. Which one kept the water out?", say: "Put a spoonful of water on *each*. Then lift them up... {sfx:ding}Which one kept the water *out*?", hold: 1.6 },
+      { id: "bye", text: "Great job, little scientist! Remember: ribs open, rain rolls off. Now you know how it works! See you next time at the Little Scientists Club! Bye-bye!", say: "{sfx:tada}Great job, little scientist! Remember... ribs open, rain rolls off. Now you know how it works! See you next time, at the Little Scientists Club! {hi}Bye-bye!{/hi}", hold: 0.5 }
+    ],
+    // extra sound effects not written into `say` as {sfx:name}: anchored to a line (+offset s) or to a chunk ('chunk': words)
+    sfx: [
+      
+    ],
+    // scenes: each starts when its `from` line starts (minus optional lead) and lasts until the next scene; transition 'cut' = no wipe
+    scenes: [
+      { from: 'hello', draw: (ctx, t, Lt) => sceneStreet(ctx, t, Lt) },            // hello + q + s1 + s2: the street, the rain, the umbrella goes up
+      { from: 'look', draw: (ctx, t, Lt) => sceneMech(ctx, t, Lt) },               // look + e1..e4 + rain + recap + close: the umbrella on its stand, step by step
+      { from: 'test', draw: (ctx, t, Lt) => sceneTest(ctx, t, Lt) },               // test + result: holes in the cloth
+      { from: 'sayit', draw: (ctx, t, Lt) => sceneSay(ctx, t, Lt) },
+      { from: 'try1', draw: (ctx, t, Lt) => sceneTry(ctx, t, Lt) },                // try1 + try2
+      { from: 'bye', draw: (ctx, t, Lt) => sceneBye(ctx, t, Lt) }
+    ],
+    // for tests and tools: the camera shots, the closed-form kinematics, the state of any moment and the pure posing functions (see the staging block above)
+    props: { shots: SH, streetShots: SS, benchShots: BS, kin: { street: kinStreet, mech: kinMech, test: kinTest, say: kinSay, bye: kinBye, bench: kinBench }, mechMoves, shopTimes, stateAt, build: { street: buildStreet, shop: buildShop }, pose: { street: poseStreet, shop: poseShop }, glide, dims: { US, CS, HOLD, STOOL, RAIN, bench: BD }, CUR },
+    interactives: ep30Interactives(L)
+  };
+})(typeof window !== 'undefined' ? window : globalThis);
+
 LSC.three.src = ['three.min.js', 'htw.js'];
